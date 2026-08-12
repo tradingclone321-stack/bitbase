@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitbase – Earn</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="page-body">
+<script>
+(function(){
+  try {
+    var p = JSON.parse(localStorage.getItem('bb_preferences'));
+    if (p && p.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(e) {}
+  try {
+    var uid = localStorage.getItem('bb_uid');
+    if (uid) {
+      var deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      if (deactivated.indexOf(uid) >= 0) {
+        localStorage.removeItem('bb_login_time');
+        window.location.href = 'index.html';
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <div class="flex items-center gap-2">
+      <a href="index.html" class="flex items-center gap-2">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="bitcoin" style="width:16px;height:16px;color:#fff;"></i>
+        </div>
+        <span class="font-heading" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">BITBASE</span>
+      </a>
+    </div>
+    <nav class="dash-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="assets.html">Assets</a>
+      <a href="markets.html">Markets</a>
+      <a href="trade.html">Trade</a>
+      <a href="earn.html" class="active">Earn</a>
+      <a href="history.html">History</a>
+      <a href="demo.html">Demo</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <div class="dash-right">
+      <div class="user-pill">
+        <div class="user-avatar">U</div>
+        <div><div class="user-name" style="font-size:13px;font-weight:500;">User</div><div class="user-email" style="font-size:11px;color:var(--text-tertiary);">user@email.com</div></div>
+      </div>
+      <a href="assets.html" class="deposit-btn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Deposit</a>
+      <button class="lg:hidden" onclick="document.getElementById('mobileNav').classList.add('open')" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;"><i data-lucide="menu" style="width:20px;height:20px;"></i></button>
+    </div>
+  </div>
+</header>
+<div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-nav">
+    <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+  </div>
+</div>
+
+<div class="page-content" style="max-width:1000px;margin:0 auto;">
+
+  <div class="mb-8">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent-yellow);margin-bottom:8px;">EARN</div>
+    <h1 class="font-heading text-3xl font-bold mb-1">Earn Passive Income</h1>
+    <p class="text-secondary">Grow your crypto holdings with flexible staking and savings products</p>
+  </div>
+
+  <div class="glass-card rounded-xl p-8 mb-8" id="summaryCard">
+    <div class="flex flex-col sm:flex-row justify-between gap-6 mb-4">
+      <div>
+        <div class="text-sm text-secondary mb-1">Total Earnings</div>
+        <div class="font-mono text-2xl font-bold" id="summaryEarned">$0.00</div>
+      </div>
+      <div>
+        <div class="text-sm text-secondary mb-1">Total Staked</div>
+        <div class="font-mono text-2xl font-bold" id="summaryStaked">$0.00</div>
+      </div>
+    </div>
+    <div class="text-sm" style="color:var(--accent-green);">Estimated Annual Rewards: <span id="summaryAnnual">$0.00</span></div>
+  </div>
+
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    <div class="glass-card rounded-xl p-6 flex flex-col">
+      <div style="width:48px;height:48px;border-radius:50%;background:rgba(22,199,132,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+        <i data-lucide="zap" style="width:22px;height:22px;color:var(--accent-green);"></i>
+      </div>
+      <h3 class="font-heading font-semibold text-lg mb-1">Flexible Savings</h3>
+      <p class="text-sm text-secondary mb-4">Withdraw anytime, earn daily rewards</p>
+      <div class="mb-1"><span class="font-mono text-2xl font-bold" style="color:var(--accent-green);">3.50%</span> <span class="text-sm text-secondary">APY</span></div>
+      <div class="text-xs text-tertiary mb-4">Min. deposit: 10 USDT</div>
+      <div style="flex:1;"></div>
+      <button onclick="openFlexibleModal()" class="w-full rounded-xl py-3 text-sm font-semibold" style="border:1px solid rgba(22,199,132,0.4);background:rgba(22,199,132,0.1);color:var(--accent-green);transition:background 0.2s;" onmouseover="this.style.background='rgba(22,199,132,0.2)'" onmouseout="this.style.background='rgba(22,199,132,0.1)'">Start Earning</button>
+      <div class="text-center mt-3"><a href="#" class="text-xs text-secondary" style="transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color=''">Learn More</a></div>
+    </div>
+
+    <div class="glass-card rounded-xl p-6 flex flex-col">
+      <div style="width:48px;height:48px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+        <i data-lucide="lock" style="width:22px;height:22px;color:var(--accent-orange);"></i>
+      </div>
+      <h3 class="font-heading font-semibold text-lg mb-1">Locked Staking</h3>
+      <p class="text-sm text-secondary mb-4">Lock for 30-365 days for higher yields</p>
+      <div class="mb-1"><span class="font-mono text-2xl font-bold" style="color:var(--accent-orange);">8.00%</span> <span class="text-sm text-secondary">APY</span></div>
+      <div class="text-xs text-tertiary mb-3">Min. deposit: 100 USDT</div>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span style="padding:4px 10px;border-radius:6px;font-size:11px;background:rgba(247,147,26,0.1);border:1px solid rgba(247,147,26,0.2);color:var(--accent-orange);">30d</span>
+        <span style="padding:4px 10px;border-radius:6px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--text-secondary);">60d</span>
+        <span style="padding:4px 10px;border-radius:6px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--text-secondary);">90d</span>
+        <span style="padding:4px 10px;border-radius:6px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--text-secondary);">180d</span>
+        <span style="padding:4px 10px;border-radius:6px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--text-secondary);">365d</span>
+      </div>
+      <div style="flex:1;"></div>
+      <button onclick="openLockedModal()" class="btn-primary w-full rounded-xl py-3 text-sm font-semibold text-white">Start Earning</button>
+    </div>
+
+    <div class="glass-card rounded-xl p-6 flex flex-col">
+      <div style="width:48px;height:48px;border-radius:50%;background:rgba(65,105,225,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+        <i data-lucide="trending-up" style="width:22px;height:22px;color:var(--accent-blue);"></i>
+      </div>
+      <h3 class="font-heading font-semibold text-lg mb-1">DeFi Yield</h3>
+      <p class="text-sm text-secondary mb-4">Earn from DeFi protocols</p>
+      <div class="mb-1"><span class="font-mono text-2xl font-bold" style="color:var(--accent-blue);">12.00%</span> <span class="text-sm text-secondary">APY</span></div>
+      <div class="flex items-center gap-2 text-xs text-tertiary mb-4">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent-yellow);display:inline-block;"></span>
+        Risk: Medium-High
+      </div>
+      <div style="flex:1;"></div>
+      <button onclick="openDefiModal()" class="w-full rounded-xl py-3 text-sm font-semibold" style="border:1px solid rgba(65,105,225,0.4);background:rgba(65,105,225,0.1);color:var(--accent-blue);transition:background 0.2s;" onmouseover="this.style.background='rgba(65,105,225,0.2)'" onmouseout="this.style.background='rgba(65,105,225,0.1)'">Start Earning</button>
+    </div>
+  </div>
+
+  <div class="glass-card rounded-xl p-8 mb-8">
+    <h2 class="font-heading text-xl font-semibold mb-6">How It Works</h2>
+    <div class="flex flex-col gap-5">
+      <div class="flex items-start gap-4">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="font-mono text-sm font-bold" style="color:var(--accent-orange);">1</span></div>
+        <p class="text-sm text-secondary pt-1">Deposit USDT or supported assets from your Assets page</p>
+      </div>
+      <div class="flex items-start gap-4">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="font-mono text-sm font-bold" style="color:var(--accent-orange);">2</span></div>
+        <p class="text-sm text-secondary pt-1">Choose a savings or staking product that fits your needs</p>
+      </div>
+      <div class="flex items-start gap-4">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="font-mono text-sm font-bold" style="color:var(--accent-orange);">3</span></div>
+        <p class="text-sm text-secondary pt-1">Interest accrues daily and is paid directly to your account</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-8">
+    <h2 class="font-heading font-semibold text-xl mb-5">Your Active Positions</h2>
+    <div id="positionsContainer" class="flex flex-col gap-4">
+      <div id="emptyPositions" class="glass-card rounded-xl p-8 text-center">
+        <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          <i data-lucide="wallet" style="width:22px;height:22px;color:var(--text-tertiary);"></i>
+        </div>
+        <p class="text-sm text-secondary">No active positions yet</p>
+        <p class="text-xs text-tertiary mt-1">Start earning by choosing a product above</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLEXIBLE SAVINGS MODAL -->
+  <div class="modal-overlay" id="flexibleModal" onclick="if(event.target===this)closeModal('flexibleModal')">
+    <div class="modal-box" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 class="font-heading font-semibold">Flexible Savings</h3>
+        <button onclick="closeModal('flexibleModal')" style="color:var(--text-tertiary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(22,199,132,0.08);border:1px solid rgba(22,199,132,0.2);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+          <i data-lucide="zap" style="width:16px;height:16px;color:var(--accent-green);flex-shrink:0;"></i>
+          <div><div class="text-xs font-medium" style="color:var(--accent-green);">Up to 3.50% APY</div><div class="text-xs text-tertiary">Withdraw anytime with no lock period</div></div>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Select Asset</label>
+          <select id="flexAsset" class="input-field" onchange="updateFlexibleEarnings()">
+            <option value="USDT" data-apr="3.50" data-min="10">USDT — 3.50% APY</option>
+            <option value="USDC" data-apr="3.20" data-min="10">USDC — 3.20% APY</option>
+            <option value="BTC" data-apr="1.50" data-min="0.001">BTC — 1.50% APY</option>
+            <option value="ETH" data-apr="2.00" data-min="0.01">ETH — 2.00% APY</option>
+            <option value="SOL" data-apr="2.80" data-min="0.1">SOL — 2.80% APY</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Deposit Amount</label>
+          <div style="position:relative;">
+            <input type="number" id="flexAmount" class="input-field" placeholder="0.00" style="width:100%;padding-right:60px;" oninput="updateFlexibleEarnings()">
+            <button onclick="setMaxFlexible()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--accent-orange);font-weight:600;">MAX</button>
+          </div>
+          <div class="text-xs text-tertiary mt-1" id="flexMin">Min. deposit: 10 USDT</div>
+          <div class="text-xs text-secondary mt-1" id="flexAvailable" style="color:var(--accent-green);">Available: 0 USDT</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">APY</span><span class="font-mono text-sm font-medium" id="flexAprDisplay" style="color:var(--accent-green);">3.50%</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Est. Daily Earnings</span><span class="font-mono text-sm font-medium" id="flexDaily">0.00</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Est. Monthly Earnings</span><span class="font-mono text-sm font-medium" id="flexMonthly">0.00</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-tertiary">Est. Yearly Earnings</span><span class="font-mono text-sm font-medium" id="flexYearly" style="color:var(--accent-green);">0.00</span></div>
+        </div>
+        <button id="flexSubmitBtn" onclick="submitFlexible()" class="btn-primary w-full rounded-xl py-3 text-sm font-semibold text-white" disabled style="opacity:0.5;cursor:not-allowed;">Confirm Deposit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCKED STAKING MODAL -->
+  <div class="modal-overlay" id="lockedModal" onclick="if(event.target===this)closeModal('lockedModal')">
+    <div class="modal-box" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 class="font-heading font-semibold">Locked Staking</h3>
+        <button onclick="closeModal('lockedModal')" style="color:var(--text-tertiary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(247,147,26,0.08);border:1px solid rgba(247,147,26,0.2);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+          <i data-lucide="lock" style="width:16px;height:16px;color:var(--accent-orange);flex-shrink:0;"></i>
+          <div><div class="text-xs font-medium" style="color:var(--accent-orange);">Up to 12.00% APY</div><div class="text-xs text-tertiary">Lock for 30–365 days for higher yields</div></div>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Select Asset</label>
+          <select id="lockedAsset" class="input-field" onchange="updateLockedEarnings()">
+            <option value="USDT" data-min="100">USDT</option>
+            <option value="BTC" data-min="0.01">BTC</option>
+            <option value="ETH" data-min="0.1">ETH</option>
+            <option value="SOL" data-min="1">SOL</option>
+            <option value="BNB" data-min="0.5">BNB</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Lock Duration</label>
+          <div class="flex flex-wrap gap-2" id="lockedDurationGroup">
+            <button class="locked-dur active" data-days="30" onclick="selectLockedDuration(this)">30 days</button>
+            <button class="locked-dur" data-days="60" onclick="selectLockedDuration(this)">60 days</button>
+            <button class="locked-dur" data-days="90" onclick="selectLockedDuration(this)">90 days</button>
+            <button class="locked-dur" data-days="180" onclick="selectLockedDuration(this)">180 days</button>
+            <button class="locked-dur" data-days="365" onclick="selectLockedDuration(this)">365 days</button>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Deposit Amount</label>
+          <div style="position:relative;">
+            <input type="number" id="lockedAmount" class="input-field" placeholder="0.00" style="width:100%;padding-right:60px;" oninput="updateLockedEarnings()">
+            <button onclick="setMaxLocked()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--accent-orange);font-weight:600;">MAX</button>
+          </div>
+          <div class="text-xs text-tertiary mt-1" id="lockedMin">Min. deposit: 100 USDT</div>
+          <div class="text-xs text-secondary mt-1" id="lockedAvailable" style="color:var(--accent-green);">Available: 0 USDT</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Selected Duration</span><span class="font-mono text-sm font-medium" id="lockedDurDisplay">30 days</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">APY</span><span class="font-mono text-sm font-medium" id="lockedAprDisplay" style="color:var(--accent-orange);">6.00%</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Est. Total Earnings</span><span class="font-mono text-sm font-medium" id="lockedTotal" style="color:var(--accent-green);">0.00</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-tertiary">Unlock Date</span><span class="font-mono text-sm font-medium" id="lockedUnlock">—</span></div>
+        </div>
+        <button id="lockedSubmitBtn" onclick="submitLocked()" class="btn-primary w-full rounded-xl py-3 text-sm font-semibold text-white" disabled style="opacity:0.5;cursor:not-allowed;">Confirm Stake</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEFI YIELD MODAL -->
+  <div class="modal-overlay" id="defiModal" onclick="if(event.target===this)closeModal('defiModal')">
+    <div class="modal-box" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 class="font-heading font-semibold">DeFi Yield</h3>
+        <button onclick="closeModal('defiModal')" style="color:var(--text-tertiary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(65,105,225,0.08);border:1px solid rgba(65,105,225,0.2);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+          <i data-lucide="trending-up" style="width:16px;height:16px;color:var(--accent-blue);flex-shrink:0;"></i>
+          <div><div class="text-xs font-medium" style="color:var(--accent-blue);">Up to 12.00% APY</div><div class="text-xs text-tertiary">Higher returns with DeFi protocols</div></div>
+        </div>
+        <div style="background:rgba(253,176,34,0.08);border:1px solid rgba(253,176,34,0.2);border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+          <i data-lucide="alert-triangle" style="width:14px;height:14px;color:var(--accent-yellow);flex-shrink:0;"></i>
+          <span class="text-xs" style="color:var(--accent-yellow);">DeFi products carry smart contract risk. Returns may vary.</span>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Select Asset</label>
+          <select id="defiAsset" class="input-field" onchange="updateDefiEarnings()">
+            <option value="USDT" data-apr="8.50" data-min="50">USDT — Aave V3</option>
+            <option value="ETH" data-apr="5.20" data-min="0.05">ETH — Lido stETH</option>
+            <option value="USDC" data-apr="7.80" data-min="50">USDC — Compound V3</option>
+            <option value="SOL" data-apr="6.50" data-min="1">SOL — Marinade Finance</option>
+            <option value="DAI" data-apr="9.00" data-min="50">DAI — Curve Pool</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Deposit Amount</label>
+          <div style="position:relative;">
+            <input type="number" id="defiAmount" class="input-field" placeholder="0.00" style="width:100%;padding-right:60px;" oninput="updateDefiEarnings()">
+            <button onclick="setMaxDefi()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--accent-blue);font-weight:600;">MAX</button>
+          </div>
+          <div class="text-xs text-tertiary mt-1" id="defiMin">Min. deposit: 50 USDT</div>
+          <div class="text-xs text-secondary mt-1" id="defiAvailable" style="color:var(--accent-green);">Available: 0 USDT</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Protocol</span><span class="text-sm font-medium" id="defiProtocol">Aave V3</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">APY</span><span class="font-mono text-sm font-medium" id="defiAprDisplay" style="color:var(--accent-blue);">8.50%</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Est. Daily Earnings</span><span class="font-mono text-sm font-medium" id="defiDaily">0.00</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-tertiary">Est. Yearly Earnings</span><span class="font-mono text-sm font-medium" id="defiYearly" style="color:var(--accent-green);">0.00</span></div>
+        </div>
+        <button id="defiSubmitBtn" onclick="submitDefi()" class="w-full rounded-xl py-3 text-sm font-semibold text-white" style="background:linear-gradient(135deg,#4169E1,#2850c8);border:none;opacity:0.5;cursor:not-allowed;" disabled>Confirm Deposit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;"></div>
+
+</div>
+
+<style>
+  [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
+  [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
+  .locked-dur{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:500;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--text-secondary);cursor:pointer;transition:all 0.2s;}
+  .locked-dur:hover{background:rgba(247,147,26,0.08);border-color:rgba(247,147,26,0.2);color:var(--accent-orange);}
+  .locked-dur.active{background:rgba(247,147,26,0.12);border-color:rgba(247,147,26,0.4);color:var(--accent-orange);}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:var(--bg-secondary);border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:100%;max-height:90vh;overflow-y:auto;animation:slideUp 0.3s ease;}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);}
+  .modal-body{padding:24px;}
+  .input-label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:500;}
+  .input-field{width:100%;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#fff;font-size:14px;outline:none;transition:border-color 0.2s;appearance:none;-webkit-appearance:none;}
+  select.input-field{cursor:pointer;padding-right:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23999' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+  select.input-field option{background:#1a1a1a;color:#fff;}
+  .input-field:focus{border-color:#f7931a;box-shadow:0 0 0 3px rgba(247,147,26,0.1);}
+  .input-field::placeholder{color:var(--text-tertiary);}
+  @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+</style>
+
+<script>
+// ===== NAME LOADER =====
+(function(){
+  var name=localStorage.getItem('bb_name')||'User';
+  var first=name.split(' ')[0];
+  document.querySelectorAll('.user-avatar').forEach(function(a){a.textContent=first.charAt(0).toUpperCase();});
+  document.querySelectorAll('.user-name').forEach(function(d){d.textContent=first;});
+  var email=localStorage.getItem('bb_email')||'user@email.com';
+  document.querySelectorAll('.user-email').forEach(function(d){d.textContent=email;});
+})();
+lucide.createIcons();
+
+// ===== MODAL HELPERS =====
+function openModal(id){ document.getElementById(id).classList.add('open'); lucide.createIcons(); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(function(m){m.classList.remove('open');}); });
+
+// ===== POSITIONS STORAGE =====
+function getPositions(){ try{ return JSON.parse(localStorage.getItem('bb_earn_positions'))||[]; }catch(e){return [];} }
+function savePositions(arr){ localStorage.setItem('bb_earn_positions',JSON.stringify(arr)); }
+
+function isCrypto(coin){ return coin==='BTC'||coin==='ETH'||coin==='SOL'||coin==='BNB'||coin==='DAI'; }
+
+function formatEarned(amount,coin){
+  if(isCrypto(coin)) return amount.toFixed(8)+' '+coin;
+  return '$'+amount.toFixed(2);
+}
+
+function renderPositions(){
+  var positions=getPositions();
+  var container=document.getElementById('positionsContainer');
+  if(!positions.length){
+    container.innerHTML='<div id="emptyPositions" class="glass-card rounded-xl p-8 text-center"><div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><i data-lucide="wallet" style="width:22px;height:22px;color:var(--text-tertiary);"></i></div><p class="text-sm text-secondary">No active positions yet</p><p class="text-xs text-tertiary mt-1">Start earning by choosing a product above</p></div>';
+    lucide.createIcons();
+    updateSummary(positions);
+    return;
+  }
+  var html='';
+  for(var i=0;i<positions.length;i++){
+    var p=positions[i];
+    var now=Date.now();
+    var start=new Date(p.started).getTime();
+    var elapsed=(now-start)/(1000*86400*365);
+    var earned=p.amount*p.apy/100*elapsed;
+    if(isCrypto(earned)) earned=parseFloat(earned.toFixed(8));
+
+    var icon='zap',iconColor='var(--accent-green)',bgColor='rgba(22,199,132,0.1)',label='Flexible Savings';
+    if(p.type==='locked'){icon='lock';iconColor='var(--accent-orange)';bgColor='rgba(247,147,26,0.1)';label='Locked Staking';}
+    if(p.type==='defi'){icon='trending-up';iconColor='var(--accent-blue)';bgColor='rgba(65,105,225,0.1)';label='DeFi Yield';}
+
+    html+='<div class="glass-card rounded-xl p-6">';
+    html+='<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">';
+    html+='<div class="flex items-center gap-3">';
+    html+='<div style="width:40px;height:40px;border-radius:10px;background:'+bgColor+';display:flex;align-items:center;justify-content:center;"><i data-lucide="'+icon+'" style="width:18px;height:18px;color:'+iconColor+';"></i></div>';
+    html+='<div><div class="font-medium text-sm">'+label+'</div><div class="text-xs text-tertiary">'+p.coin+(p.protocol?' — '+p.protocol:'')+'</div></div>';
+    html+='</div>';
+    html+=(p.type==='locked'?'<span class="text-xs font-medium" style="color:var(--text-tertiary);" title="Locked until maturity">Locked</span>':'<button onclick="removePosition('+i+')" class="text-xs font-medium" style="color:var(--accent-orange);">Unstake</button>');
+    html+='</div>';
+
+    html+='<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">';
+    html+='<div><div class="text-xs text-tertiary mb-1">Amount</div><div class="font-mono text-sm font-medium">'+p.amount+' '+p.coin+'</div></div>';
+    html+='<div><div class="text-xs text-tertiary mb-1">APY</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">'+p.apy.toFixed(2)+'%</div></div>';
+    html+='<div><div class="text-xs text-tertiary mb-1">Started</div><div class="text-sm">'+new Date(p.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div></div>';
+    html+='<div><div class="text-xs text-tertiary mb-1">Earned</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">'+formatEarned(earned,p.coin)+'</div></div>';
+    html+='</div>';
+
+    if(p.type==='locked'&&p.endDate){
+      var endDate=new Date(p.endDate).getTime();
+      var totalMs=endDate-start;
+      var progress=Math.min(100,((now-start)/totalMs)*100);
+      html+='<div class="flex items-center justify-between text-xs text-tertiary mb-2"><span>'+new Date(p.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span><span>Ends '+new Date(p.endDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>';
+      html+='<div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;"><div style="width:'+progress.toFixed(1)+'%;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent-orange),var(--accent-yellow));"></div></div>';
+    }
+    if(p.type==='defi'){
+      html+='<div class="flex items-center gap-2 text-xs text-tertiary"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent-yellow);display:inline-block;"></span> Risk: Medium-High</div>';
+    }
+    html+='</div>';
+  }
+  container.innerHTML=html;
+  lucide.createIcons();
+  updateSummary(positions);
+}
+
+var COIN_PRICES={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,USDT:1,USDC:1,DAI:1};
+function updateSummary(positions){
+  var totalEarnedUsd=0,totalStakedUsd=0;
+  var now=Date.now();
+  for(var i=0;i<positions.length;i++){
+    var p=positions[i];
+    var price=COIN_PRICES[p.coin]||0;
+    var elapsed=(now-new Date(p.started).getTime())/(1000*86400*365);
+    var earned=p.amount*p.apy/100*elapsed;
+    totalEarnedUsd+=earned*price;
+    totalStakedUsd+=p.amount*price;
+  }
+  var fmt=function(v){return v>=1000?'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'$'+v.toFixed(2);};
+  document.getElementById('summaryEarned').textContent=fmt(totalEarnedUsd);
+  document.getElementById('summaryStaked').textContent=fmt(totalStakedUsd);
+  document.getElementById('summaryAnnual').textContent=fmt(totalStakedUsd*0.07);
+}
+
+function removePosition(index){
+  var positions=getPositions();
+  var p=positions[index];
+  if(p.type==='locked'){showToast('Locked staking cannot be unstaked before maturity','error');return;}
+  if(!confirm('Unstake '+p.amount+' '+p.coin+' from '+p.type+'?')) return;
+  returnBalance(p.coin,p.amount);
+  positions.splice(index,1);
+  savePositions(positions);
+  renderPositions();
+  showToast(p.amount+' '+p.coin+' unstaked successfully!','success');
+}
+
+function deductBalance(coin,amount){
+  var data={};
+  try{var raw=localStorage.getItem('bb_asset_balances');if(raw)data=JSON.parse(raw);}catch(e){}
+  if(coin==='USDT'){
+    var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
+    cb=Math.max(0,cb-amount);
+    localStorage.setItem('bb_cash_balance',cb.toString());
+    FLEX_BALANCES.USDT=cb;LOCKED_BALANCES.USDT=cb;DEFI_BALANCES.USDT=cb;
+    if(data.USDT){data.USDT.balance=Math.max(0,data.USDT.balance-amount);data.USDT.qty=Math.max(0,data.USDT.qty-amount);}
+  }else{
+    if(data[coin]){data[coin].balance=Math.max(0,data[coin].balance-amount);data[coin].qty=Math.max(0,data[coin].qty-amount);}
+  }
+  localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+}
+function returnBalance(coin,amount){
+  var data={};
+  try{var raw=localStorage.getItem('bb_asset_balances');if(raw)data=JSON.parse(raw);}catch(e){}
+  if(coin==='USDT'){
+    var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
+    cb+=amount;
+    localStorage.setItem('bb_cash_balance',cb.toString());
+    FLEX_BALANCES.USDT=cb;LOCKED_BALANCES.USDT=cb;DEFI_BALANCES.USDT=cb;
+    if(data.USDT){data.USDT.balance+=amount;data.USDT.qty+=amount;}
+  }else{
+    if(data[coin]){data[coin].balance+=amount;data[coin].qty+=amount;}
+    else{data[coin]={balance:amount,qty:amount};}
+  }
+  localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+}
+// ===== FLEXIBLE SAVINGS =====
+var FLEX_RATES={USDT:{apy:3.50,min:10},USDC:{apy:3.20,min:10},BTC:{apy:1.50,min:0.001},ETH:{apy:2.00,min:0.01},SOL:{apy:2.80,min:0.1}};
+var FLEX_BALANCES={USDT:2500,USDC:800,BTC:0.1442,ETH:2.041,SOL:15.2};
+
+function openFlexibleModal(){
+  document.getElementById('flexAmount').value='';
+  updateFlexibleEarnings();
+  openModal('flexibleModal');
+}
+function updateFlexibleEarnings(){
+  var sel=document.getElementById('flexAsset');
+  var opt=sel.options[sel.selectedIndex];
+  var apy=parseFloat(opt.dataset.apr);
+  var min=parseFloat(opt.dataset.min);
+  var amount=parseFloat(document.getElementById('flexAmount').value)||0;
+  document.getElementById('flexMin').textContent='Min. deposit: '+min+' '+sel.value;
+  document.getElementById('flexAprDisplay').textContent=apy.toFixed(2)+'%';
+  var coin=sel.value;
+  var avail=FLEX_BALANCES[coin]||0;
+  document.getElementById('flexAvailable').textContent='Available: '+avail+' '+coin;
+  var daily=amount*apy/100/365;
+  var monthly=amount*apy/100/12;
+  var yearly=amount*apy/100;
+  document.getElementById('flexDaily').textContent=isCrypto(sel.value)?daily.toFixed(8)+' '+sel.value:'$'+daily.toFixed(2);
+  document.getElementById('flexMonthly').textContent=isCrypto(sel.value)?monthly.toFixed(8)+' '+sel.value:'$'+monthly.toFixed(2);
+  document.getElementById('flexYearly').textContent=isCrypto(sel.value)?yearly.toFixed(8)+' '+sel.value:'$'+yearly.toFixed(2);
+  var btn=document.getElementById('flexSubmitBtn');
+  if(amount>=min){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  else{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}
+}
+function setMaxFlexible(){
+  var coin=document.getElementById('flexAsset').value;
+  document.getElementById('flexAmount').value=FLEX_BALANCES[coin]||0;
+  updateFlexibleEarnings();
+}
+function submitFlexible(){
+  var coin=document.getElementById('flexAsset').value;
+  var amount=parseFloat(document.getElementById('flexAmount').value);
+  var opt=document.getElementById('flexAsset').options[document.getElementById('flexAsset').selectedIndex];
+  var apy=parseFloat(opt.dataset.apr);
+  var min=parseFloat(opt.dataset.min);
+  if(amount<min){showToast('Minimum deposit is '+min+' '+coin,'error');return;}
+  var avail=FLEX_BALANCES[coin]||0;
+  if(amount>avail){showToast('Insufficient '+coin+' balance. Available: '+avail+' '+coin,'error');return;}
+  var btn=document.getElementById('flexSubmitBtn');
+  btn.disabled=true;btn.textContent='Processing...';
+  setTimeout(function(){
+    deductBalance(coin,amount);
+    var positions=getPositions();
+    var userUid=localStorage.getItem('bb_uid')||'';
+    var userName=localStorage.getItem('bb_name')||'User';
+    var userEmail=localStorage.getItem('bb_email')||'';
+    positions.push({type:'flexible',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),uid:userUid,userName:userName,userEmail:userEmail});
+    savePositions(positions);
+    renderPositions();
+    closeModal('flexibleModal');
+    btn.disabled=false;btn.textContent='Confirm Deposit';
+    document.getElementById('flexAmount').value='';
+    showToast('Flexible Savings deposit of '+amount+' '+coin+' successful!','success');
+  },1500);
+}
+
+// ===== LOCKED STAKING =====
+var LOCKED_RATES={30:6.00,60:7.00,90:8.00,180:10.00,365:12.00};
+var LOCKED_MIN={USDT:100,BTC:0.01,ETH:0.1,SOL:1,BNB:0.5};
+var LOCKED_BALANCES={USDT:2500,BTC:0.1442,ETH:2.041,SOL:15.2,BNB:4.5};
+var selectedLockedDays=30;
+
+function openLockedModal(){
+  document.getElementById('lockedAmount').value='';
+  selectedLockedDays=30;
+  document.querySelectorAll('#lockedDurationGroup .locked-dur').forEach(function(b){
+    b.classList.toggle('active',b.dataset.days==='30');
+  });
+  updateLockedEarnings();
+  openModal('lockedModal');
+}
+function selectLockedDuration(btn){
+  document.querySelectorAll('#lockedDurationGroup .locked-dur').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  selectedLockedDays=parseInt(btn.dataset.days);
+  updateLockedEarnings();
+}
+function updateLockedEarnings(){
+  var coin=document.getElementById('lockedAsset').value;
+  var apy=LOCKED_RATES[selectedLockedDays];
+  var min=LOCKED_MIN[coin];
+  var amount=parseFloat(document.getElementById('lockedAmount').value)||0;
+  document.getElementById('lockedMin').textContent='Min. deposit: '+min+' '+coin;
+  var avail=LOCKED_BALANCES[coin]||0;
+  document.getElementById('lockedAvailable').textContent='Available: '+avail+' '+coin;
+  document.getElementById('lockedDurDisplay').textContent=selectedLockedDays+' days';
+  document.getElementById('lockedAprDisplay').textContent=apy.toFixed(2)+'%';
+  var totalEarnings=amount*apy/100*(selectedLockedDays/365);
+  document.getElementById('lockedTotal').textContent=isCrypto(coin)?totalEarnings.toFixed(8)+' '+coin:'$'+totalEarnings.toFixed(2);
+  var unlockDate=new Date(Date.now()+selectedLockedDays*86400000);
+  document.getElementById('lockedUnlock').textContent=unlockDate.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  var btn=document.getElementById('lockedSubmitBtn');
+  if(amount>=min){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  else{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}
+}
+function setMaxLocked(){
+  var coin=document.getElementById('lockedAsset').value;
+  document.getElementById('lockedAmount').value=LOCKED_BALANCES[coin]||0;
+  updateLockedEarnings();
+}
+function submitLocked(){
+  var coin=document.getElementById('lockedAsset').value;
+  var amount=parseFloat(document.getElementById('lockedAmount').value);
+  var apy=LOCKED_RATES[selectedLockedDays];
+  var min=LOCKED_MIN[coin];
+  if(amount<min){showToast('Minimum deposit is '+min+' '+coin,'error');return;}
+  var avail=LOCKED_BALANCES[coin]||0;
+  if(amount>avail){showToast('Insufficient '+coin+' balance. Available: '+avail+' '+coin,'error');return;}
+  var btn=document.getElementById('lockedSubmitBtn');
+  btn.disabled=true;btn.textContent='Processing...';
+  setTimeout(function(){
+    deductBalance(coin,amount);
+    var endDate=new Date(Date.now()+selectedLockedDays*86400000).toISOString();
+    var positions=getPositions();
+    positions.push({type:'locked',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),endDate:endDate,days:selectedLockedDays,uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
+    savePositions(positions);
+    renderPositions();
+    closeModal('lockedModal');
+    btn.disabled=false;btn.textContent='Confirm Stake';
+    document.getElementById('lockedAmount').value='';
+    showToast('Locked Staking of '+amount+' '+coin+' for '+selectedLockedDays+' days started!','success');
+  },1500);
+}
+
+// ===== DEFI YIELD =====
+var DEFI_RATES={USDT:{apy:8.50,protocol:'Aave V3',min:50},ETH:{apy:5.20,protocol:'Lido stETH',min:0.05},USDC:{apy:7.80,protocol:'Compound V3',min:50},SOL:{apy:6.50,protocol:'Marinade Finance',min:1},DAI:{apy:9.00,protocol:'Curve Pool',min:50}};
+var DEFI_BALANCES={USDT:2500,ETH:2.041,USDC:800,SOL:15.2,DAI:1200};
+
+(function(){
+  try{
+    var raw=localStorage.getItem('bb_asset_balances');
+    if(raw){
+      var data=JSON.parse(raw);
+      for(var k in FLEX_BALANCES){if(data[k]&&data[k].balance!==undefined)FLEX_BALANCES[k]=data[k].balance;}
+      for(var k in LOCKED_BALANCES){if(data[k]&&data[k].balance!==undefined)LOCKED_BALANCES[k]=data[k].balance;}
+      for(var k in DEFI_BALANCES){if(data[k]&&data[k].balance!==undefined)DEFI_BALANCES[k]=data[k].balance;}
+    }
+    var cb=localStorage.getItem('bb_cash_balance');
+    if(cb!==null){
+      var cash=parseFloat(cb);
+      if(FLEX_BALANCES.USDT!==undefined)FLEX_BALANCES.USDT=cash;
+      if(LOCKED_BALANCES.USDT!==undefined)LOCKED_BALANCES.USDT=cash;
+      if(DEFI_BALANCES.USDT!==undefined)DEFI_BALANCES.USDT=cash;
+    }
+  }catch(e){}
+})();
+
+function openDefiModal(){
+  document.getElementById('defiAmount').value='';
+  updateDefiEarnings();
+  openModal('defiModal');
+}
+function updateDefiEarnings(){
+  var coin=document.getElementById('defiAsset').value;
+  var data=DEFI_RATES[coin];
+  var amount=parseFloat(document.getElementById('defiAmount').value)||0;
+  document.getElementById('defiMin').textContent='Min. deposit: '+data.min+' '+coin;
+  var avail=DEFI_BALANCES[coin]||0;
+  document.getElementById('defiAvailable').textContent='Available: '+avail+' '+coin;
+  document.getElementById('defiProtocol').textContent=data.protocol;
+  document.getElementById('defiAprDisplay').textContent=data.apy.toFixed(2)+'%';
+  var daily=amount*data.apy/100/365;
+  var yearly=amount*data.apy/100;
+  document.getElementById('defiDaily').textContent=isCrypto(coin)?daily.toFixed(8)+' '+coin:'$'+daily.toFixed(2);
+  document.getElementById('defiYearly').textContent=isCrypto(coin)?yearly.toFixed(8)+' '+coin:'$'+yearly.toFixed(2);
+  var btn=document.getElementById('defiSubmitBtn');
+  if(amount>=data.min){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  else{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}
+}
+function setMaxDefi(){
+  var coin=document.getElementById('defiAsset').value;
+  document.getElementById('defiAmount').value=DEFI_BALANCES[coin]||0;
+  updateDefiEarnings();
+}
+function submitDefi(){
+  var coin=document.getElementById('defiAsset').value;
+  var amount=parseFloat(document.getElementById('defiAmount').value);
+  var data=DEFI_RATES[coin];
+  if(amount<data.min){showToast('Minimum deposit is '+data.min+' '+coin,'error');return;}
+  var avail=DEFI_BALANCES[coin]||0;
+  if(amount>avail){showToast('Insufficient '+coin+' balance. Available: '+avail+' '+coin,'error');return;}
+  var btn=document.getElementById('defiSubmitBtn');
+  btn.disabled=true;btn.textContent='Processing...';
+  setTimeout(function(){
+    deductBalance(coin,amount);
+    var positions=getPositions();
+    positions.push({type:'defi',coin:coin,amount:amount,apy:data.apy,protocol:data.protocol,started:new Date().toISOString(),uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
+    savePositions(positions);
+    renderPositions();
+    closeModal('defiModal');
+    btn.disabled=false;btn.textContent='Confirm Deposit';
+    document.getElementById('defiAmount').value='';
+    showToast('DeFi Yield deposit of '+amount+' '+coin+' to '+data.protocol+' successful!','success');
+  },1500);
+}
+
+// ===== TOAST =====
+function showToast(msg,type){
+  var container=document.getElementById('toastContainer');
+  var toast=document.createElement('div');
+  toast.style.cssText='padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;color:#fff;animation:slideUp 0.3s ease;backdrop-filter:blur(10px);max-width:380px;';
+  if(type==='error'){toast.style.background='rgba(234,57,67,0.9);border:1px solid rgba(234,57,67,0.3);';toast.innerHTML='&#10005; '+msg;}
+  else{toast.style.background='rgba(22,199,132,0.9);border:1px solid rgba(22,199,132,0.3);';toast.innerHTML='&#10003; '+msg;}
+  container.appendChild(toast);
+  setTimeout(function(){toast.style.opacity='0';toast.style.transition='opacity 0.3s';setTimeout(function(){toast.remove();},300);},3000);
+}
+
+// ===== INIT =====
+renderPositions();
+</script>
+<div class="mobile-bottom-bar">
+  <a href="dashboard.html"><i data-lucide="layout-dashboard"></i>Home</a>
+  <a href="assets.html"><i data-lucide="wallet"></i>Assets</a>
+  <a href="trade.html"><i data-lucide="arrow-left-right"></i>Trade</a>
+  <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

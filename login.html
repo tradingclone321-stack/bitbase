@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitbase – Sign In</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f0f0f',
+                        'dark-card': '#1a1a1a',
+                        'dark-border': '#2a2a2a',
+                        accent: '#f7931a',
+                        'accent-hover': '#e88417',
+                    },
+                    fontFamily: {
+                        heading: ['Space Grotesk', 'sans-serif'],
+                        body: ['Inter', 'sans-serif'],
+                        mono: ['IBM Plex Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f0f0f;
+            color: #ffffff;
+        }
+        .input-field {
+            width: 100%;
+            padding: 0 16px;
+            height: 48px;
+            background-color: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-field::placeholder {
+            color: #666666;
+        }
+        .input-field:focus {
+            border-color: #f7931a;
+        }
+        .btn-primary {
+            width: 100%;
+            height: 48px;
+            background: linear-gradient(135deg, #f7931a, #e88417);
+            border: none;
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        .btn-secondary {
+            width: 100%;
+            height: 48px;
+            background-color: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .btn-secondary:hover {
+            border-color: #444444;
+        }
+        .checkbox-custom {
+            width: 16px;
+            height: 16px;
+            accent-color: #f7931a;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <a href="index.html" class="inline-flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #f7931a, #e88417);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M8 11.5V9a4 4 0 1 1 8 0v2.5"/>
+                        <path d="M8 11.5h5a2.5 2.5 0 0 1 0 5H8"/>
+                        <path d="M12 16.5V14"/>
+                    </svg>
+                </div>
+                <span class="text-xl font-bold font-heading tracking-wide">BITBASE</span>
+            </a>
+            <h1 class="text-3xl font-bold font-heading mb-2">Welcome Back</h1>
+            <p class="text-gray-400">Sign in to your account</p>
+        </div>
+
+        <form id="loginForm" class="space-y-4" novalidate>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Email</label>
+                <input type="email" id="email" class="input-field" placeholder="Enter your email">
+                <p id="emailError" class="text-sm mt-1 hidden" style="color:#ea3943;">Please enter a valid email address</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Password</label>
+                <div class="relative">
+                    <input type="password" id="password" class="input-field pr-12" placeholder="Enter your password">
+                    <button type="button" onclick="togglePassword('password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                        <i data-lucide="eye" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <p id="passError" class="text-sm mt-1 hidden" style="color:#ea3943;">Password is required</p>
+            </div>
+            <div class="flex items-center justify-between">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" class="checkbox-custom">
+                    <span class="text-sm text-gray-400">Remember me</span>
+                </label>
+                <a href="javascript:void(0)" onclick="openForgotModal()" class="text-sm text-accent hover:underline">Forgot password?</a>
+            </div>
+            <div id="loginError" class="hidden rounded-xl p-3 text-sm text-center" style="background:rgba(234,57,67,0.1);border:1px solid rgba(234,57,67,0.2);color:#ea3943;"></div>
+            <button type="submit" id="submitBtn" class="btn-primary relative overflow-hidden">
+                <span id="btnText">Sign In</span>
+                <span id="btnSpinner" class="hidden absolute inset-0 flex items-center justify-center">
+                    <svg class="animate-spin" style="width:20px;height:20px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor"/></svg>
+                </span>
+            </button>
+        </form>
+
+        <p class="text-center mt-8 text-gray-400 text-sm">
+            Don't have an account? <a href="register.html" class="text-accent font-medium hover:underline">Sign up</a>
+        </p>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotModal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);">
+        <div class="glass-card rounded-2xl p-8 w-full max-w-md relative">
+            <button onclick="closeForgotModal()" class="absolute top-4 right-4 text-secondary hover:text-white transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div id="forgotStep1">
+                <h3 class="font-heading font-semibold text-xl mb-2">Reset Password</h3>
+                <p class="text-sm text-secondary mb-6">Enter the email address associated with your account.</p>
+                <div class="flex flex-col gap-4">
+                    <div>
+                        <label class="input-label">Email Address</label>
+                        <input type="email" id="forgotEmail" class="input-field" placeholder="Enter your email">
+                    </div>
+                </div>
+                <button onclick="verifyForgotEmail()" class="btn-primary rounded-xl px-6 py-3 text-sm font-semibold text-white mt-6 w-full">Verify Email</button>
+            </div>
+            <div id="forgotStep2" class="hidden">
+                <h3 class="font-heading font-semibold text-xl mb-2">Set New Password</h3>
+                <p class="text-sm text-secondary mb-6">Create a new password for your account.</p>
+                <div class="flex flex-col gap-4">
+                    <div>
+                        <label class="input-label">New Password</label>
+                        <input type="password" id="forgotNewPass" class="input-field" placeholder="Enter new password">
+                    </div>
+                    <div>
+                        <label class="input-label">Confirm Password</label>
+                        <input type="password" id="forgotConfirmPass" class="input-field" placeholder="Confirm new password">
+                    </div>
+                </div>
+                <button onclick="setNewPassword()" class="btn-primary rounded-xl px-6 py-3 text-sm font-semibold text-white mt-6 w-full">Reset Password</button>
+            </div>
+            <div id="forgotSuccess" class="hidden text-center py-4">
+                <div class="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style="background:rgba(22,199,132,0.1);border:2px solid rgba(22,199,132,0.3);">
+                    <i data-lucide="check" class="w-8 h-8" style="color:var(--accent-green);"></i>
+                </div>
+                <h3 class="font-heading font-semibold text-xl mb-2">Password Reset!</h3>
+                <p class="text-sm text-secondary mb-6">Your password has been updated. You can now sign in.</p>
+                <button onclick="closeForgotModal()" class="btn-primary rounded-xl px-6 py-3 text-sm font-semibold text-white w-full">Back to Sign In</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        function togglePassword(id, btn) {
+            const input = document.getElementById(id);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                input.type = 'password';
+                icon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
+        }
+
+        function showError(id, msg) {
+            const el = document.getElementById(id);
+            el.textContent = msg || el.textContent;
+            el.classList.remove('hidden');
+        }
+        function hideError(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            let valid = true;
+
+            hideError('emailError');
+            hideError('passError');
+            hideError('loginError');
+
+            const email = document.getElementById('email').value.trim();
+            const pass = document.getElementById('password').value.trim();
+
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showError('emailError', 'Please enter a valid email address');
+                valid = false;
+            }
+            if (!pass) {
+                showError('passError', 'Password is required');
+                valid = false;
+            }
+
+            if (!valid) return;
+
+            var btnText = document.getElementById('btnText');
+            var btnSpinner = document.getElementById('btnSpinner');
+            btnText.classList.add('hidden');
+            btnSpinner.classList.remove('hidden');
+            document.getElementById('submitBtn').disabled = true;
+
+            setTimeout(function() {
+                btnText.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+                document.getElementById('submitBtn').disabled = false;
+
+                var storedEmail = localStorage.getItem('bb_email');
+                var storedPass = localStorage.getItem('bb_password');
+
+                if (!storedEmail || !storedPass) {
+                    showError('loginError');
+                    document.getElementById('loginError').textContent = 'No account found. Please create an account first.';
+                    document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                    document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                    document.getElementById('loginError').style.color = '#ea3943';
+                    return;
+                }
+
+                if (email === 'demo@bitbase.com' && pass === 'password') {
+                    showError('loginError');
+                    document.getElementById('loginError').textContent = 'Demo accounts are disabled. Please create a real account.';
+                    document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                    document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                    document.getElementById('loginError').style.color = '#ea3943';
+                    return;
+                }
+
+                if (email !== storedEmail || pass !== storedPass) {
+                    showError('loginError');
+                    document.getElementById('loginError').textContent = 'Incorrect email or password. Please try again.';
+                    document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                    document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                    document.getElementById('loginError').style.color = '#ea3943';
+                    return;
+                }
+
+                var myUid=localStorage.getItem('bb_uid');
+                if(myUid){
+                  var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
+                  if(deactivated.indexOf(myUid)>=0){
+                    showError('loginError');
+                    document.getElementById('loginError').textContent = 'Your account has been deactivated. Contact support for assistance.';
+                    document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                    document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                    document.getElementById('loginError').style.color = '#ea3943';
+                    return;
+                  }
+                }
+
+var successDiv = document.getElementById('loginError');
+                 successDiv.textContent = 'Sign in successful! Redirecting...';
+                 successDiv.style.background = 'rgba(22,199,132,0.1)';
+                 successDiv.style.borderColor = 'rgba(22,199,132,0.2)';
+                 successDiv.style.color = '#16c784';
+                 successDiv.classList.remove('hidden');
+                 localStorage.setItem('bb_login_time', Date.now());
+                 try{
+                   var syncUid=localStorage.getItem('bb_uid');
+                   var syncName=localStorage.getItem('bb_name');
+                   var syncEmail=localStorage.getItem('bb_email');
+                   if(syncUid){
+                     var newUser={uid:syncUid,name:syncName||'User',email:syncEmail||'user@email.com',cashBalance:parseFloat(localStorage.getItem('bb_cash_balance'))||0,assetBalances:JSON.parse(localStorage.getItem('bb_asset_balances')||'{}')};
+                     var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+                     var found=false;
+                     for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===syncUid){adminUsers[i]=newUser;found=true;break;}}
+                     if(!found)adminUsers.push(newUser);
+                     localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
+                   }
+                 }catch(e){}
+                 setTimeout(function() {
+                     window.location.href = 'dashboard.html';
+                }, 1200);
+            }, 1500);
+        });
+
+        document.getElementById('email').addEventListener('input', function() { hideError('emailError'); });
+        document.getElementById('password').addEventListener('input', function() { hideError('passError'); });
+
+        function openForgotModal() {
+            var m = document.getElementById('forgotModal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+            document.getElementById('forgotStep1').classList.remove('hidden');
+            document.getElementById('forgotStep2').classList.add('hidden');
+            document.getElementById('forgotSuccess').classList.add('hidden');
+            document.getElementById('forgotEmail').value = '';
+            lucide.createIcons();
+        }
+        function closeForgotModal() {
+            var m = document.getElementById('forgotModal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+        function verifyForgotEmail() {
+            var email = document.getElementById('forgotEmail').value.trim();
+            var storedEmail = localStorage.getItem('bb_email');
+            if (!email || !storedEmail || email !== storedEmail) {
+                showToast('No account found with that email');
+                return;
+            }
+            document.getElementById('forgotStep1').classList.add('hidden');
+            document.getElementById('forgotStep2').classList.remove('hidden');
+        }
+        function setNewPassword() {
+            var newPw = document.getElementById('forgotNewPass').value.trim();
+            var confirmPw = document.getElementById('forgotConfirmPass').value.trim();
+            if (!newPw || newPw.length < 8) {
+                showToast('Password must be at least 8 characters');
+                return;
+            }
+            if (newPw !== confirmPw) {
+                showToast('Passwords do not match');
+                return;
+            }
+            localStorage.setItem('bb_password', newPw);
+            document.getElementById('forgotStep2').classList.add('hidden');
+            document.getElementById('forgotSuccess').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function showToast(msg) {
+            var t = document.createElement('div');
+            t.textContent = msg;
+            t.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:12px;font-size:14px;font-weight:500;z-index:9999;background:rgba(234,57,67,0.15);border:1px solid rgba(234,57,67,0.3);color:#ea3943;backdrop-filter:blur(10px);';
+            document.body.appendChild(t);
+            setTimeout(function(){ t.remove(); }, 3000);
+        }
+    </script>
+</body>
+</html>

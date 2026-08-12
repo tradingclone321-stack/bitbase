@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markets | BitBase</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
+    [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
+  </style>
+</head>
+<body class="page-body">
+<script>
+(function(){
+  try {
+    var p = JSON.parse(localStorage.getItem('bb_preferences'));
+    if (p && p.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(e) {}
+  try {
+    var uid = localStorage.getItem('bb_uid');
+    if (uid) {
+      var deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      if (deactivated.indexOf(uid) >= 0) {
+        localStorage.removeItem('bb_login_time');
+        window.location.href = 'index.html';
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <div class="flex items-center gap-2">
+      <a href="index.html" class="flex items-center gap-2">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="bitcoin" style="width:16px;height:16px;color:#fff;"></i>
+        </div>
+        <span class="font-heading" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">BITBASE</span>
+      </a>
+    </div>
+    <nav class="dash-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="assets.html">Assets</a>
+      <a href="markets.html" class="active">Markets</a>
+      <a href="trade.html">Trade</a>
+      <a href="earn.html">Earn</a>
+      <a href="history.html">History</a>
+      <a href="demo.html">Demo</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <div class="dash-right">
+      <div class="user-pill">
+        <div class="user-avatar">U</div>
+        <div><div class="user-name" style="font-size:13px;font-weight:500;">User</div><div class="user-email" style="font-size:11px;color:var(--text-tertiary);">user@email.com</div></div>
+      </div>
+      <a href="assets.html" class="deposit-btn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Deposit</a>
+      <button class="lg:hidden" onclick="document.getElementById('mobileNav').classList.add('open')" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;"><i data-lucide="menu" style="width:20px;height:20px;"></i></button>
+    </div>
+  </div>
+</header>
+<div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-nav">
+    <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html" class="active">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+  </div>
+</div>
+
+<div class="page-content">
+
+  <div class="mb-8">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent-yellow);" class="mb-2">LIVE MARKETS</div>
+    <h1 class="font-heading text-3xl font-bold mb-2">Markets <span id="liveBadge" style="display:inline-block;vertical-align:middle;font-size:11px;font-weight:700;color:rgba(255,255,255,0.25);letter-spacing:0.05em;margin-left:8px;">● CONNECTING</span></h1>
+    <p style="color:var(--text-secondary);font-size:15px;">Real-time prices for crypto, metals, forex &amp; commodities</p>
+  </div>
+
+  <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+    <div class="relative" style="flex:1;max-width:384px;width:100%;">
+      <i data-lucide="search" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-tertiary);"></i>
+      <input type="text" id="searchInput" placeholder="Search markets..." class="input-field" style="padding-left:40px;">
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <button class="tab-btn active" data-tab="crypto">Crypto</button>
+      <button class="tab-btn" data-tab="metals">Metals</button>
+      <button class="tab-btn" data-tab="forex">Forex</button>
+      <button class="tab-btn" data-tab="commodities">Commodities</button>
+    </div>
+  </div>
+
+  <div class="glass-card rounded-xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="market-table">
+        <thead>
+          <tr>
+            <th style="width:40px;">#</th>
+            <th>Name</th>
+            <th class="text-right">Price</th>
+            <th class="text-right">24h Change</th>
+            <th class="text-right">24h Volume</th>
+            <th class="text-right">Market Cap</th>
+            <th class="text-center">Chart (7d)</th>
+            <th class="text-right">Trade</th>
+          </tr>
+        </thead>
+        <tbody id="marketBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== NAME LOADER =====
+(function(){
+  var name=localStorage.getItem('bb_name')||'User';
+  var first=name.split(' ')[0];
+  document.querySelectorAll('.user-avatar').forEach(function(a){a.textContent=first.charAt(0).toUpperCase();});
+  document.querySelectorAll('.user-name').forEach(function(d){d.textContent=first;});
+  var email=localStorage.getItem('bb_email')||'user@email.com';
+  document.querySelectorAll('.user-email').forEach(function(d){d.textContent=email;});
+})();
+const cryptoData = [
+  { rank:1, symbol:'BTC', name:'Bitcoin', pair:'BTC/USDT', price:64464.00, change:2.34, volume:'28.5B', mcap:'1.32T', color:'#F7931A', positive:true },
+  { rank:2, symbol:'ETH', name:'Ethereum', pair:'ETH/USDT', price:1880.96, change:1.87, volume:'14.2B', mcap:'423.1B', color:'#627EEA', positive:true },
+  { rank:3, symbol:'SOL', name:'Solana', pair:'SOL/USDT', price:74.78, change:5.62, volume:'3.4B', mcap:'78.5B', color:'#9945FF', positive:true },
+  { rank:4, symbol:'BNB', name:'BNB', pair:'BNB/USDT', price:569.95, change:-0.45, volume:'1.8B', mcap:'89.2B', color:'#F3BA2F', positive:false },
+  { rank:5, symbol:'XRP', name:'XRP', pair:'XRP/USDT', price:1.1006, change:-1.23, volume:'1.2B', mcap:'28.6B', color:'#00AAE4', positive:false },
+  { rank:6, symbol:'ADA', name:'Cardano', pair:'ADA/USDT', price:0.1650, change:3.21, volume:'0.8B', mcap:'16.1B', color:'#0033AD', positive:true },
+  { rank:7, symbol:'DOGE', name:'Dogecoin', pair:'DOGE/USDT', price:0.07243, change:-2.15, volume:'1.1B', mcap:'17.8B', color:'#C3A634', positive:false },
+  { rank:8, symbol:'DOT', name:'Polkadot', pair:'DOT/USDT', price:0.816, change:1.45, volume:'0.4B', mcap:'10.5B', color:'#E6007A', positive:true },
+  { rank:9, symbol:'AVAX', name:'Avalanche', pair:'AVAX/USDT', price:38.56, change:4.23, volume:'0.9B', mcap:'14.2B', color:'#E84142', positive:true },
+  { rank:10, symbol:'LINK', name:'Chainlink', pair:'LINK/USDT', price:14.23, change:-0.87, volume:'0.5B', mcap:'8.3B', color:'#2A5ADA', positive:false },
+  { rank:11, symbol:'MATIC', name:'Polygon', pair:'MATIC/USDT', price:0.8912, change:2.11, volume:'0.3B', mcap:'8.9B', color:'#8247E5', positive:true },
+  { rank:12, symbol:'UNI', name:'Uniswap', pair:'UNI/USDT', price:7.45, change:1.67, volume:'0.2B', mcap:'5.6B', color:'#FF007A', positive:true }
+];
+
+const metalsData = [
+  { rank:1, symbol:'XAU', name:'Gold', pair:'XAU/USD', price:4075, change:0.12, volume:'—', mcap:'—', color:'#FFD700', positive:true },
+  { rank:2, symbol:'XAG', name:'Silver', pair:'XAG/USD', price:59.04, change:-0.34, volume:'—', mcap:'—', color:'#C0C0C0', positive:false },
+  { rank:3, symbol:'XPT', name:'Platinum', pair:'XPT/USD', price:1628.25, change:0.56, volume:'—', mcap:'—', color:'#E5E4E2', positive:true },
+  { rank:4, symbol:'XPD', name:'Palladium', pair:'XPD/USD', price:1281.85, change:-0.23, volume:'—', mcap:'—', color:'#CED0CE', positive:false }
+];
+
+const forexData = [
+  { rank:1, symbol:'EUR', name:'Euro', pair:'EUR/USD', price:1.0823, change:0.15, volume:'—', mcap:'—', color:'#003399', positive:true, isForex:true },
+  { rank:2, symbol:'GBP', name:'British Pound', pair:'GBP/USD', price:1.2645, change:-0.08, volume:'—', mcap:'—', color:'#00247D', positive:false, isForex:true },
+  { rank:3, symbol:'JPY', name:'US Dollar / Yen', pair:'USD/JPY', price:154.23, change:0.34, volume:'—', mcap:'—', color:'#BC002D', positive:true, isForex:true },
+  { rank:4, symbol:'CHF', name:'US Dollar / Franc', pair:'USD/CHF', price:0.8834, change:-0.12, volume:'—', mcap:'—', color:'#DA291C', positive:false, isForex:true },
+  { rank:5, symbol:'AUD', name:'Australian Dollar', pair:'AUD/USD', price:0.6512, change:0.22, volume:'—', mcap:'—', color:'#00008B', positive:true, isForex:true }
+];
+
+const commoditiesData = [
+  { rank:1, symbol:'WTI', name:'WTI Crude Oil', pair:'WTI/USD', price:78.34, change:1.23, volume:'—', mcap:'—', color:'#2E8B57', positive:true },
+  { rank:2, symbol:'BRENT', name:'Brent Crude Oil', pair:'BRENT/USD', price:82.45, change:0.98, volume:'—', mcap:'—', color:'#3CB371', positive:true },
+  { rank:3, symbol:'HG', name:'Copper', pair:'HG/USD', price:4.12, change:-0.45, volume:'—', mcap:'—', color:'#B87333', positive:false },
+  { rank:4, symbol:'NG', name:'Natural Gas', pair:'NG/USD', price:2.34, change:2.34, volume:'—', mcap:'—', color:'#4682B4', positive:true },
+  { rank:5, symbol:'CORN', name:'Corn', pair:'CORN/USD', price:456.78, change:-0.67, volume:'—', mcap:'—', color:'#DAA520', positive:false }
+];
+
+function formatPrice(p, isForex) {
+  if (isForex && p < 10) return '$' + p.toFixed(4);
+  if (p >= 1000) return '$' + p.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if (p >= 1) return '$' + p.toFixed(2);
+  return '$' + p.toFixed(4);
+}
+
+function generateSparkline(positive, w, h) {
+  const pts = 14;
+  const step = w / (pts - 1);
+  let points = [];
+  let y = h / 2;
+  for (let i = 0; i < pts; i++) {
+    const drift = positive ? 0.3 : -0.3;
+    y += (Math.random() - 0.5 + drift) * (h * 0.25);
+    y = Math.max(3, Math.min(h - 3, y));
+    points.push((i * step).toFixed(1) + ',' + y.toFixed(1));
+  }
+  const color = positive ? '#16c784' : '#ea3943';
+  const fillColor = positive ? 'rgba(22,199,132,0.1)' : 'rgba(234,57,67,0.1)';
+  const linePoints = points.join(' ');
+  const fillPoints = `0,${h} ` + linePoints + ` ${w},${h}`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="sparkline">
+    <polygon points="${fillPoints}" fill="${fillColor}"/>
+    <polyline points="${linePoints}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function getCoinLogoSvg(sym){
+  var logos={
+    BTC:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#f7931a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="Arial">₿</text></svg>',
+    ETH:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#627eea"/><polygon points="16,7 23,18 16,25 9,18" fill="white"/></svg>',
+    SOL:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#9945ff"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">S</text></svg>',
+    BNB:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#f3ba2f"/><text x="16" y="22" text-anchor="middle" fill="#1a1a1a" font-size="15" font-weight="bold" font-family="Arial">B</text></svg>',
+    ADA:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0033ad"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">A</text></svg>',
+    DOGE:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#c2a633"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">D</text></svg>',
+    XRP:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#346aa9"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">X</text></svg>',
+    DOT:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#e6007a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">●</text></svg>',
+    USDT:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">₮</text></svg>',
+    AVAX:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#E84142"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">A</text></svg>',
+    LINK:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2A5ADA"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">L</text></svg>',
+    MATIC:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#8247E5"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">P</text></svg>',
+    UNI:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#FF007A"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="15" font-weight="bold" font-family="Arial">U</text></svg>',
+    XAU:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#FFD700"/><text x="16" y="22" text-anchor="middle" fill="#1a1a1a" font-size="13" font-weight="bold" font-family="Arial">Au</text></svg>',
+    XAG:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#C0C0C0"/><text x="16" y="22" text-anchor="middle" fill="#1a1a1a" font-size="13" font-weight="bold" font-family="Arial">Ag</text></svg>',
+    XPT:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#E5E4E2"/><text x="16" y="22" text-anchor="middle" fill="#555" font-size="13" font-weight="bold" font-family="Arial">Pt</text></svg>',
+    XPD:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#CED0CE"/><text x="16" y="22" text-anchor="middle" fill="#555" font-size="13" font-weight="bold" font-family="Arial">Pd</text></svg>',
+    EUR:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#003399"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="Arial">€</text></svg>',
+    GBP:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#00247D"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="Arial">£</text></svg>',
+    JPY:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#BC002D"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="Arial">¥</text></svg>',
+    CHF:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#DA291C"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">₣</text></svg>',
+    AUD:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#00008B"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">A$</text></svg>',
+    WTI:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2E8B57"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">O</text></svg>',
+    BRENT:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#3CB371"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">B</text></svg>',
+    HG:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#B87333"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">Cu</text></svg>',
+    NG:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#4682B4"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">N</text></svg>',
+    CORN:'<svg width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#DAA520"/><text x="16" y="22" text-anchor="middle" fill="#1a1a1a" font-size="13" font-weight="bold" font-family="Arial">C</text></svg>'
+  };
+  return logos[sym]?'<div style="flex-shrink:0;width:36px;height:36px;line-height:0;">'+logos[sym]+'</div>':'<div style="width:36px;height:36px;border-radius:50%;background:'+({XAU:'#FFD700',XAG:'#C0C0C0',XPT:'#E5E4E2',XPD:'#CED0CE',EUR:'#003399',GBP:'#00247D',JPY:'#BC002D',CHF:'#DA291C',AUD:'#00008B',WTI:'#2E8B57',BRENT:'#3CB371',HG:'#B87333',NG:'#4682B4',CORN:'#DAA520',BTC:'#f7931a',ETH:'#627eea',SOL:'#9945ff',BNB:'#f3ba2f',ADA:'#0033ad',DOGE:'#c2a633',XRP:'#346aa9',DOT:'#e6007a',USDT:'#26a17b',AVAX:'#E84142',LINK:'#2A5ADA',MATIC:'#8247E5',UNI:'#FF007A'}[sym]||'#333')+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;">'+sym.substring(0,2)+'</div>';
+}
+function renderTable(data, category) {
+  const tbody = document.getElementById('marketBody');
+  tbody.innerHTML = '';
+  data.forEach(item => {
+    const changeClass = item.change >= 0 ? 'badge-green' : 'badge-red';
+    const changeSign = item.change >= 0 ? '+' : '';
+    const isForex = item.isForex || false;
+    const priceStr = formatPrice(item.price, isForex);
+    const sparkSvg = generateSparkline(item.change >= 0, 80, 30);
+    const row = document.createElement('tr');
+    row.setAttribute('data-category', category);
+    row.innerHTML = `
+      <td style="color:var(--text-tertiary);font-size:13px;">${item.rank}</td>
+      <td>
+        <div class="flex items-center gap-3">
+                    ${getCoinLogoSvg(item.symbol)}
+          <div>
+            <div style="font-weight:600;font-size:14px;">${item.name}</div>
+            <div style="font-size:12px;color:var(--text-tertiary);">${item.pair}</div>
+          </div>
+        </div>
+      </td>
+      <td class="text-right font-mono" style="font-weight:500;">${priceStr}</td>
+      <td class="text-right"><span class="${changeClass}">${changeSign}${item.change.toFixed(2)}%</span></td>
+      <td class="text-right font-mono" style="color:var(--text-secondary);font-size:13px;">${item.volume}</td>
+      <td class="text-right font-mono" style="color:var(--text-secondary);font-size:13px;">${item.mcap}</td>
+      <td class="text-center">${sparkSvg}</td>
+      <td class="text-right"><a href="trade.html?pair=${item.pair}" class="btn-primary rounded-lg px-3 py-1 text-xs" style="font-size:12px;padding:4px 12px;">Trade</a></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+let currentTab = 'crypto';
+const dataMap = { crypto: cryptoData, metals: metalsData, forex: forexData, commodities: commoditiesData };
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentTab = this.getAttribute('data-tab');
+    renderTable(dataMap[currentTab], currentTab);
+  });
+});
+
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  const rows = document.querySelectorAll('#marketBody tr');
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+});
+
+renderTable(cryptoData, 'crypto');
+
+// ===== LIVE PRICE UPDATES =====
+(function(){
+  var badge=document.getElementById('liveBadge');
+  function flash(el,up){
+    el.style.transition='color 0.15s';
+    el.style.color=up?'#16c784':'#ea3943';
+    clearTimeout(el._ft);
+    el._ft=setTimeout(function(){el.style.color='';},600);
+  }
+  function updatePrices(){
+    // Crypto via Binance
+    fetch('https://api.binance.com/api/v3/ticker/price').then(function(r){return r.json();}).then(function(prices){
+      var pmap={};
+      for(var i=0;i<prices.length;i++)pmap[prices[i].symbol]=parseFloat(prices[i].price);
+      fetch('https://api.binance.com/api/v3/ticker/24hr').then(function(r){return r.json();}).then(function(dats){
+        var cmap={};
+        for(var i=0;i<dats.length;i++)cmap[dats[i].symbol]=parseFloat(dats[i].priceChangePercent);
+        var rows=currentTab==='crypto'?document.querySelectorAll('#marketBody tr'):null;
+        for(var i=0;i<cryptoData.length;i++){
+          var item=cryptoData[i],sym=item.symbol+'USDT';
+          if(!pmap[sym])continue;
+          var old=item.price;
+          item.price=pmap[sym];
+          item.change=cmap[sym]||item.change;
+          item.positive=item.change>=0;
+          if(rows&&rows[i]){
+            var cells=rows[i].querySelectorAll('td');
+            if(cells[2]){
+              cells[2].textContent=formatPrice(item.price,false);
+              flash(cells[2],item.price>old);
+            }
+            if(cells[3]){
+              var sign=item.change>=0?'+':'';
+              cells[3].innerHTML='<span class="'+(item.change>=0?'badge-green':'badge-red')+'">'+sign+item.change.toFixed(2)+'%</span>';
+            }
+          }
+        }
+        if(badge){badge.textContent='● LIVE';badge.style.color='#16c784';}
+      });
+    }).catch(function(){});
+    // Metals via aurumrates (real-time, Yahoo Finance, 50/day free)
+    fetch('https://aurumrates.com/api/v1/spot').then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.data)throw new Error('no data');
+      var amap={gold:0,silver:1,platinum:2,palladium:3};
+      for(var akey in amap){
+        var m=d.data[akey];
+        if(!m||!m.price)continue;
+        var p=parseFloat(m.price);if(p<=0)continue;
+        var idx=amap[akey];
+        var old=metalsData[idx].price;metalsData[idx].price=p;metalsData[idx].positive=p>=old;
+        if(currentTab==='metals'){var rows=document.querySelectorAll('#marketBody tr');
+          if(rows[idx]){var c=rows[idx].querySelectorAll('td');if(c[2]){c[2].textContent=formatPrice(p,false);flash(c[2],p>=old);}}}
+      }
+    }).catch(function(){
+      // Fallback: mintedmetal (unlimited, LBMA twice-daily)
+      fetch('https://mintedmetal.com/api/prices.json').then(function(r){return r.json();}).then(function(mm){
+        if(!mm||!mm.metals)return;
+        var mmap={gold:0,silver:1,platinum:2,palladium:3};
+        for(var mkey in mmap){
+          var m2=mm.metals[mkey];
+          if(!m2||!m2.price)continue;
+          var p2=parseFloat(m2.price);if(p2<=0)continue;
+          var idx2=mmap[mkey];
+          var old2=metalsData[idx2].price;metalsData[idx2].price=p2;metalsData[idx2].positive=p2>=old2;
+          if(currentTab==='metals'){var rows2=document.querySelectorAll('#marketBody tr');
+            if(rows2[idx2]){var c2=rows2[idx2].querySelectorAll('td');if(c2[2]){c2[2].textContent=formatPrice(p2,false);flash(c2[2],p2>=old2);}}}
+        }
+      }).catch(function(){});
+    });
+    // Forex via Frankfurter (ECB rates, free, no key)
+    fetch('https://api.frankfurter.dev/v1/latest?base=USD').then(function(r){return r.json();}).then(function(fx){
+      if(!fx||!fx.rates)return;
+      var r=fx.rates;
+      var pairs=[
+        {idx:0,sym:'EUR',inv:true},  // EUR/USD = 1/rates.EUR
+        {idx:1,sym:'GBP',inv:true},  // GBP/USD = 1/rates.GBP
+        {idx:2,sym:'JPY',inv:false}, // USD/JPY = rates.JPY
+        {idx:3,sym:'CHF',inv:false}, // USD/CHF = rates.CHF
+        {idx:4,sym:'AUD',inv:true}   // AUD/USD = 1/rates.AUD
+      ];
+      for(var i=0;i<pairs.length;i++){
+        var p=pairs[i],rate=r[p.sym];
+        if(!rate)continue;
+        var price=p.inv?1/rate:rate;
+        var old=forexData[p.idx].price;
+        forexData[p.idx].price=price;
+        forexData[p.idx].positive=price>=old;
+        if(currentTab==='forex'){
+          var rows=document.querySelectorAll('#marketBody tr');
+          if(rows[p.idx]){var c=rows[p.idx].querySelectorAll('td');if(c[2]){c[2].textContent=formatPrice(price,true);flash(c[2],price>=old);}}
+        }
+      }
+    }).catch(function(){});
+  }
+  updatePrices();
+  setInterval(updatePrices,30000);
+  // Metals visual jitter every 5s (display only — doesn't modify stored price)
+  setInterval(function(){
+    if(currentTab!=='metals')return;
+    var rows=document.querySelectorAll('#marketBody tr');
+    for(var mi=0;mi<metalsData.length;mi++){
+      var base=metalsData[mi].price;
+      var jitter=base*(1+(Math.random()-0.5)*0.002);
+      if(rows[mi]){var c=rows[mi].querySelectorAll('td');if(c[2]){c[2].textContent=formatPrice(jitter,false);flash(c[2],jitter>=base);}}
+    }
+  },5000);
+})();
+
+lucide.createIcons();
+</script>
+
+<div class="mobile-bottom-bar">
+  <a href="dashboard.html"><i data-lucide="layout-dashboard"></i>Home</a>
+  <a href="assets.html"><i data-lucide="wallet"></i>Assets</a>
+  <a href="trade.html"><i data-lucide="arrow-left-right"></i>Trade</a>
+  <a href="markets.html" class="active"><i data-lucide="bar-chart-3"></i>Markets</a>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

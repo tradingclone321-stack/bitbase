@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitbase – Assets</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent-orange: #f7931a;
+      --bg-primary: #0f0f0f;
+      --bg-card: #1a1a1a;
+      --bg-elevated: #222;
+      --text-primary: #ffffff;
+      --text-secondary: #9ca3af;
+      --text-tertiary: #6b7280;
+      --border-color: rgba(255,255,255,0.08);
+    }
+    [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
+    [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Inter', sans-serif; margin: 0; }
+    .font-heading { font-family: 'Space Grotesk', sans-serif; }
+    .font-mono { font-family: 'IBM Plex Mono', monospace; }
+    .gradient-text { background: linear-gradient(135deg, #f7931a, #fdb022); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .glass-card { background: var(--bg-card); border: 1px solid var(--border-color); }
+    .btn-primary { background: linear-gradient(135deg, #f7931a, #e8820e); border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn-secondary { background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; transition: all 0.2s; }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+    .badge-green { background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .market-table { width: 100%; border-collapse: collapse; }
+    .market-table th { padding: 12px 16px; font-size: 12px; color: var(--text-tertiary); font-weight: 500; border-bottom: 1px solid var(--border-color); text-transform: uppercase; letter-spacing: 0.05em; }
+    .market-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+    .market-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+    .market-table tbody tr:last-child td { border-bottom: none; }
+    .tab-btn { padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; border: none; cursor: pointer; background: transparent; color: var(--text-secondary); transition: all 0.2s; }
+    .tab-btn.active { background: rgba(247,147,26,0.15); color: #f7931a; }
+    .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+    .deposit-btn { background: linear-gradient(135deg, #f7931a, #e8820e); padding: 6px 14px; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+    .dash-header { background: rgba(15,15,15,0.9); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; }
+    .dash-header-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; }
+    .dash-nav { display: flex; gap: 6px; }
+    .dash-nav a { padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-secondary); text-decoration: none; transition: all 0.2s; }
+    .dash-nav a.active { background: rgba(247,147,26,0.15); color: #f7931a; }
+    .dash-nav a:hover:not(.active) { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+    .dash-right { display: flex; align-items: center; gap: 12px; }
+    .user-pill { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; background: rgba(255,255,255,0.06); border-radius: 10px; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #f7931a, #e8820e); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; }
+    .mobile-nav-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 999; }
+    .mobile-nav-overlay.open { display: flex; }
+    .mobile-nav { position: absolute; right: 0; top: 0; bottom: 0; width: 280px; background: var(--bg-card); padding: 24px; display: flex; flex-direction: column; gap: 4px; }
+    .mobile-nav a { padding: 10px 12px; border-radius: 8px; color: var(--text-secondary); text-decoration: none; font-size: 14px; }
+    .mobile-nav a:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+    .page-content { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+    .text-secondary { color: var(--text-secondary); }
+
+    /* Modal base */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      z-index: 2000; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px;
+      width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border-color); }
+    .modal-body { padding: 24px; }
+    .modal-body label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500; }
+    .modal-body input, .modal-body select {
+      width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid var(--border-color);
+      border-radius: 10px; color: var(--text-primary); font-size: 14px; outline: none; box-sizing: border-box;
+    }
+    .modal-body input:focus, .modal-body select:focus { border-color: #f7931a; }
+    .modal-body select { appearance: none; cursor: pointer; }
+    .modal-body .field-group { margin-bottom: 16px; }
+
+    /* Toast */
+    .toast-container { position: fixed; top: 80px; right: 24px; z-index: 3000; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500;
+      animation: slideInRight 0.3s ease; display: flex; align-items: center; gap: 8px;
+    }
+    .toast-success { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #10b981; }
+    .toast-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; }
+    @keyframes slideInRight { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* Copy button */
+    .copy-btn {
+      padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+      background: rgba(247,147,26,0.15); color: #f7931a; font-size: 13px; font-weight: 600; white-space: nowrap; transition: all 0.2s;
+    }
+    .copy-btn:hover { background: rgba(247,147,26,0.25); }
+
+    .coin-option { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+    .coin-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0; }
+
+    .swap-btn {
+      width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--border-color); background: var(--bg-primary);
+      display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; margin: 0 auto;
+    }
+    .swap-btn:hover { border-color: #f7931a; background: rgba(247,147,26,0.1); }
+
+    .max-btn {
+      padding: 4px 10px; border-radius: 6px; border: none; background: rgba(247,147,26,0.15);
+      color: #f7931a; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .max-btn:hover { background: rgba(247,147,26,0.25); }
+
+    .loan-duration-btn { padding: 8px 0; border-radius: 8px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,0.03); color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .loan-duration-btn:hover { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3); color: #8b5cf6; }
+    .loan-duration-btn.active { background: rgba(139,92,246,0.15); border-color: #8b5cf6; color: #8b5cf6; }
+
+    .submit-btn {
+      width: 100%; padding: 12px; border-radius: 10px; border: none; font-size: 15px; font-weight: 600;
+      background: linear-gradient(135deg, #f7931a, #e8820e); color: #fff; cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .submit-btn:hover { filter: brightness(1.1); }
+    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 768px) {
+      .dash-nav { display: none; }
+      .page-content { padding: 16px 12px 80px !important; }
+      .dash-header-inner { padding: 0 12px; }
+      .user-pill { display: none; }
+      .deposit-btn { display: none; }
+      .assets-page-title { font-size: 22px !important; }
+      .assets-total-value { font-size: 28px !important; }
+      .assets-total-badge { font-size: 12px !important; padding: 3px 8px !important; }
+      .assets-action-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+      .assets-action-grid button { width: 100%; justify-content: center; padding: 10px 12px !important; font-size: 12px !important; }
+      .assets-action-grid button i { margin-right: 4px !important; }
+      .assets-tabs { overflow-x: auto; flex-wrap: nowrap; gap: 6px !important; -webkit-overflow-scrolling: touch; }
+      .assets-tabs .tab-btn { white-space: nowrap; flex-shrink: 0; padding: 8px 14px !important; font-size: 12px !important; }
+      .market-table th { padding: 10px 10px !important; font-size: 10px !important; }
+      .market-table td { padding: 10px 10px !important; font-size: 12px !important; }
+      .glass-card.rounded-xl.p-6.mb-6 { padding: 16px !important; }
+      .hide-toggle-card { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+    }
+    @media (max-width: 480px) {
+      .assets-action-grid { grid-template-columns: 1fr 1fr !important; }
+      .assets-total-value { font-size: 24px !important; }
+      .modal-box { max-width: 100% !important; margin: 8px !important; border-radius: 12px !important; }
+      .modal-body { padding: 16px !important; }
+      .modal-header { padding: 14px 16px !important; }
+    }
+  </style>
+</head>
+<body class="page-body">
+<script>
+(function(){
+  try {
+    var p = JSON.parse(localStorage.getItem('bb_preferences'));
+    if (p && p.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(e) {}
+  try {
+    var uid = localStorage.getItem('bb_uid');
+    if (uid) {
+      var deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      if (deactivated.indexOf(uid) >= 0) {
+        localStorage.removeItem('bb_login_time');
+        window.location.href = 'index.html';
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <div class="flex items-center gap-2">
+      <a href="index.html" class="flex items-center gap-2">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="bitcoin" style="width:16px;height:16px;color:#fff;"></i>
+        </div>
+        <span class="font-heading" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">BITBASE</span>
+      </a>
+    </div>
+    <nav class="dash-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="assets.html" class="active">Assets</a>
+      <a href="markets.html">Markets</a>
+      <a href="trade.html">Trade</a>
+      <a href="earn.html">Earn</a>
+      <a href="history.html">History</a>
+      <a href="demo.html">Demo</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <div class="dash-right">
+      <div class="user-pill">
+        <div class="user-avatar">U</div>
+        <div>
+          <div class="user-name" style="font-size:13px;font-weight:500;">User</div>
+          <div class="user-email" style="font-size:11px;color:var(--text-tertiary);">user@email.com</div>
+        </div>
+      </div>
+      <a href="assets.html" class="deposit-btn">
+        <i data-lucide="plus" style="width:14px;height:14px;"></i> Deposit
+      </a>
+      <button class="lg:hidden" onclick="document.getElementById('mobileNav').classList.add('open')" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="menu" style="width:20px;height:20px;"></i>
+      </button>
+    </div>
+  </div>
+</header>
+<div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-nav">
+    <div class="flex justify-between items-center mb-6">
+      <span class="font-heading font-bold text-lg">Menu</span>
+      <button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="assets.html">Assets</a>
+    <a href="markets.html">Markets</a>
+    <a href="trade.html">Trade</a>
+    <a href="earn.html">Earn</a>
+    <a href="history.html">History</a>
+    <a href="settings.html">Settings</a>
+
+    <a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a>
+    <a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+  </div>
+</div>
+
+<div class="page-content">
+
+  <!-- Page Header -->
+  <div class="mb-6">
+    <h1 class="font-heading text-3xl font-bold mb-1 assets-page-title">Assets</h1>
+    <p class="text-secondary" style="font-size:14px;">Your portfolio overview</p>
+  </div>
+
+  <!-- Total Value Banner -->
+  <div class="glass-card rounded-xl p-6 mb-6">
+    <div class="text-sm text-secondary mb-2">Total Value</div>
+    <div class="flex items-baseline gap-3">
+      <div class="font-mono text-4xl font-bold gradient-text assets-total-value" id="assetsTotalValue">—</div>
+      <div class="badge-green assets-total-badge" style="font-size:14px;padding:4px 10px;" id="assetsChangeBadge">—</div>
+    </div>
+  </div>
+
+  <!-- Action Buttons Row -->
+  <div class="flex flex-wrap gap-3 mb-6 assets-action-grid">
+    <button class="btn-primary px-5 py-2.5 rounded-xl text-sm font-semibold text-white" onclick="openModal('depositModal')"><i data-lucide="arrow-down-left" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Deposit</button>
+    <button class="px-5 py-2.5 rounded-xl text-sm font-semibold" style="background:rgba(65,105,225,0.12);border:1px solid rgba(65,105,225,0.3);color:#4169E1;" onclick="openSupport()"><i data-lucide="headphones" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Customer Service</button>
+    <button class="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold" onclick="openModal('withdrawModal')"><i data-lucide="arrow-up-right" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Withdraw</button>
+    <button class="px-5 py-2.5 rounded-xl text-sm font-semibold" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#8b5cf6;" onclick="openModal('loanModal')"><i data-lucide="landmark" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Loan</button>
+    <button class="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold" onclick="openModal('transferModal')"><i data-lucide="repeat" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Transfer</button>
+    <button class="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold" onclick="openModal('convertModal')"><i data-lucide="arrow-left-right" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Convert</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="flex gap-2 mb-6 assets-tabs">
+    <button class="tab-btn active" data-tab="all" onclick="switchTab(this,'all')">Overview</button>
+    <button class="tab-btn" data-tab="spot" onclick="switchTab(this,'spot')">Spot</button>
+    <button class="tab-btn" data-tab="funding" onclick="switchTab(this,'funding')">Funding</button>
+    <button class="tab-btn" data-tab="earn" onclick="switchTab(this,'earn')">Earn</button>
+  </div>
+
+  <!-- Assets Table -->
+  <div class="glass-card rounded-xl mb-8 overflow-x-auto">
+    <table class="market-table" style="min-width:600px;">
+      <thead>
+        <tr>
+          <th class="text-left">Asset</th>
+          <th class="text-right">Total Balance</th>
+          <th class="text-right">Available</th>
+          <th class="text-right">Order Frozen</th>
+          <th class="text-right">Value (USD)</th>
+          <th class="text-right">24h Change</th>
+          <th class="text-center">Action</th>
+        </tr>
+      </thead>
+      <tbody id="assetsTableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Portfolio Distribution -->
+  <div class="glass-card rounded-xl p-6 mb-6">
+    <h2 class="font-heading font-semibold text-lg mb-5">Portfolio Distribution</h2>
+    <div style="height:28px;border-radius:8px;overflow:hidden;display:flex;" class="mb-4" id="distBar"></div>
+    <div class="flex flex-wrap gap-x-6 gap-y-2" id="distLegend"></div>
+  </div>
+
+  <!-- Hide Assets Toggle -->
+  <div class="glass-card rounded-xl p-5 flex items-center justify-between mb-8 hide-toggle-card">
+    <div>
+      <div class="font-medium text-sm mb-0.5">Hide assets with zero balance</div>
+      <div class="text-xs text-secondary">Assets with no balance will not be shown in your portfolio.</div>
+    </div>
+    <label class="relative inline-flex items-center cursor-pointer" style="width:44px;height:24px;">
+      <input type="checkbox" class="sr-only peer" id="hideZeroToggle">
+      <div style="width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,0.15);transition:background 0.2s;" class="peer-checked:!bg-[var(--accent-orange)] peer-focus:ring-2 peer-focus:ring-[var(--accent-orange)]/30"></div>
+      <div style="position:absolute;left:2px;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform 0.2s;" class="peer-checked:translate-x-[20px]"></div>
+    </label>
+  </div>
+
+</div>
+
+<!-- ==================== DEPOSIT MODAL ==================== -->
+<div class="modal-overlay" id="depositModal" onclick="if(event.target===this)closeModal('depositModal')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="font-heading font-bold text-lg">Deposit Crypto</h3>
+      <button onclick="closeModal('depositModal')" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label>Select Coin</label>
+        <select id="depositCoinSelect" onchange="updateDepositInfo()">
+          <option value="USDT">USDT</option>
+          <option value="BTC">BTC</option>
+          <option value="ETH">ETH</option>
+          <option value="USDC">USDC</option>
+          <option value="SOL">SOL</option>
+          <option value="XRP">XRP</option>
+          <option value="DOGE">DOGE</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Network</label>
+        <div id="depositNetworkDisplay" style="padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid var(--border-color);border-radius:10px;font-size:14px;">ERC20</div>
+      </div>
+      <div class="field-group">
+        <label>Deposit Address</label>
+        <div style="display:flex;gap:8px;">
+          <div id="depositAddressText" style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid var(--border-color);border-radius:10px;font-family:'IBM Plex Mono',monospace;font-size:13px;word-break:break-all;overflow:hidden;"></div>
+          <button class="copy-btn" onclick="copyDepositAddress()">Copy</button>
+        </div>
+      </div>
+      <div class="field-group" style="display:flex;justify-content:center;">
+        <canvas id="depositQR" width="160" height="160" style="border-radius:8px;background:#fff;padding:8px;"></canvas>
+      </div>
+      <div class="field-group">
+        <div style="padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:8px;font-size:12px;color:var(--text-secondary);">
+          <div style="margin-bottom:6px;">Min deposit: <span id="depositMinAmount" style="color:var(--text-primary);font-weight:600;">0.001 BTC</span></div>
+          <div style="color:#f59e0b;font-weight:500;">⚠ Only send <span id="depositWarnCoin">BTC</span> on the <span id="depositWarnNetwork">Bitcoin</span> network. Sending any other asset may result in permanent loss.</div>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Amount Deposited</label>
+        <input type="number" id="depositAmount" class="input-field" placeholder="Enter the amount you sent" step="any" min="0">
+      </div>
+      <div class="field-group">
+        <label>Proof of Deposit <span style="color:#ea3943;">*</span></label>
+        <div id="depositProofPreview" style="display:none;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.6);align-items:center;gap:8px;margin-bottom:8px;">
+          <i data-lucide="file" style="width:14px;height:14px;flex-shrink:0;"></i>
+          <span id="depositProofName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="removeDepositProof()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.4);font-size:16px;">✕</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" onclick="document.getElementById('depositProofInput').click()" style="flex:1;padding:10px;background:rgba(65,105,225,0.1);border:1px solid rgba(65,105,225,0.3);border-radius:10px;color:#4169E1;font-size:12px;font-weight:600;cursor:pointer;text-align:center;">Attach Image / File</button>
+          <input type="file" id="depositProofInput" accept="image/*,.pdf" style="display:none;" onchange="handleDepositProof(this)">
+        </div>
+      </div>
+      <button class="submit-btn" onclick="submitDepositRequest()" style="margin-top:4px;">
+        <span>Submit Deposit Request</span>
+        <div class="spinner" id="depositSpinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== WITHDRAW MODAL ==================== -->
+<div class="modal-overlay" id="withdrawModal" onclick="if(event.target===this)closeModal('withdrawModal')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="font-heading font-bold text-lg">Withdraw Crypto</h3>
+      <button onclick="closeModal('withdrawModal')" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label>Select Coin</label>
+        <select id="withdrawCoinSelect" onchange="updateWithdrawInfo()">
+          <option value="USDT">USDT</option>
+          <option value="BTC">BTC</option>
+          <option value="ETH">ETH</option>
+          <option value="USDC">USDC</option>
+          <option value="SOL">SOL</option>
+          <option value="XRP">XRP</option>
+          <option value="DOGE">DOGE</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Network</label>
+        <select id="withdrawNetworkSelect">
+          <option value="ERC20">ERC20</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Recipient Address</label>
+        <input type="text" id="withdrawAddress" placeholder="Enter wallet address">
+      </div>
+      <div class="field-group">
+        <label style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Amount</span>
+          <span style="font-size:12px;color:var(--text-tertiary);">Available: <span id="withdrawAvailable" style="color:var(--text-primary);">0.1442 BTC</span></span>
+        </label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="withdrawAmount" placeholder="0.00" style="flex:1;">
+          <button class="max-btn" onclick="setMaxWithdraw()">Max</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <div style="display:flex;justify-content:space-between;font-size:13px;">
+          <span class="text-secondary">Network Fee</span>
+          <span id="withdrawFee" class="font-mono" style="color:var(--text-primary);">0.0001 BTC</span>
+        </div>
+      </div>
+      <button class="submit-btn" id="withdrawSubmitBtn" onclick="submitWithdraw()">
+        <span>Confirm Withdrawal</span>
+        <div class="spinner" id="withdrawSpinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TRANSFER MODAL ==================== -->
+<div class="modal-overlay" id="transferModal" onclick="if(event.target===this)closeModal('transferModal')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="font-heading font-bold text-lg">Transfer</h3>
+      <button onclick="closeModal('transferModal')" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <div style="flex:1;">
+          <label>From</label>
+          <select id="transferFrom">
+            <option value="spot">Spot Wallet</option>
+            <option value="funding">Funding Wallet</option>
+          </select>
+        </div>
+        <button class="swap-btn" onclick="swapTransferDirection()" style="margin-top:16px;">
+          <i data-lucide="arrow-left-right" style="width:16px;height:16px;color:var(--text-secondary);"></i>
+        </button>
+        <div style="flex:1;">
+          <label>To</label>
+          <select id="transferTo">
+            <option value="funding">Funding Wallet</option>
+            <option value="spot">Spot Wallet</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Select Coin</label>
+        <select id="transferCoinSelect">
+          <option value="USDT">USDT</option>
+          <option value="BTC">BTC</option>
+          <option value="ETH">ETH</option>
+          <option value="USDC">USDC</option>
+          <option value="SOL">SOL</option>
+          <option value="XRP">XRP</option>
+          <option value="DOGE">DOGE</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Amount</span>
+          <span style="font-size:12px;color:var(--text-tertiary);">Available: <span id="transferAvailable" style="color:var(--text-primary);">0.1442 BTC</span></span>
+        </label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="transferAmount" placeholder="0.00" style="flex:1;">
+          <button class="max-btn" onclick="setMaxTransfer()">Max</button>
+        </div>
+      </div>
+      <button class="submit-btn" id="transferSubmitBtn" onclick="submitTransfer()">
+        <span>Confirm Transfer</span>
+        <div class="spinner" id="transferSpinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== CONVERT MODAL ==================== -->
+<div class="modal-overlay" id="convertModal" onclick="if(event.target===this)closeModal('convertModal')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="font-heading font-bold text-lg">Quick Convert</h3>
+      <button onclick="closeModal('convertModal')" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label>From</label>
+        <div style="display:flex;gap:8px;">
+          <select id="convertFromCoin" onchange="updateConvertRate()" style="width:120px;">
+            <option value="BTC">BTC</option>
+            <option value="ETH">ETH</option>
+            <option value="SOL">SOL</option>
+            <option value="USDT">USDT</option>
+            <option value="USDC">USDC</option>
+          </select>
+          <div style="flex:1;display:flex;gap:8px;">
+            <input type="number" id="convertFromAmount" placeholder="0.00" oninput="updateConvertOutput()" style="flex:1;">
+            <button class="max-btn" onclick="setMaxConvert()">Max</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;margin:4px 0;">
+        <button class="swap-btn" onclick="swapConvertDirection()">
+          <i data-lucide="arrow-down" style="width:16px;height:16px;color:var(--text-secondary);"></i>
+        </button>
+      </div>
+      <div class="field-group">
+        <label>To</label>
+        <div style="display:flex;gap:8px;">
+          <select id="convertToCoin" onchange="updateConvertRate()" style="width:120px;">
+            <option value="USDT">USDT</option>
+            <option value="BTC">BTC</option>
+            <option value="ETH">ETH</option>
+            <option value="SOL">SOL</option>
+            <option value="USDC">USDC</option>
+          </select>
+          <input type="text" id="convertToAmount" placeholder="0.00" readonly style="background:rgba(255,255,255,0.03);">
+        </div>
+      </div>
+      <div class="field-group">
+        <div style="display:flex;justify-content:space-between;font-size:13px;">
+          <span class="text-secondary">Exchange Rate</span>
+          <span id="convertRate" class="font-mono" style="color:var(--text-primary);">1 BTC = 64,464.00 USDT</span>
+        </div>
+      </div>
+      <button class="submit-btn" id="convertSubmitBtn" onclick="submitConvert()">
+        <span>Convert</span>
+        <div class="spinner" id="convertSpinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== LOAN MODAL ==================== -->
+<div class="modal-overlay" id="loanModal" onclick="if(event.target===this)closeModal('loanModal')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="font-heading font-bold text-lg">Borrow USDT</h3>
+      <button onclick="closeModal('loanModal')" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;color:#8b5cf6;margin-bottom:4px;">How it works</div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">Borrow USDT against your portfolio. Interest rates vary by duration: <b style="color:var(--text-primary);">5%–15%</b>.</div>
+      </div>
+      <div class="field-group">
+        <label>Borrow Amount (USDT)</label>
+        <input type="number" id="loanBorrowAmt" placeholder="0.00" oninput="updateLoanInterest()" style="background:rgba(255,255,255,0.03);">
+      </div>
+      <div class="field-group">
+        <label>Loan Duration</label>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">
+          <button class="loan-duration-btn active" data-days="7" onclick="selectLoanDuration(this)">7D</button>
+          <button class="loan-duration-btn" data-days="30" onclick="selectLoanDuration(this)">30D</button>
+          <button class="loan-duration-btn" data-days="90" onclick="selectLoanDuration(this)">90D</button>
+          <button class="loan-duration-btn" data-days="180" onclick="selectLoanDuration(this)">6M</button>
+          <button class="loan-duration-btn" data-days="365" onclick="selectLoanDuration(this)">1Y</button>
+        </div>
+      </div>
+
+      <!-- Interest Projection -->
+      <div id="loanInterestSection" style="display:none;background:rgba(255,255,255,0.03);border:1px solid var(--border-subtle);border-radius:10px;padding:12px 14px;margin-top:4px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;">Loan Summary</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+          <span class="text-secondary">Borrow Amount</span>
+          <span id="loanSummaryBorrow" class="font-mono" style="color:var(--text-primary);">$0.00</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+          <span class="text-secondary">Duration</span>
+          <span id="loanSummaryDuration" class="font-mono" style="color:var(--text-primary);">7 Days</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+          <span class="text-secondary">Interest Rate</span>
+          <span id="loanSummaryRate" class="font-mono" style="color:var(--text-primary);">5.0%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
+          <span class="text-secondary">Interest Accrued</span>
+          <span id="loanSummaryInterest" class="font-mono" style="color:var(--accent-orange);">+$0.00</span>
+        </div>
+        <div style="padding-top:10px;border-top:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">Total Owed</span>
+          <div id="loanSummaryTotal" class="font-mono" style="font-size:15px;font-weight:700;color:var(--text-primary);">$0.00</div>
+        </div>
+      </div>
+
+      <!-- Proof of Income -->
+      <div class="field-group" style="margin-top:12px;">
+        <label>Proof of Income</label>
+        <div id="loanUploadArea" style="border:2px dashed var(--border-subtle);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all 0.2s;" onclick="document.getElementById('loanProofInput').click()" ondragover="event.preventDefault();this.style.borderColor='#8b5cf6';" ondragleave="this.style.borderColor='var(--border-subtle)';" ondrop="event.preventDefault();this.style.borderColor='var(--border-subtle)';handleLoanProofDrop(event);">
+          <div id="loanUploadPlaceholder">
+            <div style="margin:0 auto 8px;width:40px;height:40px;border-radius:10px;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="upload" style="width:18px;height:18px;color:#8b5cf6;"></i></div>
+            <div style="font-size:13px;color:var(--text-secondary);">Click or drag to upload image</div>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">PNG, JPG, PDF (max 5MB)</div>
+          </div>
+          <div id="loanUploadPreview" style="display:none;"></div>
+        </div>
+        <input type="file" id="loanProofInput" accept="image/*,.pdf" style="display:none;" onchange="handleLoanProofSelect(event)">
+      </div>
+
+      <div class="field-group" style="margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;">
+          <span class="text-secondary">Liquidation Threshold</span>
+          <span class="font-mono" style="color:var(--accent-red);">85%</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;margin:12px 0 16px;">
+        <input type="checkbox" id="loanAgreeCheck" style="margin-top:2px;width:16px;height:16px;accent-color:#8b5cf6;cursor:pointer;flex-shrink:0;">
+        <label for="loanAgreeCheck" style="font-size:12px;color:var(--text-secondary);line-height:1.5;cursor:pointer;">I have read and agreed to the loan agreement which will be provided from customer support.</label>
+      </div>
+      <button class="submit-btn" id="loanSubmitBtn" onclick="submitLoan()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+        <span>Confirm Borrow</span>
+        <div class="spinner" id="loanSpinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ===== NAME LOADER =====
+(function(){
+  var name=localStorage.getItem('bb_name')||'User';
+  var first=name.split(' ')[0];
+  document.querySelectorAll('.user-avatar').forEach(function(a){a.textContent=first.charAt(0).toUpperCase();});
+  document.querySelectorAll('.user-name').forEach(function(d){d.textContent=first;});
+  var email=localStorage.getItem('bb_email')||'user@email.com';
+  document.querySelectorAll('.user-email').forEach(function(d){d.textContent=email;});
+})();
+
+lucide.createIcons();
+
+const COINS = {
+  USDT: { name:'Tether', network:'ERC20', color:'#26a17b', min:1, fee:1, balance:2500, rate:1, sym:'USDT', qty:5000, bg:'linear-gradient(135deg,#26a17b,#1a9e6f)' },
+  BTC:  { name:'Bitcoin', network:'Bitcoin', color:'#f7931a', min:0.0001, fee:0.0001, balance:0.1442, rate:64464.00, sym:'BTC', qty:0.1542, bg:'linear-gradient(135deg,#f7931a,#fdb022)' },
+  ETH:  { name:'Ethereum', network:'ERC20', color:'#627eea', min:0.001, fee:0.001, balance:2.041, rate:1880.96, sym:'ETH', qty:2.341, bg:'linear-gradient(135deg,#627eea,#8b5cf6)' },
+  USDC: { name:'USD Coin', network:'ERC20', color:'#2775ca', min:1, fee:1, balance:800, rate:1 },
+  SOL:  { name:'Solana', network:'Solana', color:'#9945ff', min:0.01, fee:0.005, balance:15.2, rate:74.78, sym:'SOL', qty:15.7, bg:'linear-gradient(135deg,#9945ff,#14f195)' },
+  BNB:  { name:'BNB', network:'BEP20', color:'#f3ba2f', min:0.001, fee:0.001, balance:3.0, rate:569.95, sym:'BNB', qty:3.2, bg:'linear-gradient(135deg,#f3ba2f,#f0b90b)' },
+  ADA:  { name:'Cardano', network:'Cardano', color:'#0033ad', min:1, fee:1, balance:15000, rate:0.165, sym:'ADA', qty:15000, bg:'linear-gradient(135deg,#0033ad,#0052ff)' },
+  DOGE: { name:'Dogecoin', network:'Dogecoin', color:'#ba9f33', min:1, fee:5, balance:50000, rate:0.07243, sym:'DOGE', qty:50000, bg:'linear-gradient(135deg,#c2a633,#ba9f33)' },
+  XRP:  { name:'XRP', network:'XRP Ledger', color:'#346aa9', min:1, fee:0.5, balance:4500, rate:1.1006, sym:'XRP', qty:5000, bg:'linear-gradient(135deg,#23292f,#346aa9)' },
+  DOT:  { name:'Polkadot', network:'Polkadot', color:'#e6007a', min:0.1, fee:0.1, balance:200, rate:0.816, sym:'DOT', qty:200, bg:'linear-gradient(135deg,#e6007a,#c70066)' },
+};
+// ===== DYNAMIC PORTFOLIO CALCULATION =====
+var CASH_BALANCE = (function(){var v=localStorage.getItem('bb_cash_balance');return v!==null?parseFloat(v):0;})();
+
+// Save/load coin balances to localStorage
+function saveCoinBalances(){
+  var data={};
+  for(var k in COINS){data[k]={balance:COINS[k].balance,qty:COINS[k].qty};}
+  localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+}
+function loadCoinBalances(){
+  try{
+    var raw=localStorage.getItem('bb_asset_balances');
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    for(var k in data){if(COINS[k]&&data[k]){COINS[k].balance=data[k].balance;COINS[k].qty=data[k].qty;}}
+  }catch(e){}
+}
+loadCoinBalances();
+COINS.USDT.balance = CASH_BALANCE;
+COINS.USDT.qty = CASH_BALANCE;
+
+function getHoldingsValue(){
+  var total=0;
+  var coins=['BTC','ETH','SOL','BNB','ADA','DOGE','XRP','DOT'];
+  for(var i=0;i<coins.length;i++){
+    var c=COINS[coins[i]];
+    total+=c.qty*c.rate;
+  }
+  return total;
+}
+
+function fmtNum(n){return n.toLocaleString('en-US',{minimumFractionDigits:n<10?4:2,maximumFractionDigits:n<10?4:2});}
+
+var COIN_META = [
+  {sym:'USDT',name:'Tether',wallet:'spot',bg:'linear-gradient(135deg,#26a17b,#1a9e6f)',tradePair:'USDT/USDT',badge:'Stable',badgeColor:'#26a17b'},
+  {sym:'BTC',name:'Bitcoin',wallet:'spot',bg:'linear-gradient(135deg,#f7931a,#fdb022)',tradePair:'BTC/USDT'},
+  {sym:'ETH',name:'Ethereum',wallet:'spot',bg:'linear-gradient(135deg,#627eea,#8b5cf6)',tradePair:'ETH/USDT'},
+  {sym:'SOL',name:'Solana',wallet:'spot earn',bg:'linear-gradient(135deg,#9945ff,#14f195)',tradePair:'SOL/USDT',badge:'Staked',badgeColor:'#10b981'},
+  {sym:'BNB',name:'BNB',wallet:'spot',bg:'linear-gradient(135deg,#f3ba2f,#f0b90b)',tradePair:'BNB/USDT'},
+  {sym:'ADA',name:'Cardano',wallet:'spot',bg:'linear-gradient(135deg,#0033ad,#0052ff)',tradePair:'ADA/USDT'},
+  {sym:'DOGE',name:'Dogecoin',wallet:'spot',bg:'linear-gradient(135deg,#c2a633,#ba9f33)',tradePair:'DOGE/USDT'},
+  {sym:'XRP',name:'XRP',wallet:'spot',bg:'linear-gradient(135deg,#23292f,#346aa9)',tradePair:'XRP/USDT'},
+  {sym:'DOT',name:'Polkadot',wallet:'spot earn',bg:'linear-gradient(135deg,#e6007a,#c70066)',tradePair:'DOT/USDT',badge:'Staked',badgeColor:'#10b981'}
+];
+
+function getCoinLogoSvg(sym){
+  var logos={
+    BTC:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#f7931a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="Arial">₿</text></svg>',
+    ETH:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#627eea"/><polygon points="16,7 23,18 16,25 9,18" fill="white"/></svg>',
+    SOL:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#9945ff"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">S</text></svg>',
+    BNB:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#f3ba2f"/><text x="16" y="22" text-anchor="middle" fill="#1a1a1a" font-size="15" font-weight="bold" font-family="Arial">B</text></svg>',
+    ADA:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0033ad"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">A</text></svg>',
+    DOGE:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#c2a633"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">D</text></svg>',
+    XRP:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#346aa9"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">X</text></svg>',
+    DOT:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#e6007a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">●</text></svg>',
+    USDT:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">₮</text></svg>'
+  };
+  return logos[sym]||'<div class="coin-icon" style="background:#333;">'+sym+'</div>';
+}
+var CHANGES={};
+function fetchChanges(){
+  fetch('https://api.binance.com/api/v3/ticker/24hr').then(function(r){return r.json();}).then(function(dats){
+    for(var i=0;i<dats.length;i++){
+      CHANGES[dats[i].symbol]=parseFloat(dats[i].priceChangePercent);
+    }
+    renderAssetsTable();
+  }).catch(function(){});
+}
+fetchChanges();
+setInterval(fetchChanges,30000);
+
+function renderAssetsTable(){
+  var html='';
+  for(var i=0;i<COIN_META.length;i++){
+    var m=COIN_META[i];
+    var c=COINS[m.sym];
+    var frozen=Math.max(0,c.qty-c.balance);
+    var val=c.qty*c.rate;
+    var pairKey=m.sym+'USDT';
+    var ch=CHANGES[pairKey]||0;
+    var chDisplay=ch.toFixed(2);
+    var badgeHtml=m.badge?' <span style="font-size:10px;background:rgba('+hexToRgb(m.badgeColor)+',0.15);color:'+m.badgeColor+';padding:1px 6px;border-radius:4px;margin-left:4px;">'+m.badge+'</span>':'';
+    html+='<tr data-wallet="'+m.wallet+'" data-coin="'+m.sym+'">'+
+      '<td><div class="flex items-center gap-3">'+
+        '<div style="flex-shrink:0;width:28px;height:28px;line-height:0;">'+getCoinLogoSvg(m.sym)+'</div>'+
+        '<div><div class="font-medium text-sm">'+m.name+badgeHtml+'</div>'+
+        '<div class="text-xs text-secondary">'+m.sym+'</div></div>'+
+      '</div></td>'+
+      '<td class="text-right font-mono text-sm" id="aqty-'+m.sym.toLowerCase()+'">'+fmtNum(c.qty)+'</td>'+
+      '<td class="text-right font-mono text-sm" id="abal-'+m.sym.toLowerCase()+'">'+fmtNum(c.balance)+'</td>'+
+      '<td class="text-right font-mono text-sm" id="afrozen-'+m.sym.toLowerCase()+'">'+fmtNum(frozen)+'</td>'+
+      '<td class="text-right font-mono text-sm" id="val-'+m.sym.toLowerCase()+'">$'+val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td class="text-right"><span class="'+(ch>=0?'badge-green':'badge-red')+'" id="chg-'+m.sym.toLowerCase()+'">'+(ch>=0?'+':'')+chDisplay+'%</span></td>'+
+      '<td class="text-center"><a href="trade.html?pair='+m.tradePair+'" class="btn-primary px-4 py-1.5 rounded-lg text-xs font-semibold text-white" style="text-decoration:none;">Trade</a></td>'+
+    '</tr>';
+  }
+  document.getElementById('assetsTableBody').innerHTML=html;
+}
+
+function hexToRgb(hex){
+  hex=hex.replace('#','');
+  var r=parseInt(hex.substring(0,2),16);
+  var g=parseInt(hex.substring(2,4),16);
+  var b=parseInt(hex.substring(4,6),16);
+  return r+','+g+','+b;
+}
+
+function updateAssetsValues(){
+  var holdingsVal=getHoldingsValue();
+  var totalVal=holdingsVal+CASH_BALANCE;
+  document.getElementById('assetsTotalValue').textContent='$'+totalVal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  var pnlTotal=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
+  var pnlChange=totalVal>0?(pnlTotal/totalVal)*100:0;
+  var sign=pnlChange>=0?'+':'';
+  document.getElementById('assetsChangeBadge').textContent=sign+pnlChange.toFixed(1)+'% today';
+  renderAssetsTable();
+  renderDistribution();
+}
+
+function renderDistribution() {
+  var coins = [
+    { sym:'BTC', bg:'linear-gradient(90deg,#f7931a,#fdb022)' },
+    { sym:'ETH', bg:'linear-gradient(90deg,#627eea,#8b5cf6)' },
+    { sym:'SOL', bg:'linear-gradient(90deg,#9945ff,#14f195)' },
+    { sym:'BNB', bg:'linear-gradient(90deg,#f3ba2f,#f0b90b)' },
+    { sym:'ADA', bg:'linear-gradient(90deg,#0033ad,#0052ff)' },
+    { sym:'DOGE', bg:'linear-gradient(90deg,#c2a633,#ba9f33)' },
+    { sym:'XRP', bg:'linear-gradient(90deg,#23292f,#346aa9)' },
+    { sym:'DOT', bg:'linear-gradient(90deg,#e6007a,#c70066)' },
+    { sym:'USDT', bg:'linear-gradient(90deg,#26a17b,#1a9e6f)' }
+  ];
+  var total = getHoldingsValue();
+  var barHtml = '';
+  var legendHtml = '';
+  for (var i = 0; i < coins.length; i++) {
+    var c = COINS[coins[i].sym];
+    var val = c.qty * c.rate;
+    var pct = total > 0 ? (val / total * 100) : 0;
+    if (pct < 1) continue;
+    barHtml += '<div style="width:' + pct.toFixed(1) + '%;background:' + coins[i].bg + ';"></div>';
+    legendHtml += '<div class="flex items-center gap-2 text-sm">' +
+      '<div style="width:10px;height:10px;border-radius:3px;background:' + coins[i].bg + ';"></div>' +
+      '<span class="text-secondary">' + coins[i].sym + '</span>' +
+      '<span class="font-mono font-medium">' + pct.toFixed(1) + '%</span></div>';
+  }
+  document.getElementById('distBar').innerHTML = barHtml;
+  document.getElementById('distLegend').innerHTML = legendHtml;
+}
+
+updateAssetsValues();
+
+const ADDRESSES = {
+  USDT: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',
+  BTC:  'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+  ETH:  '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',
+  USDC: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',
+  SOL:  '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
+  XRP:  'rN7PbqX2RPjxfn5RfKE1RMpDqGzRGQ3q5e',
+  DOGE: 'DFundmtrigzA6E25Swr2pRe4Eb79bGP8G1',
+};
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  lucide.createIcons();
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
+// ========== DEPOSIT ==========
+function getDepositAddresses(){
+  try{
+    var raw=localStorage.getItem('bb_deposit_addresses');
+    if(!raw)return ADDRESSES;
+    return JSON.parse(raw);
+  }catch(e){return ADDRESSES;}
+}
+function updateDepositInfo() {
+  const coin = document.getElementById('depositCoinSelect').value;
+  const data = COINS[coin];
+  var addrs=getDepositAddresses();
+  var coinData=addrs[coin]||ADDRESSES[coin];
+  var addr=typeof coinData==='string'?coinData:coinData.address;
+  var network=typeof coinData==='object'?coinData.network:data.network;
+  var qrData=typeof coinData==='object'?coinData.qrData:null;
+  document.getElementById('depositNetworkDisplay').textContent = network;
+  document.getElementById('depositAddressText').textContent = addr;
+  document.getElementById('depositMinAmount').textContent = data.min + ' ' + coin;
+  document.getElementById('depositWarnCoin').textContent = coin;
+  document.getElementById('depositWarnNetwork').textContent = network;
+  if(qrData){
+    var canvas=document.getElementById('depositQR');
+    var ctx=canvas.getContext('2d');
+    var img=new Image();
+    img.onload=function(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);};
+    img.src=qrData;
+  }else{
+    try { QRCode.toCanvas(document.getElementById('depositQR'), addr, { width: 160, margin: 1, color: { dark: '#000', light: '#fff' } }); } catch(e) {}
+  }
+}
+function copyDepositAddress() {
+  const coin = document.getElementById('depositCoinSelect').value;
+  var addrs=getDepositAddresses();
+  var coinData=addrs[coin]||ADDRESSES[coin];
+  var addr=typeof coinData==='string'?coinData:coinData.address;
+  navigator.clipboard.writeText(addr).then(() => {
+    const btn = event.target.closest('.copy-btn');
+    btn.textContent = 'Copied!';
+    showToast('Address copied to clipboard', 'success');
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  }).catch(() => {
+    showToast('Failed to copy address', 'error');
+  });
+}
+var depositProofData=null;
+function handleDepositProof(input){
+  if(input.files&&input.files[0]){
+    var file=input.files[0];
+    var reader=new FileReader();
+    reader.onload=function(e){
+      depositProofData={name:file.name,type:file.type,dataUrl:e.target.result};
+      document.getElementById('depositProofName').textContent=file.name;
+      document.getElementById('depositProofPreview').style.display='flex';
+      lucide.createIcons();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+function removeDepositProof(){
+  depositProofData=null;
+  document.getElementById('depositProofInput').value='';
+  document.getElementById('depositProofPreview').style.display='none';
+}
+function submitDepositRequest(){
+  var coin=document.getElementById('depositCoinSelect').value;
+  var amount=parseFloat(document.getElementById('depositAmount').value);
+  if(!amount||amount<=0){showToast('Please enter a valid amount','error');return;}
+  if(!depositProofData){showToast('Please attach proof of deposit','error');return;}
+  var addrs=getDepositAddresses();
+  var coinData=addrs[coin]||ADDRESSES[coin];
+  var addr=typeof coinData==='string'?coinData:coinData.address;
+  var network=typeof coinData==='object'?coinData.network:'';
+  var btn=document.querySelector('#depositModal .submit-btn');
+  var spinner=document.getElementById('depositSpinner');
+  btn.disabled=true;spinner.style.display='inline-block';
+  setTimeout(function(){
+    btn.disabled=false;spinner.style.display='none';
+    var userName=localStorage.getItem('bb_name')||'User';
+    var userEmail=localStorage.getItem('bb_email')||'user@email.com';
+    var uid=localStorage.getItem('bb_uid')||'000000';
+    var reqId='DEP-'+uid+'-'+Date.now();
+    var requests=[];
+    try{requests=JSON.parse(localStorage.getItem('bb_deposit_requests')||'[]');}catch(e){}
+    requests.push({
+      id:reqId,userId:uid,userName:userName,userEmail:userEmail,
+      coin:coin,amount:amount,network:network,address:addr,
+      proof:depositProofData,
+      status:'pending',createdAt:Date.now(),resolvedAt:0
+    });
+    localStorage.setItem('bb_deposit_requests',JSON.stringify(requests));
+    document.getElementById('depositAmount').value='';
+    removeDepositProof();
+    closeModal('depositModal');
+    showToast('Deposit of '+amount+' '+coin+' submitted! Awaiting admin approval.','success');
+  },2000);
+}
+updateDepositInfo();
+
+// ========== WITHDRAW ==========
+function updateWithdrawInfo() {
+  const coin = document.getElementById('withdrawCoinSelect').value;
+  const data = COINS[coin];
+  document.getElementById('withdrawAvailable').textContent = data.balance + ' ' + coin;
+  document.getElementById('withdrawFee').textContent = data.fee + ' ' + coin;
+  const netSelect = document.getElementById('withdrawNetworkSelect');
+  netSelect.innerHTML = '<option value="' + data.network + '">' + data.network + '</option>';
+}
+function setMaxWithdraw() {
+  const coin = document.getElementById('withdrawCoinSelect').value;
+  document.getElementById('withdrawAmount').value = COINS[coin].balance;
+}
+function submitWithdraw() {
+  const coin = document.getElementById('withdrawCoinSelect').value;
+  const addr = document.getElementById('withdrawAddress').value.trim();
+  const amount = parseFloat(document.getElementById('withdrawAmount').value);
+  const network = document.getElementById('withdrawNetworkSelect').value;
+  const data = COINS[coin];
+  if (!addr) { showToast('Please enter a recipient address', 'error'); return; }
+  if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
+  if (amount < data.min) { showToast('Minimum withdrawal is ' + data.min + ' ' + coin, 'error'); return; }
+  if (amount > data.balance) { showToast('Insufficient balance', 'error'); return; }
+  const btn = document.getElementById('withdrawSubmitBtn');
+  const spinner = document.getElementById('withdrawSpinner');
+  // Check active loan
+  var loans=[];try{loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');}catch(e){}
+  var uid=localStorage.getItem('bb_uid')||'';
+  var activeLoan=false;
+  for(var li=0;li<loans.length;li++){
+    if(loans[li].userId===uid&&loans[li].status==='active'){activeLoan=true;break;}
+  }
+  if(activeLoan){showToast('You have an outstanding loan. Please repay before withdrawing.','error');btn.disabled=false;spinner.style.display='none';return;}
+  btn.disabled = true; spinner.style.display = 'inline-block';
+  setTimeout(() => {
+    btn.disabled = false; spinner.style.display = 'none';
+    var userName=localStorage.getItem('bb_name')||'User';
+    var userEmail=localStorage.getItem('bb_email')||'user@email.com';
+    var uid=localStorage.getItem('bb_uid')||'000000';
+    var reqId='WD-'+uid+'-'+Date.now();
+    var requests=[];
+    try{requests=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');}catch(e){}
+    requests.push({
+      id:reqId,userId:uid,userName:userName,userEmail:userEmail,
+      coin:coin,amount:amount,fee:data.fee,network:network,address:addr,
+      status:'pending',createdAt:Date.now(),resolvedAt:0
+    });
+    localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
+    document.getElementById('withdrawAddress').value = '';
+    document.getElementById('withdrawAmount').value = '';
+    updateWithdrawInfo();
+    closeModal('withdrawModal');
+    showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
+  }, 2000);
+}
+
+// ========== TRANSFER ==========
+function swapTransferDirection() {
+  const from = document.getElementById('transferFrom');
+  const to = document.getElementById('transferTo');
+  const tmp = from.value;
+  from.value = to.value;
+  to.value = tmp;
+  updateTransferAvailable();
+}
+function updateTransferAvailable() {
+  const coin = document.getElementById('transferCoinSelect').value;
+  document.getElementById('transferAvailable').textContent = COINS[coin].balance + ' ' + coin;
+}
+function setMaxTransfer() {
+  const coin = document.getElementById('transferCoinSelect').value;
+  document.getElementById('transferAmount').value = COINS[coin].balance;
+}
+function submitTransfer() {
+  const coin = document.getElementById('transferCoinSelect').value;
+  const amount = parseFloat(document.getElementById('transferAmount').value);
+  const from = document.getElementById('transferFrom').value;
+  const to = document.getElementById('transferTo').value;
+  if (from === to) { showToast('Source and destination wallets must be different', 'error'); return; }
+  if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
+  if (amount > COINS[coin].balance) { showToast('Insufficient balance', 'error'); return; }
+  const btn = document.getElementById('transferSubmitBtn');
+  const spinner = document.getElementById('transferSpinner');
+  btn.disabled = true; spinner.style.display = 'inline-block';
+  setTimeout(() => {
+    COINS[coin].balance -= amount;
+    COINS[coin].qty -= amount;
+    if(coin==='USDT'){CASH_BALANCE=COINS.USDT.balance;localStorage.setItem('bb_cash_balance',CASH_BALANCE);}
+    saveCoinBalances();
+    btn.disabled = false; spinner.style.display = 'none';
+    document.getElementById('transferAmount').value = '';
+    updateTransferAvailable();
+    closeModal('transferModal');
+    updateAssetsValues();
+    showToast('Transferred ' + amount + ' ' + coin + ' from ' + (from === 'spot' ? 'Spot' : 'Funding') + ' to ' + (to === 'spot' ? 'Spot' : 'Funding'), 'success');
+  }, 2000);
+}
+
+// ========== CONVERT ==========
+const RATES = {
+  'BTC-USDT': 64464.00, 'ETH-USDT': 1880.96, 'SOL-USDT': 74.78, 'USDC-USDT': 1, 'USDT-USDT': 1,
+  'BTC-ETH': 34.27, 'BTC-SOL': 862.05, 'BTC-USDC': 64464.00,
+  'ETH-BTC': 0.02917, 'ETH-SOL': 25.16, 'ETH-USDC': 1880.96,
+  'SOL-BTC': 0.00116, 'SOL-ETH': 0.03974, 'SOL-USDC': 74.78,
+  'USDT-BTC': 0.0000155, 'USDT-ETH': 0.0005316, 'USDT-SOL': 0.01337,
+  'USDC-BTC': 0.0000155, 'USDC-ETH': 0.0005316, 'USDC-SOL': 0.01337,
+};
+function updateConvertRate() {
+  const from = document.getElementById('convertFromCoin').value;
+  const to = document.getElementById('convertToCoin').value;
+  const key = from + '-' + to;
+  const rate = RATES[key] || 0;
+  document.getElementById('convertRate').textContent = '1 ' + from + ' = ' + rate.toLocaleString('en-US', {maximumFractionDigits:8}) + ' ' + to;
+  updateConvertOutput();
+}
+function setMaxConvert() {
+  const coin = document.getElementById('convertFromCoin').value;
+  document.getElementById('convertFromAmount').value = COINS[coin].balance;
+  updateConvertOutput();
+}
+function updateConvertOutput() {
+  const from = document.getElementById('convertFromCoin').value;
+  const to = document.getElementById('convertToCoin').value;
+  const amount = parseFloat(document.getElementById('convertFromAmount').value) || 0;
+  const key = from + '-' + to;
+  const rate = RATES[key] || 0;
+  document.getElementById('convertToAmount').value = amount > 0 ? (amount * rate).toFixed(8) : '';
+}
+function swapConvertDirection() {
+  const from = document.getElementById('convertFromCoin');
+  const to = document.getElementById('convertToCoin');
+  const tmp = from.value;
+  from.value = to.value;
+  to.value = tmp;
+  updateConvertRate();
+}
+function submitConvert() {
+  const from = document.getElementById('convertFromCoin').value;
+  const to = document.getElementById('convertToCoin').value;
+  const amount = parseFloat(document.getElementById('convertFromAmount').value);
+  if (from === to) { showToast('Cannot convert to the same asset', 'error'); return; }
+  if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
+  if (amount > COINS[from].balance) { showToast('Insufficient ' + from + ' balance', 'error'); return; }
+  const key = from + '-' + to;
+  const rate = RATES[key] || 0;
+  const received = amount * rate;
+  const btn = document.getElementById('convertSubmitBtn');
+  const spinner = document.getElementById('convertSpinner');
+  btn.disabled = true; spinner.style.display = 'inline-block';
+  setTimeout(() => {
+    COINS[from].balance -= amount;
+    COINS[from].qty -= amount;
+    COINS[to].balance += received;
+    COINS[to].qty += received;
+    if(from==='USDT'||to==='USDT'){CASH_BALANCE=COINS.USDT.balance;localStorage.setItem('bb_cash_balance',CASH_BALANCE);}
+    saveCoinBalances();
+    btn.disabled = false; spinner.style.display = 'none';
+    document.getElementById('convertFromAmount').value = '';
+    document.getElementById('convertToAmount').value = '';
+    updateConvertRate();
+    closeModal('convertModal');
+    updateAssetsValues();
+    showToast('Converted ' + amount + ' ' + from + ' to ' + received.toFixed(8) + ' ' + to, 'success');
+  }, 2000);
+}
+
+// ========== LOAN ==========
+var LOAN_RATES={7:5,30:7,90:9,180:12,365:15};
+var loanDurationDays=7;
+var loanProofFile=null;
+var LOAN_DURATION_LABELS={7:'7 Days',30:'30 Days',90:'90 Days',180:'6 Months',365:'1 Year'};
+function selectLoanDuration(btn){
+  document.querySelectorAll('.loan-duration-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  loanDurationDays=parseInt(btn.getAttribute('data-days'));
+  updateLoanInterest();
+}
+function updateLoanInterest(){
+  var amt=parseFloat(document.getElementById('loanBorrowAmt').value)||0;
+  var sec=document.getElementById('loanInterestSection');
+  if(amt<=0){sec.style.display='none';return;}
+  sec.style.display='block';
+  var rate=LOAN_RATES[loanDurationDays]||5;
+  var interest=amt*(rate/100);
+  document.getElementById('loanSummaryBorrow').textContent='$'+amt.toFixed(2);
+  document.getElementById('loanSummaryDuration').textContent=LOAN_DURATION_LABELS[loanDurationDays]||loanDurationDays+' Days';
+  document.getElementById('loanSummaryRate').textContent=rate.toFixed(1)+'%';
+  document.getElementById('loanSummaryInterest').textContent='+$'+interest.toFixed(2);
+  document.getElementById('loanSummaryTotal').textContent='$'+(amt+interest).toFixed(2);
+}
+function handleLoanProofSelect(e){
+  var file=e.target.files[0];
+  if(!file)return;
+  if(file.size>5*1024*1024){showToast('File too large. Max 5MB.','error');return;}
+  loanProofFile=file;
+  showLoanProofPreview(file);
+}
+function handleLoanProofDrop(e){
+  var file=e.dataTransfer.files[0];
+  if(!file)return;
+  if(file.size>5*1024*1024){showToast('File too large. Max 5MB.','error');return;}
+  loanProofFile=file;
+  showLoanProofPreview(file);
+}
+function showLoanProofPreview(file){
+  var placeholder=document.getElementById('loanUploadPlaceholder');
+  var preview=document.getElementById('loanUploadPreview');
+  placeholder.style.display='none';
+  preview.style.display='block';
+  if(file.type.startsWith('image/')){
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      preview.innerHTML='<div style="position:relative;display:inline-block;">'+
+        '<img src="'+ev.target.result+'" style="max-width:100%;max-height:120px;border-radius:8px;">'+
+        '<div style="margin-top:8px;font-size:12px;color:var(--text-secondary);">'+file.name+'</div>'+
+        '<button onclick="event.stopPropagation();removeLoanProof()" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--accent-red);border:none;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>'+
+      '</div>';
+    };
+    reader.readAsDataURL(file);
+  }else{
+    preview.innerHTML='<div style="position:relative;display:inline-block;">'+
+      '<div style="width:80px;height:80px;border-radius:8px;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto;"><i data-lucide="file-text" style="width:28px;height:28px;color:#8b5cf6;"></i></div>'+
+      '<div style="margin-top:8px;font-size:12px;color:var(--text-secondary);">'+file.name+'</div>'+
+      '<button onclick="event.stopPropagation();removeLoanProof()" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--accent-red);border:none;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>'+
+    '</div>';
+    lucide.createIcons();
+  }
+}
+function removeLoanProof(){
+  loanProofFile=null;
+  document.getElementById('loanUploadPlaceholder').style.display='';
+  document.getElementById('loanUploadPreview').style.display='none';
+  document.getElementById('loanProofInput').value='';
+}
+function submitLoan(){
+  var borrowAmt=parseFloat(document.getElementById('loanBorrowAmt').value);
+  if(!borrowAmt||borrowAmt<=0){showToast('Enter a borrow amount','error');return;}
+  if(!loanProofFile){showToast('Please upload proof of income','error');return;}
+  if(!document.getElementById('loanAgreeCheck').checked){showToast('Please agree to the loan agreement','error');return;}
+  var btn=document.getElementById('loanSubmitBtn');
+  var spinner=document.getElementById('loanSpinner');
+  btn.disabled=true;spinner.style.display='inline-block';
+  setTimeout(function(){
+    var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
+    var uid=localStorage.getItem('bb_uid')||'';
+    var uname=localStorage.getItem('bb_name')||'User';
+    loans.push({
+      id:'LOAN-'+Date.now(),
+      userId:uid,
+      userName:uname,
+      borrowAmt:borrowAmt,
+      durationDays:loanDurationDays,
+      interestRate:LOAN_RATES[loanDurationDays]||5,
+      proofName:loanProofFile.name,
+      status:'pending',
+      time:Date.now()
+    });
+    localStorage.setItem('bb_loans',JSON.stringify(loans));
+    btn.disabled=false;spinner.style.display='none';
+    document.getElementById('loanBorrowAmt').value='';
+    document.getElementById('loanInterestSection').style.display='none';
+    document.getElementById('loanAgreeCheck').checked=false;
+    removeLoanProof();
+    closeModal('loanModal');
+    updateAssetsValues();
+    showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
+  },2000);
+}
+
+function switchTab(btn, tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const rows = document.querySelectorAll('#assetsTableBody tr');
+  rows.forEach(row => {
+    const wallets = row.getAttribute('data-wallet') || '';
+    if (tab === 'all') { row.style.display = ''; }
+    else if (tab === 'earn') { row.style.display = wallets.includes('earn') ? '' : 'none'; }
+    else { row.style.display = wallets.includes(tab) ? '' : 'none'; }
+  });
+}
+
+// ========== TOAST ==========
+function showToast(msg, type) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-' + (type || 'success');
+  toast.innerHTML = (type === 'error' ? '✕ ' : '✓ ') + msg;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+// ========== LIVE BALANCE SYNC ==========
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden)return;
+  var newBal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+  if(newBal!==CASH_BALANCE){
+    CASH_BALANCE=newBal;
+    COINS.USDT.balance=CASH_BALANCE;
+    COINS.USDT.qty=CASH_BALANCE;
+    loadCoinBalances();
+    COINS.USDT.balance=CASH_BALANCE;
+    COINS.USDT.qty=CASH_BALANCE;
+    updateAssetsValues();
+  }
+});
+
+</script>
+
+<!-- FLOATING CUSTOMER SERVICE PANEL -->
+<div id="supportPanel" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9000;width:380px;height:520px;border-radius:16px;background:var(--bg-card,#1a1a1a);border:1px solid rgba(255,255,255,0.08);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;animation:supportSlideUp 0.3s ease;flex-direction:column;">
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#4169E1,#2850c8);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#fff;">Customer Support</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.7);">We typically reply in minutes</div>
+      </div>
+    </div>
+    <button onclick="closeSupport()" style="width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- Chat Messages -->
+  <div id="supportMessages" style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px;"></div>
+
+  <!-- Input Area -->
+  <div style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0;">
+    <div id="supportPreview" style="display:none;padding:8px 12px;margin-bottom:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.6);align-items:center;gap:8px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      <span id="supportFileName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <button onclick="removeSupportFile()" style="color:rgba(255,255,255,0.4);flex-shrink:0;background:none;border:none;cursor:pointer;padding:0;display:flex;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button onclick="document.getElementById('supportFileInput').click()" style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.2s;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <input type="file" id="supportFileInput" style="display:none;" onchange="handleSupportFile(this)">
+      <input type="text" id="supportInput" placeholder="Type your message..." style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#fff;font-size:13px;outline:none;" onkeydown="if(event.key==='Enter')sendSupportMsg()">
+      <button onclick="sendSupportMsg()" style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#4169E1,#2850c8);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Floating Trigger Button -->
+<button id="supportTrigger" onclick="openSupport()" style="position:fixed;bottom:24px;right:24px;z-index:8999;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#4169E1,#2850c8);box-shadow:0 4px 20px rgba(65,105,225,0.4);display:flex;align-items:center;justify-content:center;transition:transform 0.2s;cursor:pointer;border:none;" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+</button>
+
+<style>
+  @keyframes supportSlideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  .support-msg{max-width:80%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;animation:supportSlideUp 0.2s ease;}
+  .support-msg.bot{background:rgba(65,105,225,0.12);border:1px solid rgba(65,105,225,0.2);align-self:flex-start;border-bottom-left-radius:4px;}
+  .support-msg.user{background:rgba(247,147,26,0.15);border:1px solid rgba(247,147,26,0.2);align-self:flex-end;border-bottom-right-radius:4px;}
+  .support-msg .msg-time{font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;}
+  @media(max-width:480px){
+    #supportPanel{width:calc(100vw - 24px)!important;height:560px!important;bottom:12px!important;right:12px!important;left:12px!important;border-radius:14px!important;}
+    #supportTrigger{width:48px;height:48px;bottom:16px;right:16px;}
+    #supportTrigger svg{width:20px;height:20px;}
+    .support-msg{max-width:88%;font-size:12px;padding:8px 12px;}
+  }
+</style>
+
+<script>
+// ===== CUSTOMER SERVICE =====
+var supportOpen=false;
+var supportFileAttached=false;
+var supportFileData=null;
+
+function openSupport(){
+  var panel=document.getElementById('supportPanel');
+  var trigger=document.getElementById('supportTrigger');
+  if(supportOpen){closeSupport();return;}
+  panel.style.display='flex';
+  trigger.style.display='none';
+  supportOpen=true;
+  var msgs=document.getElementById('supportMessages');
+  msgs.innerHTML='';
+  // Load existing ticket messages from localStorage
+  var uid=localStorage.getItem('bb_uid')||'000000';
+  var loadedExisting=false;
+  try{
+    var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+    for(var i=0;i<tickets.length;i++){
+      if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
+        for(var j=0;j<tickets[i].messages.length;j++){
+          var m=tickets[i].messages[j];
+          if(m.from==='admin'){
+            addBotMsgNoScroll(m.text,m.time);
+          }else{
+            addUserMsgNoScroll(m.text||'Sent an attachment',null,m.time);
+          }
+        }
+        loadedExisting=true;
+        break;
+      }
+    }
+  }catch(e){}
+  if(!loadedExisting){
+    addBotMsg('Hello! Welcome to BitBase Support. How can I help you today?');
+  }
+  msgs.scrollTop=msgs.scrollHeight;
+  startSupportPolling();
+  lucide.createIcons();
+}
+var supportPollTimer=null;
+function startSupportPolling(){
+  if(supportPollTimer)clearInterval(supportPollTimer);
+  var uid=localStorage.getItem('bb_uid')||'000000';
+  var lastMsgCount=0;
+  try{
+    var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+    for(var i=0;i<tickets.length;i++){
+      if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
+        lastMsgCount=tickets[i].messages.length;break;
+      }
+    }
+  }catch(e){}
+  supportPollTimer=setInterval(function(){
+    if(!supportOpen){clearInterval(supportPollTimer);return;}
+    try{
+      var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+      for(var i=0;i<tickets.length;i++){
+        if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
+          var msgs=tickets[i].messages;
+          if(msgs.length>lastMsgCount){
+            for(var j=lastMsgCount;j<msgs.length;j++){
+              var m=msgs[j];
+              if(m.from==='admin'){addBotMsg(m.text);}
+            }
+            lastMsgCount=msgs.length;
+          }
+          break;
+        }
+      }
+    }catch(e){}
+  },3000);
+}
+function closeSupport(){
+  document.getElementById('supportPanel').style.display='none';
+  document.getElementById('supportTrigger').style.display='flex';
+  supportOpen=false;
+  if(supportPollTimer){clearInterval(supportPollTimer);supportPollTimer=null;}
+  lucide.createIcons();
+}
+function addBotMsgNoScroll(text,time){
+  var msgs=document.getElementById('supportMessages');
+  var div=document.createElement('div');
+  div.className='support-msg bot';
+  var ts=time?new Date(time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  div.innerHTML=text+'<div class="msg-time">'+ts+'</div>';
+  msgs.appendChild(div);
+}
+function addUserMsgNoScroll(text,fileName,time){
+  var msgs=document.getElementById('supportMessages');
+  var div=document.createElement('div');
+  div.className='support-msg user';
+  var html=text;
+  var ts=time?new Date(time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  html+='<div class="msg-time">'+ts+'</div>';
+  div.innerHTML=html;
+  msgs.appendChild(div);
+}
+function addBotMsg(text){
+  var msgs=document.getElementById('supportMessages');
+  var div=document.createElement('div');
+  div.className='support-msg bot';
+  div.innerHTML=text+'<div class="msg-time">'+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})+'</div>';
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+function addUserMsg(text,fileName){
+  var msgs=document.getElementById('supportMessages');
+  var div=document.createElement('div');
+  div.className='support-msg user';
+  var html=text;
+  if(fileName) html+='<div style="margin-top:6px;padding:6px 10px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:11px;display:flex;align-items:center;gap:6px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'+fileName+'</div>';
+  html+='<div class="msg-time">'+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})+'</div>';
+  div.innerHTML=html;
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+function handleSupportFile(input){
+  if(input.files&&input.files[0]){
+    var file=input.files[0];
+    var reader=new FileReader();
+    reader.onload=function(e){
+      supportFileAttached=true;
+      supportFileData={name:file.name,type:file.type,dataUrl:e.target.result};
+      document.getElementById('supportFileName').textContent=file.name;
+      document.getElementById('supportPreview').style.display='flex';
+      lucide.createIcons();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+function removeSupportFile(){
+  supportFileAttached=false;
+  supportFileData=null;
+  document.getElementById('supportFileInput').value='';
+  document.getElementById('supportPreview').style.display='none';
+}
+function sendSupportMsg(){
+  var input=document.getElementById('supportInput');
+  var text=input.value.trim();
+  if(!text&&!supportFileAttached)return;
+  var fileName=supportFileAttached?supportFileData?supportFileData.name:'attachment':null;
+  addUserMsg(text||'Sent an attachment',fileName);
+  var attachmentData=supportFileData?{name:supportFileData.name,type:supportFileData.type,dataUrl:supportFileData.dataUrl}:null;
+  input.value='';
+  removeSupportFile();
+  // Save to support tickets for admin panel
+  var userName=localStorage.getItem('bb_name')||'User';
+  var userEmail=localStorage.getItem('bb_email')||'user@email.com';
+  var uid=localStorage.getItem('bb_uid')||'000000';
+  var tickets=[];
+  try{tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');}catch(e){}
+  var ticketId='SUP-'+uid+'-'+Date.now();
+  // Check if user already has an open ticket
+  var existingTicket=null;
+  for(var i=0;i<tickets.length;i++){
+    if(tickets[i].userId===uid&&tickets[i].status==='open'){existingTicket=tickets[i];break;}
+  }
+  var userMsg={from:'user',text:text||'Sent an attachment',time:Date.now()};
+  if(attachmentData)userMsg.attachment=attachmentData;
+  if(existingTicket){
+    existingTicket.messages.push(userMsg);
+    ticketId=existingTicket.id;
+  }else{
+    tickets.push({
+      id:ticketId,
+      userId:uid,
+      userName:userName,
+      userEmail:userEmail,
+      status:'open',
+      createdAt:Date.now(),
+      messages:[userMsg]
+    });
+  }
+  localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
+}
+</script>
+<div class="mobile-bottom-bar">
+  <a href="dashboard.html"><i data-lucide="layout-dashboard"></i>Home</a>
+  <a href="assets.html" class="active"><i data-lucide="wallet"></i>Assets</a>
+  <a href="trade.html"><i data-lucide="arrow-left-right"></i>Trade</a>
+  <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

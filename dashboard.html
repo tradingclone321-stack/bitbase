@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitbase – Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
+    [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
+  </style>
+</head>
+<body class="page-body">
+<script>
+(function(){
+  try {
+    var p = JSON.parse(localStorage.getItem('bb_preferences'));
+    if (p && p.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(e) {}
+  try {
+    var uid = localStorage.getItem('bb_uid');
+    if (uid) {
+      var deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      if (deactivated.indexOf(uid) >= 0) {
+        localStorage.removeItem('bb_login_time');
+        window.location.href = 'index.html';
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <div class="flex items-center gap-2">
+      <a href="index.html" class="flex items-center gap-2">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="bitcoin" style="width:16px;height:16px;color:#fff;"></i>
+        </div>
+        <span class="font-heading" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">BITBASE</span>
+      </a>
+    </div>
+    <nav class="dash-nav">
+      <a href="dashboard.html" class="active">Dashboard</a>
+      <a href="assets.html">Assets</a>
+      <a href="markets.html">Markets</a>
+      <a href="trade.html">Trade</a>
+      <a href="earn.html">Earn</a>
+      <a href="history.html">History</a>
+      <a href="demo.html">Demo</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <div class="dash-right">
+      <div class="user-pill">
+        <div class="user-avatar">U</div>
+        <div>
+          <div class="user-name" style="font-size:13px;font-weight:500;">User</div>
+          <div class="user-email" style="font-size:11px;color:var(--text-tertiary);">user@email.com</div>
+        </div>
+      </div>
+      <a href="assets.html" class="deposit-btn">
+        <i data-lucide="plus" style="width:14px;height:14px;"></i> Deposit
+      </a>
+      <a id="adminLink" href="admin.html" style="display:none;padding:8px 16px;border-radius:10px;background:rgba(22,199,132,0.12);border:1px solid rgba(22,199,132,0.3);color:#16c784;font-size:13px;font-weight:600;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.background='rgba(22,199,132,0.2)'" onmouseout="this.style.background='rgba(22,199,132,0.12)'">Admin</a>
+      <button class="lg:hidden" onclick="document.getElementById('mobileNav').classList.add('open')" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="menu" style="width:20px;height:20px;"></i>
+      </button>
+    </div>
+  </div>
+</header>
+<div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-nav">
+    <div class="flex justify-between items-center mb-6">
+      <span class="font-heading font-bold text-lg">Menu</span>
+      <button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="assets.html">Assets</a>
+    <a href="markets.html">Markets</a>
+    <a href="trade.html">Trade</a>
+    <a href="earn.html">Earn</a>
+    <a href="history.html">History</a>
+    <a href="demo.html">Demo</a>
+    <a href="settings.html">Settings</a>
+
+    <a id="mobileAdminLink" href="admin.html" style="display:none;color:#16c784;">Admin Panel</a>
+    <a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a>
+    <a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+  </div>
+</div>
+
+<div class="page-content">
+
+  <!-- Page Header -->
+  <div class="mb-8">
+    <h1 class="font-heading text-3xl font-bold mb-1">Dashboard</h1>
+    <p class="text-secondary">Welcome back, <span id="dashUserName">User</span></p>
+  </div>
+
+  <!-- Quick Stats Row -->
+  <div class="grid grid-cols-4 gap-2 sm:gap-4 mb-8">
+    <div class="glass-card rounded-xl p-3 sm:p-6">
+      <div class="text-[10px] sm:text-sm text-secondary mb-1 sm:mb-2">Total Balance</div>
+      <div class="font-mono text-sm sm:text-2xl font-bold gradient-text mb-0.5" id="statTotalBalance">—</div>
+      <div class="text-[10px] sm:text-sm" id="statTotalChange" style="color:var(--accent-green);">—</div>
+    </div>
+    <div class="glass-card rounded-xl p-3 sm:p-6">
+      <div class="text-[10px] sm:text-sm text-secondary mb-1 sm:mb-2">Total P&L</div>
+      <div class="font-mono text-sm sm:text-2xl font-bold mb-0.5" id="statPnL" style="color:var(--accent-green);">—</div>
+      <div class="text-[10px] sm:text-sm text-secondary">From trades</div>
+    </div>
+    <div class="glass-card rounded-xl p-3 sm:p-6">
+      <div class="text-[10px] sm:text-sm text-secondary mb-1 sm:mb-2">Available Balance</div>
+      <div class="font-mono text-sm sm:text-2xl font-bold mb-0.5" id="statAvailable">—</div>
+      <div class="text-[10px] sm:text-sm text-secondary">Available to trade</div>
+    </div>
+  </div>
+
+  <!-- Portfolio Chart Area -->
+  <div class="glass-card rounded-xl p-6 mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+      <h2 class="font-heading font-semibold text-lg">Portfolio Overview</h2>
+      <div class="flex gap-1" id="periodTabs">
+        <button class="tab-btn" data-period="24H" onclick="switchPeriod('24H',this)">24H</button>
+        <button class="tab-btn" data-period="7D" onclick="switchPeriod('7D',this)">7D</button>
+        <button class="tab-btn active" data-period="1M" onclick="switchPeriod('1M',this)">1M</button>
+        <button class="tab-btn" data-period="3M" onclick="switchPeriod('3M',this)">3M</button>
+        <button class="tab-btn" data-period="1Y" onclick="switchPeriod('1Y',this)">1Y</button>
+        <button class="tab-btn" data-period="ALL" onclick="switchPeriod('ALL',this)">ALL</button>
+      </div>
+    </div>
+    <div style="position:relative;height:300px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(247,147,26,0.08) 0%,rgba(247,147,26,0.02) 100%);">
+      <svg id="portfolioChart" width="100%" height="100%" viewBox="0 0 800 300" preserveAspectRatio="none" style="position:absolute;inset:0;"></svg>
+      <div style="position:absolute;top:16px;right:16px;">
+        <div class="font-mono text-sm font-bold" style="color:var(--accent-orange);" id="chartValue">$24,531.42</div>
+        <div class="font-mono text-xs mt-1" id="chartChange" style="color:var(--accent-green);">+$1,234.56 (+5.3%)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assets + Activity Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+
+    <!-- Your Assets -->
+    <div class="lg:col-span-2 glass-card rounded-xl p-6">
+      <h2 class="font-heading font-semibold text-lg mb-5">Your Assets</h2>
+      <div id="holdingsList">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="glass-card rounded-xl p-6">
+      <h2 class="font-heading font-semibold text-lg mb-5">Recent Activity</h2>
+      <div id="recentActivityList"></div>
+      <div class="mt-4 pt-4" style="border-top:1px solid var(--border-subtle);">
+        <a href="history.html" class="text-sm font-medium" style="color:var(--accent-orange);">View All →</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="flex flex-wrap gap-3 mb-8">
+    <a href="assets.html" class="btn-secondary px-6 py-3 rounded-xl text-sm font-semibold">Deposit</a>
+  </div>
+
+</div>
+
+<script>
+// ===== NAME LOADER =====
+(function(){
+  var name=localStorage.getItem('bb_name')||'User';
+  var first=name.split(' ')[0];
+  var el=document.getElementById('dashUserName');
+  if(el) el.textContent=first;
+  document.querySelectorAll('.user-avatar').forEach(function(a){a.textContent=first.charAt(0).toUpperCase();});
+  document.querySelectorAll('.user-name').forEach(function(d){d.textContent=first;});
+  var email=localStorage.getItem('bb_email')||'user@email.com';
+  document.querySelectorAll('.user-email').forEach(function(d){d.textContent=email;});
+})();
+lucide.createIcons();
+
+// Show admin link if user has admin access
+(function(){
+  var uid=localStorage.getItem('bb_uid');
+  if(!uid)return;
+  try{
+    var list=JSON.parse(localStorage.getItem('bb_admin_access_list')||'[]');
+    if(list.indexOf(uid)>=0){
+      document.getElementById('adminLink').style.display='inline-flex';
+      var ml=document.getElementById('mobileAdminLink');if(ml)ml.style.display='block';
+    }
+  }catch(e){}
+})();
+
+// ===== HOLDINGS DATA (current TradingView prices) =====
+var CASH_BALANCE = (function(){var v=localStorage.getItem('bb_cash_balance');return v!==null?parseFloat(v):0;})();
+
+var holdings = [
+  { symbol:'USDT', name:'Tether', qty:5000, price:1.00, color:'#26a17b', bg:'linear-gradient(135deg,#26a17b,#1a9e6f)', icon:'USDT' },
+  { symbol:'BTC', name:'Bitcoin', qty:0.1542, price:64464.00, color:'#f7931a', bg:'linear-gradient(135deg,#f7931a,#fdb022)', icon:'BTC' },
+  { symbol:'ETH', name:'Ethereum', qty:2.341, price:1880.96, color:'#627eea', bg:'linear-gradient(135deg,#627eea,#8b5cf6)', icon:'ETH' },
+  { symbol:'SOL', name:'Solana', qty:15.7, price:74.78, color:'#9945ff', bg:'linear-gradient(135deg,#9945ff,#14f195)', icon:'SOL' },
+  { symbol:'BNB', name:'BNB', qty:3.2, price:569.95, color:'#f3ba2f', bg:'linear-gradient(135deg,#f3ba2f,#f0b90b)', icon:'BNB' },
+  { symbol:'ADA', name:'Cardano', qty:15000, price:0.165, color:'#0033ad', bg:'linear-gradient(135deg,#0033ad,#0052ff)', icon:'ADA' },
+  { symbol:'DOGE', name:'Dogecoin', qty:50000, price:0.07243, color:'#c2a633', bg:'linear-gradient(135deg,#c2a633,#ba9f33)', icon:'DOGE' },
+  { symbol:'XRP', name:'XRP', qty:5000, price:1.1006, color:'#23292f', bg:'linear-gradient(135deg,#23292f,#346aa9)', icon:'XRP' },
+  { symbol:'DOT', name:'Polkadot', qty:200, price:0.816, color:'#e6007a', bg:'linear-gradient(135deg,#e6007a,#c70066)', icon:'DOT' }
+];
+
+(function(){
+  try{
+    var raw=localStorage.getItem('bb_asset_balances');
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    for(var i=0;i<holdings.length;i++){
+      if(data[holdings[i].symbol]&&data[holdings[i].symbol].qty!==undefined){
+        holdings[i].qty=data[holdings[i].symbol].qty;
+      }
+    }
+  }catch(e){}
+  for(var i=0;i<holdings.length;i++){
+    if(holdings[i].symbol==='USDT'){holdings[i].qty=CASH_BALANCE;break;}
+  }
+})();
+
+// Historical return multipliers per period (how much value has changed over time)
+// e.g. for 1Y, past price = current price / multiplier
+var periodMultipliers = {
+  '24H': { btc:0.997, eth:0.995, sol:0.991, bnb:0.998, ada:0.994, doge:0.993, xrp:0.996, dot:0.992, usdt:1.0, cash:1.0 },
+  '7D':  { btc:0.985, eth:0.978, sol:0.965, bnb:0.988, ada:0.972, doge:0.960, xrp:0.975, dot:0.968, usdt:1.0, cash:1.0 },
+  '1M':  { btc:0.958, eth:0.942, sol:0.910, bnb:0.965, ada:0.930, doge:0.895, xrp:0.940, dot:0.920, usdt:1.0, cash:1.0 },
+  '3M':  { btc:0.885, eth:0.855, sol:0.810, bnb:0.895, ada:0.840, doge:0.780, xrp:0.850, dot:0.820, usdt:1.0, cash:1.0 },
+  '1Y':  { btc:0.720, eth:0.650, sol:0.520, bnb:0.740, ada:0.620, doge:0.480, xrp:0.600, dot:0.550, usdt:1.0, cash:1.0 },
+  'ALL': { btc:0.350, eth:0.220, sol:0.100, bnb:0.400, ada:0.180, doge:0.060, xrp:0.150, dot:0.120, usdt:1.0, cash:1.0 }
+};
+
+// Volatility per period for generating chart noise
+var periodVolatility = { '24H':0.003, '7D':0.008, '1M':0.015, '3M':0.025, '1Y':0.040, 'ALL':0.060 };
+
+// Number of chart points per period
+var periodPoints = { '24H':24, '7D':14, '1M':16, '3M':20, '1Y':24, 'ALL':22 };
+
+// ===== CALCULATION FUNCTIONS =====
+function getTotalHoldingsValue() {
+  var total = 0;
+  for (var i = 0; i < holdings.length; i++) {
+    if(holdings[i].symbol==='USDT') continue;
+    total += holdings[i].qty * holdings[i].price;
+  }
+  return total;
+}
+
+function getHoldingsValueAtMultipliers(mults) {
+  var total = 0;
+  for (var i = 0; i < holdings.length; i++) {
+    if(holdings[i].symbol==='USDT') continue;
+    var h = holdings[i];
+    var key = h.symbol.toLowerCase();
+    var m = mults[key] || 1.0;
+    total += h.qty * h.price * m;
+  }
+  return total + CASH_BALANCE;
+}
+
+function generateChartPoints(period) {
+  var n = periodPoints[period] || 16;
+  var vol = periodVolatility[period] || 0.015;
+  var mults = periodMultipliers[period];
+  var startVal = getHoldingsValueAtMultipliers(mults);
+  var endVal = getTotalHoldingsValue() + CASH_BALANCE;
+  var pts = [];
+  var val = startVal;
+  for (var i = 0; i < n; i++) {
+    if (i === n - 1) {
+      val = endVal;
+    } else {
+      var progress = i / (n - 1);
+      var trend = startVal + (endVal - startVal) * progress;
+      var noise = (Math.random() - 0.5) * 2 * vol * endVal;
+      val = trend + noise;
+    }
+    pts.push(Math.round(val));
+  }
+  return pts;
+}
+
+function formatUSD(v) {
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+
+function formatCompact(v) {
+  if (v >= 1000) return '$' + (v/1000).toFixed(1) + 'K';
+  return formatUSD(v);
+}
+
+// ===== RENDER HOLDINGS LIST =====
+function getCoinLogoSvg(sym){
+  var logos={
+    BTC:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#f7931a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="Arial">₿</text></svg>',
+    ETH:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#627eea"/><polygon points="16,7 23,18 16,25 9,18" fill="white"/></svg>',
+    SOL:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#9945ff"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">S</text></svg>',
+    BNB:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#f3ba2f"/><text x="16" y="22" text-anchor="middle" fill="#1a1a1a" font-size="15" font-weight="bold" font-family="Arial">B</text></svg>',
+    ADA:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0033ad"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">A</text></svg>',
+    DOGE:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#c2a633"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">D</text></svg>',
+    XRP:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#346aa9"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">X</text></svg>',
+    DOT:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#e6007a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">●</text></svg>',
+    USDT:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">₮</text></svg>'
+  };
+  return logos[sym]||'<div style="width:38px;height:38px;border-radius:50%;background:'+({BTC:'linear-gradient(135deg,#f7931a,#fdb022)',ETH:'linear-gradient(135deg,#627eea,#8b5cf6)',SOL:'linear-gradient(135deg,#9945ff,#14f195)',BNB:'linear-gradient(135deg,#f3ba2f,#f0b90b)',ADA:'linear-gradient(135deg,#0033ad,#0052ff)',DOGE:'linear-gradient(135deg,#c2a633,#ba9f33)',XRP:'linear-gradient(135deg,#23292f,#346aa9)',DOT:'linear-gradient(135deg,#e6007a,#c70066)',USDT:'linear-gradient(135deg,#26a17b,#1a9e6f)'}[sym]||'#333')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;">'+sym+'</div>';
+}
+function renderHoldings() {
+  var el = document.getElementById('holdingsList');
+  var html = '';
+  for (var i = 0; i < holdings.length; i++) {
+    var h = holdings[i];
+    var val = h.qty * h.price;
+    var ch = CHANGES_DASH[h.symbol+'USDT']||0;
+    var isPos = ch >= 0;
+    var badgeClass = isPos ? 'badge-green' : 'badge-red';
+    var sign = isPos ? '+' : '';
+    html += '<div class="flex items-center justify-between py-3" style="border-bottom:1px solid var(--border-subtle);">' +
+      '<div class="flex items-center gap-3">' +
+        '<div style="flex-shrink:0;width:38px;height:38px;line-height:0;">'+getCoinLogoSvg(h.symbol)+'</div>' +
+        '<div>' +
+          '<div class="font-medium text-sm">' + h.name + '</div>' +
+          '<div class="text-xs text-secondary">' + h.symbol + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="font-mono text-sm">' + (h.qty >= 100 ? h.qty.toLocaleString('en-US') : h.qty) + '</div>' +
+      '<div class="font-mono text-sm">' + formatCompact(val) + '</div>' +
+      '<div class="' + badgeClass + '">' + sign + Math.abs(ch).toFixed(2) + '%</div>' +
+    '</div>';
+  }
+  el.innerHTML = html;
+}
+
+var COIN_PRICES_DASH={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,USDC:1};
+var CHANGES_DASH={};
+function fetchLiveData(){
+  fetch('https://api.binance.com/api/v3/ticker/price').then(function(r){return r.json();}).then(function(prices){
+    var pmap={};
+    for(var i=0;i<prices.length;i++)pmap[prices[i].symbol]=parseFloat(prices[i].price);
+    for(var i=0;i<holdings.length;i++){
+      var key=holdings[i].symbol+'USDT';
+      if(pmap[key]){holdings[i].price=pmap[key];COIN_PRICES_DASH[holdings[i].symbol]=pmap[key];}
+    }
+    renderHoldings();
+    renderStats('1M');
+  }).catch(function(){});
+  fetch('https://api.binance.com/api/v3/ticker/24hr').then(function(r){return r.json();}).then(function(dats){
+    for(var i=0;i<dats.length;i++)CHANGES_DASH[dats[i].symbol]=parseFloat(dats[i].priceChangePercent);
+    renderHoldings();
+  }).catch(function(){});
+}
+fetchLiveData();
+setInterval(fetchLiveData,30000);
+function getStakingEarningsUsd(){
+  var total=0;
+  try{
+    var positions=JSON.parse(localStorage.getItem('bb_earn_positions')||'[]');
+    var now=Date.now();
+    for(var i=0;i<positions.length;i++){
+      var p=positions[i];
+      var price=COIN_PRICES_DASH[p.coin]||0;
+      var elapsed=(now-new Date(p.started).getTime())/(1000*86400*365);
+      total+=p.amount*p.apy/100*elapsed*price;
+    }
+  }catch(e){}
+  return total;
+}
+function getTradePnL(){
+  return parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
+}
+
+// ===== RENDER STAT CARDS =====
+function renderStats(period) {
+  var holdingsVal = getTotalHoldingsValue();
+  var totalVal = holdingsVal + CASH_BALANCE;
+  var tradePnL=getTradePnL();
+  var change = tradePnL;
+  var pct = totalVal > 0 ? (change / totalVal * 100) : 0;
+  var isPos = change >= 0;
+
+  document.getElementById('statTotalBalance').textContent = formatUSD(totalVal);
+  var sign = isPos ? '+' : '';
+  var clr = isPos ? 'var(--accent-green)' : 'var(--accent-red)';
+  document.getElementById('statTotalChange').textContent = sign + formatUSD(change) + ' (' + sign + pct.toFixed(1) + '%) this period';
+  document.getElementById('statTotalChange').style.color = clr;
+
+  document.getElementById('statPnL').textContent = sign + formatUSD(tradePnL);
+  document.getElementById('statPnL').style.color = clr;
+  document.getElementById('statAvailable').textContent = formatUSD(CASH_BALANCE);
+}
+
+// ===== CHART =====
+function renderChart(period) {
+  var pts = generateChartPoints(period);
+  var n = pts.length;
+  var svg = document.getElementById('portfolioChart');
+  var w = 800, h = 300, pad = 20;
+  var min = Math.min.apply(null, pts);
+  var max = Math.max.apply(null, pts);
+  var range = max - min || 1;
+
+  var coords = [];
+  for (var i = 0; i < n; i++) {
+    var x = pad + (i / (n - 1)) * (w - pad * 2);
+    var y = pad + (1 - (pts[i] - min) / range) * (h - pad * 2);
+    coords.push({ x: x, y: y });
+  }
+
+  var linePath = 'M' + coords.map(function(c){ return c.x + ',' + c.y; }).join(' L');
+  var areaPath = linePath + ' L' + coords[n-1].x + ',' + h + ' L' + coords[0].x + ',' + h + ' Z';
+  var last = coords[n - 1];
+
+  svg.innerHTML =
+    '<defs>' +
+      '<linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">' +
+        '<stop offset="0%" stop-color="#f7931a"/>' +
+        '<stop offset="100%" stop-color="#fdb022"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">' +
+        '<stop offset="0%" stop-color="#f7931a" stop-opacity="0.2"/>' +
+        '<stop offset="100%" stop-color="#f7931a" stop-opacity="0"/>' +
+      '</linearGradient>' +
+    '</defs>' +
+    '<path d="' + areaPath + '" fill="url(#areaGrad)"/>' +
+    '<path d="' + linePath + '" fill="none" stroke="url(#lineGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<circle cx="' + last.x + '" cy="' + last.y + '" r="5" fill="#fdb022"/>' +
+    '<circle cx="' + last.x + '" cy="' + last.y + '" r="10" fill="#fdb022" opacity="0.2">' +
+      '<animate attributeName="r" values="8;14;8" dur="2s" repeatCount="indefinite"/>' +
+      '<animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>' +
+    '</circle>';
+
+  var totalVal = getTotalHoldingsValue() + CASH_BALANCE;
+  document.getElementById('chartValue').textContent = formatUSD(totalVal);
+
+  var mults = periodMultipliers[period];
+  var startVal = getHoldingsValueAtMultipliers(mults);
+  var change = totalVal - startVal;
+  var pct = startVal > 0 ? (change / startVal * 100) : 0;
+  var isPos = change >= 0;
+  var sign = isPos ? '+' : '';
+  var clr = isPos ? 'var(--accent-green)' : 'var(--accent-red)';
+  document.getElementById('chartChange').textContent = sign + formatUSD(change) + ' (' + sign + pct.toFixed(1) + '%)';
+  document.getElementById('chartChange').style.color = clr;
+}
+
+// ===== PERIOD SWITCH =====
+function switchPeriod(period, btn) {
+  document.querySelectorAll('#periodTabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderChart(period);
+  renderStats(period);
+}
+
+// ===== RENDER RECENT ACTIVITY =====
+function renderRecentActivity(){
+  var list=document.getElementById('recentActivityList');
+  var cutoff=Date.now()-7*24*60*60*1000;
+  var items=[];
+
+  // Trades
+  try{
+    var trades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
+    for(var i=0;i<trades.length;i++){
+      var t=trades[i];
+      if(t.time<cutoff)continue;
+      var color=t.status==='Won'?'var(--accent-green)':'var(--accent-red)';
+      var bg=t.status==='Won'?'rgba(22,199,132,0.1)':'rgba(234,57,67,0.1)';
+      var icon=t.status==='Won'?'trending-up':'trending-down';
+      var label=(t.status==='Won'?'Won ':'Lost ')+fmtAmt(t.amount)+' USDT · '+t.pair.replace('/USDT','');
+      var amt=t.status==='Won'?t.profit:-(t.amount);
+      var sign=amt>=0?'+':'';
+      items.push({time:t.time,label:label,icon:icon,color:color,bg:bg,amount:sign+formatUSD(Math.abs(amt))});
+    }
+  }catch(e){}
+
+  // Deposits
+  try{
+    var deposits=JSON.parse(localStorage.getItem('bb_deposit_requests')||'[]');
+    for(var i=0;i<deposits.length;i++){
+      var d=deposits[i];
+      if(d.time<cutoff)continue;
+      var amt=d.amount||0;
+      items.push({time:d.time,label:'Deposited '+formatUSD(amt),icon:'arrow-down-left',color:'var(--accent-blue)',bg:'rgba(65,105,225,0.1)',amount:'+'+formatUSD(amt)});
+    }
+  }catch(e){}
+
+  // Withdrawals
+  try{
+    var withdrawals=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');
+    for(var i=0;i<withdrawals.length;i++){
+      var w=withdrawals[i];
+      if(w.time<cutoff)continue;
+      var amt=w.amount||0;
+      var coin=w.coin||'USDT';
+      items.push({time:w.time,label:'Withdrew '+formatUSD(amt)+' '+coin,icon:'arrow-up-right',color:'var(--accent-orange)',bg:'rgba(247,147,26,0.1)',amount:'-'+formatUSD(amt)});
+    }
+  }catch(e){}
+
+  // Sort by time, newest first
+  items.sort(function(a,b){return b.time-a.time;});
+
+  // Take top 6
+  items=items.slice(0,6);
+
+  if(items.length===0){
+    list.innerHTML='<div class="text-secondary text-sm py-4" style="text-align:center;">No recent activity</div>';
+    lucide.createIcons();
+    return;
+  }
+
+  var html='';
+  for(var i=0;i<items.length;i++){
+    var it=items[i];
+    var dt=new Date(it.time);
+    var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var dateStr=months[dt.getMonth()]+' '+dt.getDate()+', '+dt.getFullYear()+' · '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+    html+='<div class="flex items-start gap-3 py-3" style="border-bottom:1px solid var(--border-subtle);">'+
+      '<div style="width:36px;height:36px;border-radius:10px;background:'+it.bg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+
+        '<i data-lucide="'+it.icon+'" style="width:16px;height:16px;color:'+it.color+';"></i>'+
+      '</div>'+
+      '<div class="flex-1">'+
+        '<div class="font-medium text-sm">'+it.label+'</div>'+
+        '<div class="text-xs text-secondary">'+dateStr+'</div>'+
+      '</div>'+
+      '<div class="font-mono text-sm font-medium" style="color:'+it.color+';">'+it.amount+'</div>'+
+    '</div>';
+  }
+  list.innerHTML=html;
+  lucide.createIcons();
+}
+
+function fmtAmt(n){return n>=100?n.toLocaleString('en-US'):n;}
+
+// ===== LIVE BALANCE SYNC =====
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden)return;
+  var newBal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+  if(newBal!==CASH_BALANCE){
+    CASH_BALANCE=newBal;
+    for(var i=0;i<holdings.length;i++){
+      if(holdings[i].symbol==='USDT'){holdings[i].qty=CASH_BALANCE;break;}
+    }
+    renderHoldings();
+    renderStats('1M');
+    renderChart('1M');
+    renderRecentActivity();
+  }
+});
+
+// ===== INIT =====
+renderHoldings();
+renderStats('1M');
+  renderChart('1M');
+  renderRecentActivity();
+</script>
+<div class="mobile-bottom-bar">
+  <a href="dashboard.html" class="active"><i data-lucide="layout-dashboard"></i>Home</a>
+  <a href="assets.html"><i data-lucide="wallet"></i>Assets</a>
+  <a href="trade.html"><i data-lucide="arrow-left-right"></i>Trade</a>
+  <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

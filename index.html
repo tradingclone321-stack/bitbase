@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en" class="overflow-x-hidden">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitbase – World's Leading Crypto Exchange</title>
+  <meta name="description" content="Bitbase is the world's leading cryptocurrency exchange. Trade 350+ crypto assets with advanced tools, low fees, and institutional-grade security.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'bg-primary': '#0f0f0f',
+            'bg-secondary': '#1a1a1a',
+            'bg-tertiary': '#242424',
+            'bg-glass': 'rgba(26,26,26,0.85)',
+            'accent-orange': '#f7931a',
+            'accent-yellow': '#fdb022',
+            'accent-blue': '#4169e1',
+            'accent-green': '#16c784',
+            'accent-red': '#ea3943',
+            'accent-purple': '#8b5cf6',
+            'text-primary': '#ffffff',
+            'text-secondary': '#b0b0b0',
+            'text-tertiary': 'grey',
+          },
+          fontFamily: {
+            heading: ['"Space Grotesk"', 'sans-serif'],
+            body: ['"Inter"', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace'],
+          },
+          keyframes: {
+            'ticker-slow': {
+              '0%': { transform: 'translateX(0)' },
+              '100%': { transform: 'translateX(-50%)' },
+            },
+            'float': {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-20px)' },
+            },
+            'gradient-shift': {
+              '0%, 100%': { backgroundPosition: '0% 50%' },
+              '50%': { backgroundPosition: '100% 50%' },
+            },
+          },
+          animation: {
+            'ticker-slow': 'ticker-slow 140s linear infinite',
+            'float': 'float 6s ease-in-out infinite',
+            'gradient-shift': 'gradient-shift 4s ease-in-out infinite',
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0f0f0f;
+      color: #ffffff;
+      overflow-x: hidden;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #f7931a, #fdb022 50%, #FFD700);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .gradient-text-blue {
+      background: linear-gradient(135deg, #4169e1, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .gradient-stats {
+      background: linear-gradient(to right, #f7931a, #fdb022, #FFD700);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #F7931A 0%, #FDB022 100%);
+      box-shadow: 0 8px 32px rgba(247, 147, 26, 0.35);
+      transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 12px 48px rgba(247, 147, 26, 0.5);
+      transform: translateY(-1px);
+    }
+    .glass-card {
+      background: rgba(26, 26, 26, 0.85);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .section-card {
+      background: rgba(26, 26, 26, 0.6);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.3s ease;
+    }
+    .section-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(247, 147, 26, 0.3);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+    .ticker-wrap {
+      overflow: hidden;
+      position: relative;
+    }
+    .ticker-wrap::before,
+    .ticker-wrap::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0; width: 120px; z-index: 2;
+      pointer-events: none;
+    }
+    .ticker-wrap::before {
+      left: 0;
+      background: linear-gradient(to right, #0f0f0f, rgba(15,15,15,0.8) 60%, transparent);
+    }
+    .ticker-wrap::after {
+      right: 0;
+      background: linear-gradient(to left, #0f0f0f, rgba(15,15,15,0.8) 60%, transparent);
+    }
+    .partner-logo {
+      filter: grayscale(100%) opacity(0.5);
+      transition: all 0.3s ease;
+    }
+    .partner-logo:hover {
+      filter: grayscale(0%) opacity(1);
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .market-row:hover {
+      background: rgba(247, 147, 26, 0.04);
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+  </style>
+</head>
+<body class="min-h-screen w-full max-w-full min-w-0 overflow-x-hidden antialiased font-body bg-bg-primary text-text-primary">
+
+  <!-- HEADER -->
+  <header class="fixed top-0 left-0 right-0 z-[1000] h-[72px] w-full border-b border-white/[0.08] bg-[#1a1a1a]/85 backdrop-blur-[24px]">
+    <div class="max-w-[1920px] h-full mx-auto flex items-center justify-between px-3 sm:px-4 md:px-6 lg:px-10">
+      <!-- Logo -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-[28px] h-[28px] rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #F7931A, #FDB022);">
+          <i data-lucide="bitcoin" class="w-[16px] h-[16px] text-white"></i>
+        </div>
+        <span class="font-heading text-[22px] font-bold tracking-tight">BITBASE</span>
+      </div>
+
+      <!-- Nav Links -->
+      <nav class="hidden lg:flex items-center gap-8">
+        <a href="markets.html" class="text-[15px] font-medium text-white hover:text-accent-orange transition-colors relative py-1">
+          Markets
+          <span class="absolute bottom-0 left-0 right-0 h-[2px] rounded-full" style="background: linear-gradient(135deg, #F7931A, #FDB022);"></span>
+        </a>
+      </nav>
+
+      <!-- Right Side -->
+      <div class="flex items-center gap-3">
+        <!-- Search -->
+        <div class="hidden xl:flex items-center h-11 rounded-md bg-white/[0.06] border border-white/[0.08] backdrop-blur-[10px] px-3 gap-2 max-w-[420px]">
+          <i data-lucide="search" class="w-4 h-4 text-text-tertiary"></i>
+          <span class="text-[14px] text-text-tertiary">Search</span>
+          <span class="ml-auto text-[12px] text-text-tertiary bg-white/[0.06] px-2 py-0.5 rounded">⌘K</span>
+        </div>
+        <!-- Auth Buttons -->
+        <a href="login.html" class="h-9 sm:h-10 px-3 sm:px-5 items-center rounded-lg border border-white/[0.15] text-[13px] sm:text-[14px] font-medium text-white hover:bg-white/[0.05] transition-colors flex">Sign In</a>
+        <a href="register.html" class="btn-primary h-9 sm:h-10 px-4 sm:px-6 items-center rounded-xl text-[13px] sm:text-[14px] font-semibold text-white flex">Sign Up</a>
+        <!-- Mobile Menu -->
+        <button class="lg:hidden flex items-center justify-center w-10 h-10" id="mobileMenuBtn">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MOBILE MENU -->
+  <div id="mobileMenu" class="fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm hidden">
+    <div class="absolute top-0 right-0 w-[280px] h-full bg-bg-secondary p-6 flex flex-col gap-4">
+      <div class="flex justify-between items-center mb-4">
+        <span class="font-heading text-lg font-bold">Menu</span>
+        <button id="mobileMenuClose"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <a href="markets.html" class="text-[15px] font-medium py-2 border-b border-white/[0.08] mobile-link">Markets</a>
+      <div class="mt-4 flex flex-col gap-3">
+        <a href="login.html" class="h-10 flex items-center justify-center rounded-lg border border-white/[0.15] text-[14px] font-medium">Sign In</a>
+        <a href="register.html" class="btn-primary h-10 flex items-center justify-center rounded-xl text-[14px] font-semibold text-white">Sign Up</a>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <!-- ========== HERO ========== -->
+    <section class="relative min-h-[calc(100vh-72px)] overflow-hidden flex items-center" style="background:#0F0F0F; background-image: radial-gradient(circle at 50% 20%, rgba(247,147,26,0.08) 0%, transparent 50%);">
+      <!-- Background video -->
+      <div class="absolute inset-0 right-0 w-full md:w-[55%] ml-auto">
+        <div class="absolute inset-0" style="background: linear-gradient(90deg, #0F0F0F 0%, rgba(15,15,15,0.95) 20%, rgba(15,15,15,0.7) 40%, rgba(15,15,15,0.3) 60%, transparent 100%); z-index:1;"></div>
+        <video class="w-full h-full object-cover opacity-60" style="filter: brightness(0.7) contrast(1.1);" autoplay muted loop playsinline>
+          <source src="https://www.bitbasecrypto.com/videos/trade-video.mp4" type="video/mp4">
+        </video>
+      </div>
+
+      <div class="relative z-10 max-w-[1920px] mx-auto w-full px-6 lg:px-10">
+        <div class="max-w-[640px] lg:pr-20">
+          <!-- Badge -->
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-6" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.2);">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-accent-orange"></i>
+            <span class="text-[13px] font-medium text-accent-orange">Trusted by 350M+ Traders Worldwide</span>
+          </div>
+
+          <!-- Heading -->
+          <h1 class="font-heading text-3xl sm:text-4xl md:text-5xl lg:text-[64px] font-bold leading-[1.1] mb-6">
+            Trade Crypto<br>
+            <span class="gradient-text" style="background-size: 200% 200%; animation: gradient-shift 4s ease-in-out infinite;">With Confidence</span>
+          </h1>
+
+          <!-- Subtitle -->
+          <p class="text-[17px] text-text-secondary max-w-[560px] mb-8 leading-relaxed">
+            Access 350+ cryptocurrencies with advanced trading tools, lightning-fast execution, and institutional-grade security. Start trading with as little as $10.
+          </p>
+
+          <!-- Stats -->
+          <div class="flex flex-wrap gap-4 sm:gap-8 mb-8">
+            <div>
+              <div class="font-mono text-2xl lg:text-[32px] font-bold text-white">350M+</div>
+              <div class="text-[13px] text-text-tertiary mt-0.5">Verified Users</div>
+            </div>
+            <div>
+              <div class="font-mono text-2xl lg:text-[32px] font-bold text-white">$76B</div>
+              <div class="text-[13px] text-text-tertiary mt-0.5">24h Volume</div>
+            </div>
+            <div>
+              <div class="font-mono text-2xl lg:text-[32px] font-bold text-white">0.1%</div>
+              <div class="text-[13px] text-text-tertiary mt-0.5">Trading Fees</div>
+            </div>
+          </div>
+
+          <!-- CTA Buttons -->
+          <div class="flex flex-wrap gap-4 mb-8">
+            <a href="login.html" class="btn-primary inline-flex h-14 items-center rounded-xl px-9 text-[16px] font-semibold text-white gap-2">
+              Start Trading <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </a>
+            <a href="register.html" class="inline-flex h-14 items-center rounded-xl px-7 gap-2 bg-white/[0.06] border border-white/[0.12] text-[16px] font-medium text-white hover:bg-white/[0.1] transition-colors backdrop-blur-[10px]">
+              <i data-lucide="circle-play" class="w-5 h-5"></i> Watch Demo
+            </a>
+          </div>
+
+          <!-- Secured By -->
+          <div class="flex items-center gap-4 flex-wrap">
+            <span class="text-[12px] text-text-tertiary uppercase tracking-wider font-medium">Secured by:</span>
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#FFC400"/><path d="M12 3L4 7v5c0 4.42 3.4 8.56 8 9.5 4.6-.94 8-5.08 8-9.5V7l-8-4z" fill="#000" opacity="0.85"/><path d="M10.5 14.5l-2-2 1.06-1.06L10.5 12.38l3.94-3.94L15.5 9.5l-5 5z" fill="#FFC400"/></svg>
+                <span class="text-[12px] font-semibold text-white/70">Norton</span>
+              </div>
+              <div class="flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#C01933"/><path d="M12 4C8 4 5 6.5 5 10c0 2.5 1.5 4.5 3 6l1 2h6l1-2c1.5-1.5 3-3.5 3-6 0-3.5-3-6-7-6z" fill="#fff" opacity="0.9"/><circle cx="12" cy="10" r="2.5" fill="#C01933"/></svg>
+                <span class="text-[12px] font-semibold text-white/70">McAfee</span>
+              </div>
+              <div class="flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#F38020"/><path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg>
+                <span class="text-[12px] font-semibold text-white/70">Cloudflare</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== PARTNER TICKER ========== -->
+    <section class="relative border-y border-white/[0.06] overflow-hidden bg-[#1a1a1a]/90 py-8 backdrop-blur-[20px]">
+      <div class="ticker-wrap">
+        <div class="flex animate-ticker-slow" style="width: max-content;">
+          <!-- Set 1 -->
+          <div class="flex items-center gap-6 px-6">
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#FFC400;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 3L4 7v5c0 4.42 3.4 8.56 8 9.5 4.6-.94 8-5.08 8-9.5V7l-8-4z" fill="#000" opacity="0.85"/><path d="M10.5 14.5l-2-2 1.06-1.06L10.5 12.38l3.94-3.94L15.5 9.5l-5 5z" fill="#FFC400"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Norton</div><div class="text-[12px] text-text-tertiary">Security</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#C01933;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 4C8 4 5 6.5 5 10c0 2.5 1.5 4.5 3 6l1 2h6l1-2c1.5-1.5 3-3.5 3-6 0-3.5-3-6-7-6z" fill="#fff" opacity="0.9"/><circle cx="12" cy="10" r="2.5" fill="#C01933"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">McAfee</div><div class="text-[12px] text-text-tertiary">Threat Protection</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#F38020;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Cloudflare</div><div class="text-[12px] text-text-tertiary">DDoS Protection</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#1a5276;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="#fff" stroke-width="2"/><path d="M7 12l3 3 7-7" stroke="#4FC3F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">DigiCert</div><div class="text-[12px] text-text-tertiary">SSL Secured</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#2E7D32;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="#fff" stroke-width="2"/><path d="M7 12l3 3 7-7" stroke="#81C784" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Sectigo</div><div class="text-[12px] text-text-tertiary">Encryption</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#E65100;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" stroke="#fff" stroke-width="2" fill="none"/><path d="M9 12l2 2 4-4" stroke="#FFB74D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Comodo</div><div class="text-[12px] text-text-tertiary">Web Security</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#0D47A1;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="2"/><path d="M12 7v5l3 3" stroke="#64B5F6" stroke-width="2" stroke-linecap="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">GeoTrust</div><div class="text-[12px] text-text-tertiary">Trust Seal</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#6A1B9A;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5.55-3.84 10.74-8 12-4.16-1.26-8-6.45-8-12V6l8-4z" stroke="#fff" stroke-width="2" fill="none"/><path d="M9 12l2 2 4-4" stroke="#CE93D8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Thawte</div><div class="text-[12px] text-text-tertiary">Identity Verification</div></div>
+            </div>
+          </div>
+          <!-- Set 2 (duplicate for seamless loop) -->
+          <div class="flex items-center gap-6 px-6">
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#FFC400;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 3L4 7v5c0 4.42 3.4 8.56 8 9.5 4.6-.94 8-5.08 8-9.5V7l-8-4z" fill="#000" opacity="0.85"/><path d="M10.5 14.5l-2-2 1.06-1.06L10.5 12.38l3.94-3.94L15.5 9.5l-5 5z" fill="#FFC400"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Norton</div><div class="text-[12px] text-text-tertiary">Security</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#C01933;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 4C8 4 5 6.5 5 10c0 2.5 1.5 4.5 3 6l1 2h6l1-2c1.5-1.5 3-3.5 3-6 0-3.5-3-6-7-6z" fill="#fff" opacity="0.9"/><circle cx="12" cy="10" r="2.5" fill="#C01933"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">McAfee</div><div class="text-[12px] text-text-tertiary">Threat Protection</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#F38020;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Cloudflare</div><div class="text-[12px] text-text-tertiary">DDoS Protection</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#1a5276;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="#fff" stroke-width="2"/><path d="M7 12l3 3 7-7" stroke="#4FC3F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">DigiCert</div><div class="text-[12px] text-text-tertiary">SSL Secured</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#2E7D32;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="#fff" stroke-width="2"/><path d="M7 12l3 3 7-7" stroke="#81C784" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Sectigo</div><div class="text-[12px] text-text-tertiary">Encryption</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#E65100;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" stroke="#fff" stroke-width="2" fill="none"/><path d="M9 12l2 2 4-4" stroke="#FFB74D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Comodo</div><div class="text-[12px] text-text-tertiary">Web Security</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#0D47A1;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="2"/><path d="M12 7v5l3 3" stroke="#64B5F6" stroke-width="2" stroke-linecap="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">GeoTrust</div><div class="text-[12px] text-text-tertiary">Trust Seal</div></div>
+            </div>
+            <div class="flex items-center gap-4 min-w-[240px] rounded-2xl border border-white/[0.1] bg-white/[0.03] px-7 py-4 backdrop-blur-md">
+              <div style="width:56px;height:56px;border-radius:12px;background:#6A1B9A;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5.55-3.84 10.74-8 12-4.16-1.26-8-6.45-8-12V6l8-4z" stroke="#fff" stroke-width="2" fill="none"/><path d="M9 12l2 2 4-4" stroke="#CE93D8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div><div class="font-heading font-semibold text-[15px]">Thawte</div><div class="text-[12px] text-text-tertiary">Identity Verification</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== TRADING SHOWCASE ========== -->
+    <section id="trading-showcase" class="px-4 sm:px-6 py-12 sm:py-24 lg:px-10" style="background:#0F0F0F;">
+      <div class="max-w-[1440px] mx-auto">
+        <!-- Label -->
+        <div class="flex justify-center mb-6">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.2);">
+            <i data-lucide="trending-up" class="w-3.5 h-3.5 text-accent-orange"></i>
+            <span class="text-[13px] font-medium text-accent-orange">Professional Trading</span>
+          </div>
+        </div>
+        <!-- Heading -->
+        <div class="text-center mb-12">
+          <h2 class="font-heading text-3xl md:text-4xl lg:text-[42px] font-bold mb-4">Advanced Trading Terminal</h2>
+          <p class="text-text-secondary text-[16px] max-w-[600px] mx-auto">Trade with precision using our professional-grade interface, real-time data, and advanced charting tools</p>
+        </div>
+        <!-- Trading Image -->
+        <div class="relative mb-12 rounded-[20px] overflow-hidden border border-white/[0.08] shadow-[0_24px_96px_rgba(0,0,0,0.8)] group" style="background: radial-gradient(circle, rgba(247,147,26,0.15), transparent 70%);">
+          <div class="relative rounded-[20px] overflow-hidden bg-bg-secondary">
+            <img src="https://www.bitbasecrypto.com/_next/image?url=%2Fimages%2Ftradep.webp&w=3840&q=75" alt="Bitbase trading interface" class="w-full h-auto transition-transform duration-500 group-hover:scale-[1.02]">
+          </div>
+        </div>
+        <!-- Feature Cards -->
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="section-card rounded-xl p-7">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style="background: rgba(247,147,26,0.12);">
+              <i data-lucide="zap" class="w-5 h-5 text-accent-orange"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[16px] mb-2">Lightning Fast Execution</h3>
+            <p class="text-[14px] text-text-secondary leading-relaxed">Sub-millisecond order matching with 99.99% uptime</p>
+          </div>
+          <div class="section-card rounded-xl p-7">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style="background: rgba(247,147,26,0.12);">
+              <i data-lucide="chart-column" class="w-5 h-5 text-accent-orange"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[16px] mb-2">Advanced Charts</h3>
+            <p class="text-[14px] text-text-secondary leading-relaxed">TradingView integration with 100+ technical indicators</p>
+          </div>
+          <div class="section-card rounded-xl p-7">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style="background: rgba(247,147,26,0.12);">
+              <i data-lucide="shield" class="w-5 h-5 text-accent-orange"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[16px] mb-2">Secure Trading</h3>
+            <p class="text-[14px] text-text-secondary leading-relaxed">Multi-signature wallets and cold storage protection</p>
+          </div>
+          <div class="section-card rounded-xl p-7">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style="background: rgba(247,147,26,0.12);">
+              <i data-lucide="layers" class="w-5 h-5 text-accent-orange"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[16px] mb-2">Multiple Order Types</h3>
+            <p class="text-[14px] text-text-secondary leading-relaxed">Limit, market, stop-loss, trailing stop, and more</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== LIVE MARKETS ========== -->
+    <section id="markets" class="px-4 sm:px-6 py-12 sm:py-24 lg:px-8">
+      <div class="max-w-[1440px] mx-auto">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+          <div>
+            <div class="text-[12px] font-semibold uppercase tracking-[0.2em] text-accent-orange mb-2">Live Markets</div>
+            <h2 class="font-heading text-3xl md:text-4xl font-bold">Explore Markets</h2>
+            <p class="text-text-secondary text-[15px] mt-2">Real-time prices for crypto, metals, forex & commodities</p>
+          </div>
+          <a href="markets.html" class="text-[15px] font-medium text-accent-orange hover:underline">View All Markets →</a>
+        </div>
+        <!-- Tabs -->
+        <div class="flex gap-2 mb-6">
+          <button class="market-tab px-4 py-2 rounded-lg text-[14px] font-medium border transition-all active" data-tab="crypto" style="background: rgba(247,147,26,0.15); border-color: rgba(247,147,26,0.2); color: #fdb022;">Crypto</button>
+          <button class="market-tab px-4 py-2 rounded-lg text-[14px] font-medium border border-white/[0.08] text-text-secondary hover:bg-white/[0.04] transition-all" data-tab="metals">Metals</button>
+          <button class="market-tab px-4 py-2 rounded-lg text-[14px] font-medium border border-white/[0.08] text-text-secondary hover:bg-white/[0.04] transition-all" data-tab="forex">Forex</button>
+          <button class="market-tab px-4 py-2 rounded-lg text-[14px] font-medium border border-white/[0.08] text-text-secondary hover:bg-white/[0.04] transition-all" data-tab="commodities">Commodities</button>
+        </div>
+        <!-- Table -->
+        <div class="rounded-lg border border-white/[0.08] bg-[rgba(26,26,26,0.85)] backdrop-blur-[20px] overflow-x-auto">
+          <table class="w-full min-w-[900px]">
+            <thead>
+              <tr class="border-b border-white/[0.06]">
+                <th class="text-left text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">#</th>
+                <th class="text-left text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">Name</th>
+                <th class="text-right text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">Price</th>
+                <th class="text-right text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">24h Change</th>
+                <th class="text-right text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">24h Volume</th>
+                <th class="text-right text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">Market Cap</th>
+                <th class="text-right text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">Chart (7d)</th>
+                <th class="text-center text-[12px] font-medium uppercase tracking-wider text-text-tertiary px-6 py-4">Trade</th>
+              </tr>
+            </thead>
+            <tbody id="marketTableBody">
+              <tr>
+                <td colspan="8" class="text-center py-16 text-text-tertiary text-[14px]">
+                  <div class="flex flex-col items-center gap-3">
+                    <div class="w-8 h-8 border-2 border-accent-orange border-t-transparent rounded-full animate-spin"></div>
+                    Loading real-time crypto prices...
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== PROFESSIONAL TOOLS ========== -->
+    <section id="trade" class="px-4 sm:px-6 py-16 sm:py-32 lg:px-8" style="background: linear-gradient(180deg, #0D0D0D 0%, #1A0B2E 50%, #0D0D0D 100%);">
+      <div class="max-w-[1440px] mx-auto">
+        <div class="flex justify-center mb-6">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5" style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2);">
+            <span class="text-[13px] font-medium text-accent-purple">Advanced Trading</span>
+          </div>
+        </div>
+        <div class="text-center mb-14">
+          <h2 class="font-heading text-3xl md:text-4xl lg:text-[42px] font-bold mb-4">Professional Tools for Every Trader</h2>
+          <p class="text-text-secondary text-[16px] max-w-[600px] mx-auto">From beginners to professionals, access institutional-grade trading tools</p>
+        </div>
+        <!-- 6 Feature Cards -->
+        <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
+          <!-- Spot Trading -->
+          <div class="glass-card rounded-lg p-8">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5" style="background: rgba(14,165,233,0.12);">
+              <i data-lucide="trending-up" class="w-6 h-6" style="color: #0EA5E9;"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-3">Spot Trading</h3>
+            <p class="text-[14px] text-text-secondary mb-5 leading-relaxed">Trade cryptocurrencies instantly at current market prices with deep liquidity and minimal slippage.</p>
+            <ul class="space-y-2 mb-6">
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>350+ trading pairs</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>0.1% maker/taker fees</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Advanced order types</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Real-time order book</li>
+            </ul>
+            <a href="login.html" class="text-[14px] font-medium hover:underline" style="color: #0EA5E9;">Start Spot Trading →</a>
+          </div>
+          <!-- Futures -->
+          <div class="glass-card rounded-lg p-8">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5" style="background: rgba(139,92,246,0.12);">
+              <i data-lucide="chart-line" class="w-6 h-6" style="color: #8B5CF6;"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-3">Futures & Derivatives</h3>
+            <p class="text-[14px] text-text-secondary mb-5 leading-relaxed">Trade crypto futures with up to 125x leverage. Hedge positions and maximize capital efficiency.</p>
+            <ul class="space-y-2 mb-6">
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Up to 125x leverage</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Perpetual & quarterly contracts</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Cross & isolated margin</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Advanced risk management</li>
+            </ul>
+            <a href="login.html" class="text-[14px] font-medium hover:underline" style="color: #8B5CF6;">Explore Futures →</a>
+          </div>
+          <!-- Margin -->
+          <div class="glass-card rounded-lg p-8">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5" style="background: rgba(245,158,11,0.12);">
+              <i data-lucide="chart-line" class="w-6 h-6" style="color: #F59E0B;"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-3">Margin Trading</h3>
+            <p class="text-[14px] text-text-secondary mb-5 leading-relaxed">Amplify your trading with flexible leverage options and competitive interest rates.</p>
+            <ul class="space-y-2 mb-6">
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Up to 10x leverage</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Cross & isolated margin modes</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Low interest rates (0.02% daily)</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Risk management tools</li>
+            </ul>
+            <a href="login.html" class="text-[14px] font-medium hover:underline" style="color: #F59E0B;">Learn About Margin →</a>
+          </div>
+          <!-- Auto-Invest -->
+          <div class="glass-card rounded-lg p-8">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5" style="background: rgba(16,185,129,0.12);">
+              <i data-lucide="repeat" class="w-6 h-6" style="color: #10B981;"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-3">Auto-Invest (DCA)</h3>
+            <p class="text-[14px] text-text-secondary mb-5 leading-relaxed">Set up recurring buys to dollar-cost average into your favorite cryptocurrencies automatically.</p>
+            <ul class="space-y-2 mb-6">
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Automated purchases</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Custom schedules</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Portfolio rebalancing</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Zero extra fees</li>
+            </ul>
+            <a href="login.html" class="text-[14px] font-medium hover:underline" style="color: #10B981;">Setup Auto-Invest →</a>
+          </div>
+          <!-- Staking -->
+          <div class="glass-card rounded-lg p-8">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5" style="background: rgba(6,182,212,0.12);">
+              <i data-lucide="coins" class="w-6 h-6" style="color: #06B6D4;"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-3">Staking & Earn</h3>
+            <p class="text-[14px] text-text-secondary mb-5 leading-relaxed">Earn passive income on your crypto holdings with flexible and locked staking options.</p>
+            <ul class="space-y-2 mb-6">
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Up to 15% APY</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>50+ supported assets</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Flexible & locked terms</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Daily interest payouts</li>
+            </ul>
+            <a href="login.html" class="text-[14px] font-medium hover:underline" style="color: #06B6D4;">Start Earning →</a>
+          </div>
+          <!-- API -->
+          <div class="glass-card rounded-lg p-8">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5" style="background: rgba(236,72,153,0.12);">
+              <i data-lucide="code" class="w-6 h-6" style="color: #EC4899;"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-3">API & Algorithmic Trading</h3>
+            <p class="text-[14px] text-text-secondary mb-5 leading-relaxed">Build and deploy trading bots with our robust REST and WebSocket APIs for algorithmic trading.</p>
+            <ul class="space-y-2 mb-6">
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>REST & WebSocket APIs</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>1,200 requests/min</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Real-time market data</li>
+              <li class="flex items-center gap-2 text-[13px] text-text-secondary"><i data-lucide="check" class="w-3.5 h-3.5 text-accent-green flex-shrink-0"></i>Extensive documentation</li>
+            </ul>
+            <a href="login.html" class="text-[14px] font-medium hover:underline" style="color: #EC4899;">View API Docs →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== MOBILE TRADING ========== -->
+    <section class="px-4 sm:px-6 py-16 sm:py-32 lg:px-10" style="background: linear-gradient(180deg, #0F0F0F 0%, #1A1520 50%, #0F0F0F 100%);">
+      <div class="max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center gap-16 lg:gap-16">
+        <!-- Left Content -->
+        <div class="flex-1 max-w-[600px]">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-6" style="background: rgba(65,105,225,0.08); border: 1px solid rgba(65,105,225,0.2);">
+            <span class="text-[13px] font-medium text-accent-blue">Mobile Trading</span>
+          </div>
+          <h2 class="font-heading text-3xl md:text-4xl lg:text-[42px] font-bold mb-6 leading-tight">
+            Trade Anywhere,<br>
+            <span class="gradient-text-blue">Anytime</span>
+          </h2>
+          <p class="text-text-secondary text-[16px] mb-8 leading-relaxed">
+            Our award-winning mobile app brings the full power of BitBase to your pocket. Trade, track, and manage your portfolio on the go with our iOS and Android apps.
+          </p>
+          <!-- Feature checklist -->
+          <ul class="space-y-3 mb-8">
+            <li class="flex items-center gap-3 text-[15px]"><i data-lucide="check" class="w-4 h-4 text-accent-green"></i>Real-time portfolio tracking</li>
+            <li class="flex items-center gap-3 text-[15px]"><i data-lucide="check" class="w-4 h-4 text-accent-green"></i>Advanced order types</li>
+            <li class="flex items-center gap-3 text-[15px]"><i data-lucide="check" class="w-4 h-4 text-accent-green"></i>Price alerts & notifications</li>
+            <li class="flex items-center gap-3 text-[15px]"><i data-lucide="check" class="w-4 h-4 text-accent-green"></i>Biometric authentication</li>
+            <li class="flex items-center gap-3 text-[15px]"><i data-lucide="check" class="w-4 h-4 text-accent-green"></i>Dark & light themes</li>
+            <li class="flex items-center gap-3 text-[15px]"><i data-lucide="check" class="w-4 h-4 text-accent-green"></i>Multi-language support</li>
+          </ul>
+          <!-- Stats -->
+          <div class="flex flex-wrap gap-4 sm:gap-8">
+            <div><div class="font-heading text-[20px] font-bold flex items-center gap-1">4.8 <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i></div><div class="text-[12px] text-text-tertiary">App Rating</div></div>
+            <div><div class="font-heading text-[20px] font-bold">10M+</div><div class="text-[12px] text-text-tertiary">Downloads</div></div>
+            <div><div class="font-heading text-[20px] font-bold">150+</div><div class="text-[12px] text-text-tertiary">Countries</div></div>
+          </div>
+        </div>
+        <!-- Right: Phone Mockup -->
+        <div class="flex-1 relative flex justify-center">
+          <div class="absolute inset-0 flex items-center justify-center">
+            <div class="w-[300px] h-[300px] rounded-full" style="background: radial-gradient(circle, rgba(65,105,225,0.2), transparent 70%);"></div>
+          </div>
+          <img src="https://www.bitbasecrypto.com/_next/image?url=%2Fimages%2Ftradep3.png&w=1200&q=75" alt="Bitbase mobile app" class="relative z-10 w-[280px] md:w-[320px] animate-float drop-shadow-[0_40px_80px_rgba(0,0,0,0.6)]">
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== DARK/LIGHT THEME SHOWCASE ========== -->
+    <section class="px-4 sm:px-6 py-16 sm:py-32 lg:px-10" style="background: linear-gradient(180deg, #0F0F0F 0%, #F5F7FA 50%, #0F0F0F 100%);">
+      <div class="max-w-[1440px] mx-auto">
+        <div class="flex justify-center mb-6">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.2);">
+            <span class="text-[13px] font-medium text-accent-orange">Dual Theme Support</span>
+          </div>
+        </div>
+        <div class="text-center mb-14">
+          <h2 class="font-heading text-3xl md:text-4xl lg:text-[42px] font-bold mb-4">Choose Your Perfect View</h2>
+          <p class="text-text-secondary text-[16px] max-w-[600px] mx-auto">Switch seamlessly between dark and light modes to match your preference</p>
+        </div>
+        <!-- Light Theme Image -->
+        <div class="relative mb-12 rounded-[20px] overflow-hidden shadow-[0_24px_96px_rgba(65,105,225,0.2)] max-w-[1200px] mx-auto" style="perspective: 1200px;">
+          <img src="https://www.bitbasecrypto.com/_next/image?url=%2Fimages%2Ftradep2.webp&w=3840&q=75" alt="Bitbase light theme" class="w-full rounded-[20px]" style="transform: rotateX(2deg) rotateY(-2deg);">
+        </div>
+        <!-- Two Info Cards -->
+        <div class="grid md:grid-cols-2 gap-6 max-w-[900px] mx-auto">
+          <div class="rounded-xl p-7 bg-white/[0.06] border border-white/[0.08] backdrop-blur-md">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style="background: rgba(139,92,246,0.12);">
+              <i data-lucide="moon" class="w-5 h-5 text-accent-purple"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-2">Dark Mode</h3>
+            <p class="text-[14px] text-text-secondary mb-4">Reduces eye strain during extended trading sessions. Perfect for low-light environments.</p>
+            <ul class="space-y-2">
+              <li class="text-[13px] text-text-secondary flex items-center gap-2"><span class="text-accent-purple">•</span>Better for OLED displays</li>
+              <li class="text-[13px] text-text-secondary flex items-center gap-2"><span class="text-accent-purple">•</span>Improved battery life</li>
+              <li class="text-[13px] text-text-secondary flex items-center gap-2"><span class="text-accent-purple">•</span>Enhanced focus on charts</li>
+            </ul>
+          </div>
+          <div class="rounded-xl p-7 bg-[rgba(247,147,26,0.1)] border border-[rgba(247,147,26,0.15)] backdrop-blur-md">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style="background: rgba(247,147,26,0.15);">
+              <i data-lucide="sun" class="w-5 h-5 text-accent-orange"></i>
+            </div>
+            <h3 class="font-heading font-semibold text-[18px] mb-2">Light Mode</h3>
+            <p class="text-[14px] text-text-secondary mb-4">Clean and modern interface with high contrast. Ideal for well-lit environments.</p>
+            <ul class="space-y-2">
+              <li class="text-[13px] text-text-secondary flex items-center gap-2"><span class="text-accent-orange">•</span>Better in bright conditions</li>
+              <li class="text-[13px] text-text-secondary flex items-center gap-2"><span class="text-accent-orange">•</span>Familiar interface design</li>
+              <li class="text-[13px] text-text-secondary flex items-center gap-2"><span class="text-accent-orange">•</span>Enhanced readability</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SECURITY STATS ========== -->
+    <section class="px-4 sm:px-6 py-12 sm:py-24 lg:px-8">
+      <div class="max-w-[1440px] mx-auto">
+        <div class="flex justify-center mb-6">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5" style="background: rgba(22,199,132,0.08); border: 1px solid rgba(22,199,132,0.2);">
+            <span class="text-[13px] font-medium text-accent-green">Security First</span>
+          </div>
+        </div>
+        <div class="text-center mb-14">
+          <h2 class="font-heading text-3xl md:text-4xl lg:text-[42px] font-bold mb-4">Bank-Grade Security</h2>
+          <p class="text-text-secondary text-[16px] max-w-[600px] mx-auto">Your assets are protected by industry-leading security measures</p>
+        </div>
+        <!-- 4 Stat Cards -->
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-14">
+          <div class="text-center">
+            <div class="w-[72px] h-[72px] rounded-2xl flex items-center justify-center mx-auto mb-5" style="background: rgba(22,199,132,0.1);">
+              <i data-lucide="lock" class="w-8 h-8 text-accent-green"></i>
+            </div>
+            <div class="font-mono text-[40px] font-bold text-accent-green mb-1">98%</div>
+            <div class="font-heading font-semibold text-[16px] mb-2">Cold Storage</div>
+            <div class="text-[14px] text-text-secondary">Assets secured offline in multi-sig vaults</div>
+          </div>
+          <div class="text-center">
+            <div class="w-[72px] h-[72px] rounded-2xl flex items-center justify-center mx-auto mb-5" style="background: rgba(22,199,132,0.1);">
+              <i data-lucide="shield" class="w-8 h-8 text-accent-green"></i>
+            </div>
+            <div class="font-mono text-[40px] font-bold text-accent-green mb-1">2FA</div>
+            <div class="font-heading font-semibold text-[16px] mb-2">Authentication</div>
+            <div class="text-[14px] text-text-secondary">Multi-factor security on all accounts</div>
+          </div>
+          <div class="text-center">
+            <div class="w-[72px] h-[72px] rounded-2xl flex items-center justify-center mx-auto mb-5" style="background: rgba(22,199,132,0.1);">
+              <i data-lucide="file-check" class="w-8 h-8 text-accent-green"></i>
+            </div>
+            <div class="font-mono text-[40px] font-bold text-accent-green mb-1">$300M</div>
+            <div class="font-heading font-semibold text-[16px] mb-2">Insurance Fund</div>
+            <div class="text-[14px] text-text-secondary">SAFU fund protects user assets</div>
+          </div>
+          <div class="text-center">
+            <div class="w-[72px] h-[72px] rounded-2xl flex items-center justify-center mx-auto mb-5" style="background: rgba(22,199,132,0.1);">
+              <i data-lucide="award" class="w-8 h-8 text-accent-green"></i>
+            </div>
+            <div class="font-mono text-[40px] font-bold text-accent-green mb-1">SOC 2</div>
+            <div class="font-heading font-semibold text-[16px] mb-2">Certified</div>
+            <div class="text-[14px] text-text-secondary">Type II compliance certified</div>
+          </div>
+        </div>
+        <!-- Certification Badges -->
+        <div class="flex flex-wrap justify-center gap-4">
+          <span class="px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[13px] font-medium text-text-secondary">ISO 27001 Certified</span>
+          <span class="px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[13px] font-medium text-text-secondary">SOC 2 Type II</span>
+          <span class="px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[13px] font-medium text-text-secondary">PCI DSS Compliant</span>
+          <span class="px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[13px] font-medium text-text-secondary">CCSS Certified</span>
+          <span class="px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[13px] font-medium text-text-secondary">BitLicense</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== TESTIMONIALS ========== -->
+    <section class="px-4 sm:px-6 py-12 sm:py-24 lg:px-8" style="background: linear-gradient(180deg, #0D0D0D 0%, #1A0B2E 100%);">
+      <div class="max-w-[1440px] mx-auto">
+        <div class="flex justify-center mb-6">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5" style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2);">
+            <span class="text-[13px] font-medium text-accent-purple">Trusted By Millions</span>
+          </div>
+        </div>
+        <div class="text-center mb-14">
+          <h2 class="font-heading text-3xl md:text-4xl lg:text-[42px] font-bold">What Our Traders Say</h2>
+        </div>
+        <!-- Testimonial Cards -->
+        <div class="relative">
+          <div class="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory" id="testimonialScroll">
+            <!-- Card 1 -->
+            <div class="min-w-[320px] md:min-w-[380px] snap-center glass-card rounded-lg p-8 flex-shrink-0">
+              <div class="flex gap-1 mb-4">
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+              </div>
+              <p class="text-[15px] text-text-secondary leading-relaxed mb-6">"BitBase has completely transformed how I trade crypto. The interface is intuitive and the execution speed is incredible."</p>
+              <div>
+                <div class="font-heading font-semibold text-[15px]">Sarah Chen</div>
+                <div class="text-[13px] text-text-tertiary">Day Trader</div>
+              </div>
+            </div>
+            <!-- Card 2 -->
+            <div class="min-w-[320px] md:min-w-[380px] snap-center glass-card rounded-lg p-8 flex-shrink-0">
+              <div class="flex gap-1 mb-4">
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+              </div>
+              <p class="text-[15px] text-text-secondary leading-relaxed mb-6">"Best crypto exchange I've used. Low fees, great security, and the mobile app is fantastic."</p>
+              <div>
+                <div class="font-heading font-semibold text-[15px]">Michael Rodriguez</div>
+                <div class="text-[13px] text-text-tertiary">HODLer</div>
+              </div>
+            </div>
+            <!-- Card 3 -->
+            <div class="min-w-[320px] md:min-w-[380px] snap-center glass-card rounded-lg p-8 flex-shrink-0">
+              <div class="flex gap-1 mb-4">
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+              </div>
+              <p class="text-[15px] text-text-secondary leading-relaxed mb-6">"The futures platform is professional-grade. I've been able to hedge my positions effectively."</p>
+              <div>
+                <div class="font-heading font-semibold text-[15px]">David Kim</div>
+                <div class="text-[13px] text-text-tertiary">Institutional Trader</div>
+              </div>
+            </div>
+            <!-- Card 4 -->
+            <div class="min-w-[320px] md:min-w-[380px] snap-center glass-card rounded-lg p-8 flex-shrink-0">
+              <div class="flex gap-1 mb-4">
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+                <i data-lucide="star" class="w-4 h-4 text-accent-yellow fill-accent-yellow"></i>
+              </div>
+              <p class="text-[15px] text-text-secondary leading-relaxed mb-6">"The staking rewards are amazing. I earn passive income daily while holding my favorite assets."</p>
+              <div>
+                <div class="font-heading font-semibold text-[15px]">Emily Watson</div>
+                <div class="text-[13px] text-text-tertiary">DeFi Enthusiast</div>
+              </div>
+            </div>
+          </div>
+          <!-- Dots -->
+          <div class="flex justify-center gap-2 mt-8">
+            <span class="w-6 h-2 rounded-full bg-accent-yellow"></span>
+            <span class="w-2 h-2 rounded-full bg-white/20"></span>
+            <span class="w-2 h-2 rounded-full bg-white/20"></span>
+            <span class="w-2 h-2 rounded-full bg-white/20"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== GLOBAL STATS ========== -->
+    <section class="px-4 sm:px-6 py-16 sm:py-32 lg:px-8">
+      <div class="max-w-[1440px] mx-auto">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-10">
+          <div class="text-center">
+            <div class="flex justify-center mb-4">
+              <i data-lucide="users" class="w-[52px] h-[52px] text-accent-yellow"></i>
+            </div>
+            <div class="font-heading text-4xl md:text-5xl font-bold gradient-stats mb-2" style="background: linear-gradient(to right, #f7931a, #fdb022, #FFD700); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">350M+</div>
+            <div class="text-[15px] text-text-secondary">Verified Users Worldwide</div>
+          </div>
+          <div class="text-center">
+            <div class="flex justify-center mb-4">
+              <i data-lucide="globe" class="w-[52px] h-[52px] text-accent-yellow"></i>
+            </div>
+            <div class="font-heading text-4xl md:text-5xl font-bold mb-2" style="background: linear-gradient(to right, #f7931a, #fdb022, #FFD700); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">190+</div>
+            <div class="text-[15px] text-text-secondary">Countries & Regions</div>
+          </div>
+          <div class="text-center">
+            <div class="flex justify-center mb-4">
+              <i data-lucide="dollar-sign" class="w-[52px] h-[52px] text-accent-yellow"></i>
+            </div>
+            <div class="font-heading text-4xl md:text-5xl font-bold mb-2" style="background: linear-gradient(to right, #f7931a, #fdb022, #FFD700); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">$76B</div>
+            <div class="text-[15px] text-text-secondary">24h Trading Volume</div>
+          </div>
+          <div class="text-center">
+            <div class="flex justify-center mb-4">
+              <i data-lucide="coins" class="w-[52px] h-[52px] text-accent-yellow"></i>
+            </div>
+            <div class="font-heading text-4xl md:text-5xl font-bold mb-2" style="background: linear-gradient(to right, #f7931a, #fdb022, #FFD700); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">350+</div>
+            <div class="text-[15px] text-text-secondary">Supported Cryptocurrencies</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== CTA SECTION ========== -->
+    <section class="px-4 sm:px-6 py-20 sm:py-40 lg:px-8" style="background: radial-gradient(ellipse at 50% 50%, rgba(247,147,26,0.15) 0%, #0F0F0F 70%);">
+      <div class="max-w-[1200px] mx-auto text-center rounded-[24px] border border-white/[0.12] p-12 md:p-20" style="background: rgba(26,26,26,0.8); box-shadow: 0 0 80px rgba(247,147,26,0.08);">
+        <h2 class="font-heading text-3xl md:text-4xl lg:text-[48px] font-bold mb-6">Join BitBase Today</h2>
+        <p class="text-text-secondary text-[17px] mb-10 max-w-[600px] mx-auto">Start trading with 350+ cryptocurrencies. No credit card required.</p>
+        <a href="register.html" class="btn-primary inline-flex h-16 items-center rounded-2xl px-12 text-[18px] font-semibold text-white" style="box-shadow: 0 16px 48px rgba(247,147,26,0.4);">
+          Get Started <i data-lucide="arrow-right" class="w-5 h-5 ml-2"></i>
+        </a>
+        <p class="text-[13px] text-text-tertiary mt-5">✓ No credit card required &nbsp;•&nbsp; ✓ $10 minimum &nbsp;•&nbsp; ✓ Instant verification</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ========== FOOTER ========== -->
+  <footer class="border-t border-[rgba(255,255,255,0.06)] px-6 pt-20 pb-8 lg:px-8" style="background:#0A0A0A;">
+    <div class="max-w-[1440px] mx-auto">
+      <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-10 mb-16">
+        <!-- Column 1: Brand -->
+        <div class="lg:col-span-1 lg:max-w-[320px]">
+          <div class="flex items-center gap-2.5 mb-5">
+            <div class="w-[28px] h-[28px] rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #F7931A, #FDB022);">
+              <i data-lucide="bitcoin" class="w-[16px] h-[16px] text-white"></i>
+            </div>
+            <span class="font-heading text-[22px] font-bold tracking-tight">BITBASE</span>
+          </div>
+          <p class="text-[14px] text-text-secondary mb-6 leading-relaxed">The world's leading cryptocurrency exchange</p>
+          <div class="flex gap-2">
+            <a href="#" class="w-11 h-11 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:bg-white/[0.08] transition-colors">
+              <svg class="w-[18px] h-[18px]" fill="white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+            <a href="#" class="w-11 h-11 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:bg-white/[0.08] transition-colors">
+              <i data-lucide="send" class="w-[18px] h-[18px]"></i>
+            </a>
+            <a href="#" class="w-11 h-11 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:bg-white/[0.08] transition-colors">
+              <i data-lucide="message-circle" class="w-[18px] h-[18px]"></i>
+            </a>
+            <a href="#" class="w-11 h-11 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:bg-white/[0.08] transition-colors">
+              <i data-lucide="youtube" class="w-[18px] h-[18px]"></i>
+            </a>
+            <a href="#" class="w-11 h-11 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:bg-white/[0.08] transition-colors">
+              <i data-lucide="linkedin" class="w-[18px] h-[18px]"></i>
+            </a>
+          </div>
+        </div>
+        <!-- Column 2: Products -->
+        <div>
+          <h4 class="font-heading font-semibold text-[15px] mb-5">Products</h4>
+          <ul class="space-y-3">
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Spot Trading</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Margin Trading</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Futures</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Options</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Staking</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Savings</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Launchpad</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">NFT Marketplace</a></li>
+          </ul>
+        </div>
+        <!-- Column 3: Services -->
+        <div>
+          <h4 class="font-heading font-semibold text-[15px] mb-5">Services</h4>
+          <ul class="space-y-3">
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Buy Crypto</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">P2P Trading</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">OTC Trading</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Institutional</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">API</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Affiliate Program</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Referral Program</a></li>
+            <li><a href="register.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">VIP Program</a></li>
+          </ul>
+        </div>
+        <!-- Column 4: Support -->
+        <div>
+          <h4 class="font-heading font-semibold text-[15px] mb-5">Support</h4>
+          <ul class="space-y-3">
+            <li><a href="#" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Contact Us</a></li>
+            <li><a href="#" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Fees</a></li>
+            <li><a href="#" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">API Documentation</a></li>
+          </ul>
+        </div>
+        <!-- Column 5: Company -->
+        <div>
+          <h4 class="font-heading font-semibold text-[15px] mb-5">Company</h4>
+          <ul class="space-y-3">
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">About Us</a></li>
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Careers <span class="inline-block ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-accent-green/15 text-accent-green">Hiring</span></a></li>
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Press</a></li>
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Blog</a></li>
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Terms of Service</a></li>
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Privacy Policy</a></li>
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">Cookie Policy</a></li>
+            <li><a href="index.html" class="text-[14px] text-text-secondary hover:text-white hover:translate-x-1 inline-block transition-all">AML Policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <!-- Bottom Bar -->
+      <div class="border-t border-white/[0.06] pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="text-[13px] text-text-tertiary">© 2026 BitBase. All rights reserved. Build 2025-02-v2</div>
+        <div class="flex items-center gap-4">
+          <button class="text-[13px] text-text-tertiary hover:text-white transition-colors flex items-center gap-1">English <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+          <button class="text-[13px] text-text-tertiary hover:text-white transition-colors flex items-center gap-1">$ USD <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========== SCRIPTS ========== -->
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Mobile menu toggle
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const mobileMenu = document.getElementById('mobileMenu');
+    const mobileMenuClose = document.getElementById('mobileMenuClose');
+    const mobileLinks = document.querySelectorAll('.mobile-link');
+
+    mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.remove('hidden'));
+    mobileMenuClose.addEventListener('click', () => mobileMenu.classList.add('hidden'));
+    mobileLinks.forEach(link => link.addEventListener('click', () => mobileMenu.classList.add('hidden')));
+    mobileMenu.addEventListener('click', (e) => {
+      if (e.target === mobileMenu) mobileMenu.classList.add('hidden');
+    });
+
+    // Market data simulation
+    const cryptoData = [
+      { rank: 1, name: 'Bitcoin', symbol: 'BTC', price: 64464.00, change: 2.34, volume: '28.5B', cap: '1.32T', color: '#f7931a' },
+      { rank: 2, name: 'Ethereum', symbol: 'ETH', price: 1880.96, change: 1.87, volume: '14.2B', cap: '423.1B', color: '#627eea' },
+      { rank: 3, name: 'Tether', symbol: 'USDT', price: 1.00, change: 0.01, volume: '52.1B', cap: '112.4B', color: '#26a17b' },
+      { rank: 4, name: 'BNB', symbol: 'BNB', price: 569.95, change: -0.45, volume: '1.8B', cap: '89.2B', color: '#f3ba2f' },
+      { rank: 5, name: 'Solana', symbol: 'SOL', price: 74.78, change: 5.62, volume: '3.4B', cap: '78.5B', color: '#9945ff' },
+      { rank: 6, name: 'XRP', symbol: 'XRP', price: 1.1006, change: -1.23, volume: '1.2B', cap: '28.6B', color: '#00aae4' },
+      { rank: 7, name: 'Cardano', symbol: 'ADA', price: 0.1650, change: 3.21, volume: '0.8B', cap: '16.1B', color: '#0033ad' },
+      { rank: 8, name: 'Dogecoin', symbol: 'DOGE', price: 0.07243, change: -2.15, volume: '1.1B', cap: '17.8B', color: '#c2a633' },
+    ];
+
+    function renderMarketTable() {
+      const tbody = document.getElementById('marketTableBody');
+      tbody.innerHTML = cryptoData.map(coin => {
+        const isPositive = coin.change >= 0;
+        const changeColor = isPositive ? '#16c784' : '#ea3943';
+        const changeSign = isPositive ? '+' : '';
+        const sparkline = generateSparkline(isPositive);
+        return `
+          <tr class="market-row border-b border-white/[0.04] transition-colors">
+            <td class="px-6 py-4 text-[14px] text-text-tertiary">${coin.rank}</td>
+            <td class="px-6 py-4">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full flex items-center justify-center" style="background: ${coin.color}20;">
+                  <span class="text-[12px] font-bold" style="color: ${coin.color};">${coin.symbol.substring(0,2)}</span>
+                </div>
+                <div>
+                  <div class="font-medium text-[14px]">${coin.name}</div>
+                  <div class="text-[12px] text-text-tertiary">${coin.symbol}</div>
+                </div>
+              </div>
+            </td>
+            <td class="px-6 py-4 text-right font-mono text-[14px]">$${coin.price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            <td class="px-6 py-4 text-right font-mono text-[14px]" style="color: ${changeColor};">${changeSign}${coin.change.toFixed(2)}%</td>
+            <td class="px-6 py-4 text-right font-mono text-[14px] text-text-secondary">$${coin.volume}</td>
+            <td class="px-6 py-4 text-right font-mono text-[14px] text-text-secondary">$${coin.cap}</td>
+            <td class="px-6 py-4 text-right">
+              <svg width="80" height="32" viewBox="0 0 80 32" class="inline-block">
+                <polyline points="${sparkline}" fill="none" stroke="${changeColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </td>
+            <td class="px-6 py-4 text-center">
+              <button class="px-4 py-1.5 rounded-lg text-[13px] font-medium text-white" style="background: linear-gradient(135deg, #F7931A 0%, #FDB022 100%);">Trade</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function generateSparkline(positive) {
+      const points = [];
+      let y = 16;
+      for (let x = 0; x <= 76; x += 4) {
+        y = Math.max(2, Math.min(30, y + (Math.random() - (positive ? 0.4 : 0.6)) * 6));
+        points.push(`${x},${y}`);
+      }
+      return points.join(' ');
+    }
+
+    // Simulate loading delay
+    setTimeout(renderMarketTable, 1500);
+
+    // Market tabs
+    const tabs = document.querySelectorAll('.market-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => {
+          t.classList.remove('active');
+          t.style.background = '';
+          t.style.borderColor = 'rgba(255,255,255,0.08)';
+          t.style.color = '#b0b0b0';
+        });
+        tab.classList.add('active');
+        tab.style.background = 'rgba(247,147,26,0.15)';
+        tab.style.borderColor = 'rgba(247,147,26,0.2)';
+        tab.style.color = '#fdb022';
+      });
+    });
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

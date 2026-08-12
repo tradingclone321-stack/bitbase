@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitbase – Create Account</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f0f0f',
+                        'dark-card': '#1a1a1a',
+                        'dark-border': '#2a2a2a',
+                        accent: '#f7931a',
+                        'accent-hover': '#e88417',
+                    },
+                    fontFamily: {
+                        heading: ['Space Grotesk', 'sans-serif'],
+                        body: ['Inter', 'sans-serif'],
+                        mono: ['IBM Plex Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f0f0f;
+            color: #ffffff;
+        }
+        .input-field {
+            width: 100%;
+            padding: 0 16px;
+            height: 48px;
+            background-color: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        .input-field::placeholder {
+            color: #666666;
+        }
+        .input-field:focus {
+            border-color: #f7931a;
+        }
+        select.input-field {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 40px;
+        }
+        select.input-field option {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .btn-primary {
+            width: 100%;
+            height: 48px;
+            background: linear-gradient(135deg, #f7931a, #e88417);
+            border: none;
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        .btn-secondary {
+            width: 100%;
+            height: 48px;
+            background-color: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .btn-secondary:hover {
+            border-color: #444444;
+        }
+        .checkbox-custom {
+            width: 16px;
+            height: 16px;
+            accent-color: #f7931a;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <a href="index.html" class="inline-flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #f7931a, #e88417);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M8 11.5V9a4 4 0 1 1 8 0v2.5"/>
+                        <path d="M8 11.5h5a2.5 2.5 0 0 1 0 5H8"/>
+                        <path d="M12 16.5V14"/>
+                    </svg>
+                </div>
+                <span class="text-xl font-bold font-heading tracking-wide">BITBASE</span>
+            </a>
+            <h1 class="text-3xl font-bold font-heading mb-2">Create Account</h1>
+            <p class="text-gray-400">Start your crypto journey today</p>
+        </div>
+
+        <form id="registerForm" class="space-y-4" novalidate>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Full Name</label>
+                <input type="text" id="fullName" class="input-field" placeholder="Enter your full name" required>
+                <p id="nameError" class="text-sm mt-1 hidden" style="color: #ea3943;">Please enter your full name</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Email</label>
+                <input type="email" id="email" class="input-field" placeholder="Enter your email" required>
+                <p id="emailError" class="text-sm mt-1 hidden" style="color: #ea3943;">Please enter a valid email address</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Password</label>
+                <div class="relative">
+                    <input type="password" id="password" class="input-field pr-12" placeholder="Create a password" required minlength="8">
+                    <button type="button" onclick="togglePassword('password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                        <i data-lucide="eye" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <p id="passError" class="text-sm mt-1 hidden" style="color: #ea3943;">Password must be at least 8 characters</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Confirm Password</label>
+                <div class="relative">
+                    <input type="password" id="confirm-password" class="input-field pr-12" placeholder="Confirm your password" required>
+                    <button type="button" onclick="togglePassword('confirm-password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                        <i data-lucide="eye" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <p id="confirmError" class="text-sm mt-1 hidden" style="color: #ea3943;">Passwords do not match</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Country / Region</label>
+                <select id="country" class="input-field" required>
+                    <option value="" disabled selected>Select your country</option>
+                    <option value="us">United States</option>
+                    <option value="uk">United Kingdom</option>
+                    <option value="ca">Canada</option>
+                    <option value="au">Australia</option>
+                    <option value="de">Germany</option>
+                    <option value="fr">France</option>
+                    <option value="jp">Japan</option>
+                    <option value="kr">South Korea</option>
+                    <option value="in">India</option>
+                    <option value="br">Brazil</option>
+                    <option value="ng">Nigeria</option>
+                    <option value="sg">Singapore</option>
+                    <option value="ae">United Arab Emirates</option>
+                    <option value="other">Other</option>
+                </select>
+                <p id="countryError" class="text-sm mt-1 hidden" style="color: #ea3943;">Please select your country</p>
+            </div>
+            <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" id="terms" class="checkbox-custom mt-0.5" required>
+                <span class="text-sm text-gray-400">I agree to the <a href="#" class="text-accent hover:underline">Terms of Service</a> and <a href="#" class="text-accent hover:underline">Privacy Policy</a></span>
+            </label>
+            <p id="termsError" class="text-sm hidden" style="color: #ea3943;">You must agree to the terms</p>
+            <div id="submitSuccess" class="hidden rounded-xl p-4 text-sm text-center font-medium" style="background: rgba(22,199,132,0.1); border: 1px solid rgba(22,199,132,0.2); color: #16c784;">
+                Account created successfully! Redirecting...
+            </div>
+            <button type="submit" id="submitBtn" class="btn-primary relative">
+                <span id="btnText">Create Account</span>
+                <span id="btnSpinner" class="hidden absolute inset-0 flex items-center justify-center">
+                    <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor"/></svg>
+                </span>
+            </button>
+        </form>
+
+        <p class="text-center mt-8 text-gray-400 text-sm">
+            Already have an account? <a href="login.html" class="text-accent font-medium hover:underline">Sign in</a>
+        </p>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        function togglePassword(id, btn) {
+            const input = document.getElementById(id);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                input.type = 'password';
+                icon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
+        }
+
+        function showError(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+        function hideError(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        const form = document.getElementById('registerForm');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            let valid = true;
+
+            // Hide all errors
+            ['nameError','emailError','passError','confirmError','countryError','termsError'].forEach(hideError);
+
+            const name = document.getElementById('fullName').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const pass = document.getElementById('password').value.trim();
+            const confirm = document.getElementById('confirm-password').value.trim();
+            const country = document.getElementById('country').value;
+            const terms = document.getElementById('terms').checked;
+
+            if (!name) { showError('nameError'); valid = false; }
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('emailError'); valid = false; }
+            if (!pass || pass.length < 8) { showError('passError'); valid = false; }
+            if (pass !== confirm) { showError('confirmError'); valid = false; }
+            if (!country) { showError('countryError'); valid = false; }
+            if (!terms) { showError('termsError'); valid = false; }
+
+            if (!valid) return;
+
+            // Check for existing account with same email
+            var existingEmail = localStorage.getItem('bb_email');
+            if (existingEmail && existingEmail === email) {
+                showError('emailError');
+                document.getElementById('emailError').textContent = 'An account with this email already exists. Please sign in.';
+                return;
+            }
+            try {
+                var adminUsers = JSON.parse(localStorage.getItem('bb_admin_users') || '[]');
+                for (var i = 0; i < adminUsers.length; i++) {
+                    if (adminUsers[i].email === email) {
+                        showError('emailError');
+                        document.getElementById('emailError').textContent = 'An account with this email already exists. Please sign in.';
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            // Show loading
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            btnText.classList.add('hidden');
+            btnSpinner.classList.remove('hidden');
+            document.getElementById('submitBtn').disabled = true;
+
+            // Simulate API call
+            setTimeout(function() {
+                btnText.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('submitSuccess').classList.remove('hidden');
+
+// Generate UID on account creation (6 digits, assigned once)
+                 var newUID = String(Math.floor(100000 + Math.random() * 900000));
+                 localStorage.setItem('bb_uid', newUID);
+                 localStorage.setItem('bb_name', document.getElementById('fullName').value.trim());
+                 localStorage.setItem('bb_email', document.getElementById('email').value.trim());
+                  localStorage.setItem('bb_password', pass);
+                 localStorage.setItem('bb_login_time', Date.now());
+                 localStorage.setItem('bb_cash_balance', '0');
+                 localStorage.setItem('bb_asset_balances', JSON.stringify({BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}));
+                 // Save to central admin user list so admin panel can see all registered users
+                 try{
+                   var newUser={uid:newUID,name:document.getElementById('fullName').value.trim(),email:document.getElementById('email').value.trim(),cashBalance:0,assetBalances:{BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}};
+                   var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+                   var found=false;
+                   for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===newUID){adminUsers[i]=newUser;found=true;break;}}
+                   if(!found)adminUsers.push(newUser);
+                   localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
+                 }catch(e){}
+
+                setTimeout(function() {
+                    window.location.href = 'dashboard.html';
+                }, 1500);
+            }, 2000);
+        });
+
+        // Clear errors on input
+        document.getElementById('fullName').addEventListener('input', function() { hideError('nameError'); });
+        document.getElementById('email').addEventListener('input', function() { hideError('emailError'); });
+        document.getElementById('password').addEventListener('input', function() { hideError('passError'); });
+        document.getElementById('confirm-password').addEventListener('input', function() { hideError('confirmError'); });
+        document.getElementById('country').addEventListener('change', function() { hideError('countryError'); });
+        document.getElementById('terms').addEventListener('change', function() { hideError('termsError'); });
+    </script>
+</body>
+</html>

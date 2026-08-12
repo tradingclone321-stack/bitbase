@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitbase – History</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
+    [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
+    .search-wrapper { position: relative; }
+    .search-wrapper i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-tertiary); pointer-events: none; }
+    .search-wrapper input { padding-left: 36px; }
+
+    .filter-input {
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-medium);
+      background: rgba(255,255,255,0.04);
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .filter-input:focus { border-color: var(--accent-orange); box-shadow: 0 0 0 3px rgba(247,147,26,0.1); }
+    .filter-input::placeholder { color: var(--text-tertiary); }
+    input[type="date"].filter-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+    .badge-deposit { background: rgba(22,199,132,0.12); color: #16c784; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .badge-withdrawal { background: rgba(247,147,26,0.12); color: #f7931a; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .badge-trade-buy { background: rgba(65,105,225,0.12); color: #4169e1; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .badge-trade-sell { background: rgba(234,57,67,0.12); color: #ea3943; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .badge-borrow { background: rgba(247,147,26,0.12); color: #f7931a; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .badge-demo { background: rgba(22,199,132,0.12); color: #16c784; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; border: 1px solid rgba(22,199,132,0.25); display: inline-flex; align-items: center; gap: 4px; }
+    .badge-real { background: rgba(247,147,26,0.12); color: #f7931a; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; border: 1px solid rgba(247,147,26,0.25); display: inline-flex; align-items: center; gap: 4px; }
+
+    .status-completed { background: rgba(22,199,132,0.15); color: #16c784; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+    .status-pending { background: rgba(253,176,34,0.15); color: #fdb022; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+    .status-rejected { background: rgba(234,57,67,0.15); color: #ea3943; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      z-index: 2000; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--bg-secondary); border: 1px solid var(--border-medium); border-radius: 16px;
+      width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto;
+      animation: slideUp 0.3s ease;
+    }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border-subtle); }
+    .modal-body { padding: 24px; }
+    .modal-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .modal-row:last-child { border-bottom: none; }
+    .modal-row .label { font-size: 13px; color: var(--text-secondary); }
+    .modal-row .value { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #fff; text-align: right; max-width: 60%; word-break: break-all; }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; }
+    .empty-state .icon-box { width: 64px; height: 64px; border-radius: 16px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-medium); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+
+    .market-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
+    .market-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    .page-btn {
+      width: 32px; height: 32px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border-medium); background: rgba(255,255,255,0.04); color: var(--text-secondary);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .page-btn:hover:not(.active):not(:disabled) { color: #fff; background: rgba(255,255,255,0.08); }
+    .page-btn.active { background: rgba(247,147,26,0.15); border-color: rgba(247,147,26,0.2); color: var(--accent-yellow); }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .page-btn-nav {
+      padding: 0 12px; width: auto; height: 32px;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="page-body">
+<script>
+(function(){
+  try {
+    var p = JSON.parse(localStorage.getItem('bb_preferences'));
+    if (p && p.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(e) {}
+  try {
+    var uid = localStorage.getItem('bb_uid');
+    if (uid) {
+      var deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      if (deactivated.indexOf(uid) >= 0) {
+        localStorage.removeItem('bb_login_time');
+        window.location.href = 'index.html';
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <div class="flex items-center gap-2">
+      <a href="index.html" class="flex items-center gap-2">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="bitcoin" style="width:16px;height:16px;color:#fff;"></i>
+        </div>
+        <span class="font-heading" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">BITBASE</span>
+      </a>
+    </div>
+    <nav class="dash-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="assets.html">Assets</a>
+      <a href="markets.html">Markets</a>
+      <a href="trade.html">Trade</a>
+      <a href="earn.html">Earn</a>
+      <a href="history.html" class="active">History</a>
+      <a href="demo.html">Demo</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <div class="dash-right">
+      <div class="user-pill">
+        <div class="user-avatar">U</div>
+        <div><div class="user-name" style="font-size:13px;font-weight:500;">User</div><div class="user-email" style="font-size:11px;color:var(--text-tertiary);">user@email.com</div></div>
+      </div>
+      <a href="assets.html" class="deposit-btn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Deposit</a>
+      <button class="lg:hidden" onclick="document.getElementById('mobileNav').classList.add('open')" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;"><i data-lucide="menu" style="width:20px;height:20px;"></i></button>
+    </div>
+  </div>
+</header>
+<div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-nav">
+    <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+  </div>
+</div>
+
+<div class="page-content">
+
+  <div class="mb-8">
+    <div class="inline-flex items-center gap-2 mb-3" style="background:rgba(247,147,26,0.08);border:1px solid rgba(247,147,26,0.2);padding:5px 14px;border-radius:9999px;">
+      <i data-lucide="history" style="width:14px;height:14px;color:#f7931a;"></i>
+      <span style="font-size:12px;font-weight:600;color:#f7931a;text-transform:uppercase;letter-spacing:0.05em;">History</span>
+    </div>
+    <h1 class="font-heading text-3xl font-bold mb-1">History</h1>
+    <p class="text-secondary">View your transaction history, deposits, withdrawals, and borrow activity.</p>
+  </div>
+
+  <div class="flex flex-wrap gap-2 mb-6" id="filterTabs">
+    <button class="tab-btn active" data-filter="all">All</button>
+    <button class="tab-btn" data-filter="trade">Trades</button>
+    <button class="tab-btn" data-filter="deposit">Deposits</button>
+    <button class="tab-btn" data-filter="withdrawal">Withdrawals</button>
+    <button class="tab-btn" data-filter="borrow">Borrow</button>
+    <button class="tab-btn" data-filter="demo">Demo Trades</button>
+    <button class="tab-btn" data-filter="real">Real Trades</button>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-3 mb-6" id="filterBar">
+    <div class="search-wrapper">
+      <i data-lucide="search"></i>
+      <input type="text" id="searchInput" placeholder="Search transactions..." class="filter-input" style="max-width:260px;width:100%;">
+    </div>
+    <input type="date" id="dateFrom" class="filter-input" placeholder="From">
+    <input type="date" id="dateTo" class="filter-input" placeholder="To">
+    <button class="btn-secondary rounded-lg px-4 text-sm font-medium" id="exportBtn" style="height:40px;"><i data-lucide="download" style="width:14px;height:14px;"></i> Export CSV</button>
+    <button class="btn-secondary rounded-lg px-4 text-sm font-medium hidden" id="clearFilters" style="height:40px;"><i data-lucide="x" style="width:14px;height:14px;"></i> Clear</button>
+  </div>
+
+  <div class="glass-card rounded-xl table-wrap" id="tableCard">
+    <table class="market-table">
+      <thead>
+        <tr>
+          <th style="text-transform:uppercase;font-size:12px;letter-spacing:0.06em;color:#808080;font-weight:500;">Type</th>
+          <th style="text-transform:uppercase;font-size:12px;letter-spacing:0.06em;color:#808080;font-weight:500;">Amount</th>
+          <th style="text-transform:uppercase;font-size:12px;letter-spacing:0.06em;color:#808080;font-weight:500;">Time</th>
+          <th style="text-transform:uppercase;font-size:12px;letter-spacing:0.06em;color:#808080;font-weight:500;">Status</th>
+          <th style="text-transform:uppercase;font-size:12px;letter-spacing:0.06em;color:#808080;font-weight:500;text-align:right;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty-state" style="display:none;">
+      <div class="icon-box"><i data-lucide="inbox" style="width:28px;height:28px;color:var(--text-tertiary);"></i></div>
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:6px;">No records found</div>
+      <div style="font-size:13px;color:var(--text-secondary);">Try adjusting your filters</div>
+    </div>
+  </div>
+
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+    <div class="text-sm text-secondary" id="showingText">Showing 1-10 of 20 transactions</div>
+    <div class="flex items-center gap-1" id="pagination"></div>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="font-heading" style="font-size:18px;font-weight:700;">Transaction Details</h3>
+      <button onclick="closeModal()" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="modal-body" id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+// ===== NAME LOADER =====
+(function(){
+  var name=localStorage.getItem('bb_name')||'User';
+  var first=name.split(' ')[0];
+  document.querySelectorAll('.user-avatar').forEach(function(a){a.textContent=first.charAt(0).toUpperCase();});
+  document.querySelectorAll('.user-name').forEach(function(d){d.textContent=first;});
+  var email=localStorage.getItem('bb_email')||'user@email.com';
+  document.querySelectorAll('.user-email').forEach(function(d){d.textContent=email;});
+})();
+const historyData = [
+  { type:'deposit', asset:'USDT', amount:5000.00, time:'2026-01-20T14:32:00', status:'Completed', txHash:'0xabc...def123', network:'ERC20', from:'External Wallet' },
+  { type:'withdrawal', asset:'USDT', amount:2000.00, time:'2026-01-17T11:20:00', status:'Completed', txHash:'0xdef...abc456', network:'ERC20', to:'0x742d...88f1' },
+  { type:'deposit', asset:'ETH', amount:2.5000, time:'2026-01-16T08:30:00', status:'Completed', txHash:'0x123...789abc', network:'ERC20', from:'Coinbase' },
+  { type:'borrow', asset:'USDT', amount:5000.00, time:'2026-01-14T13:55:00', status:'Approved', rate:'0.02%', duration:'30 days' },
+  { type:'deposit', asset:'USDT', amount:10000.00, time:'2026-01-13T07:22:00', status:'Completed', txHash:'0x456...def789', network:'ERC20', from:'Binance' },
+  { type:'deposit', asset:'SOL', amount:10.000, time:'2026-01-09T12:00:00', status:'Completed', txHash:'0xabc...def456', network:'Solana', from:'Phantom Wallet' },
+  { type:'withdrawal', asset:'ETH', amount:1.5000, time:'2026-01-08T09:45:00', status:'Completed', txHash:'0xdef...abc789', network:'ERC20', to:'0x123...456def' },
+  { type:'borrow', asset:'USDT', amount:2000.00, time:'2026-01-07T14:20:00', status:'Rejected', rate:'0.02%', duration:'14 days' },
+  { type:'deposit', asset:'USDT', amount:3000.00, time:'2026-01-04T08:00:00', status:'Completed', txHash:'0x111...222aaa', network:'ERC20', from:'Kraken' },
+  { type:'borrow', asset:'BTC', amount:0.0500, time:'2026-01-01T09:00:00', status:'Approved', rate:'0.01%', duration:'7 days' }
+];
+
+function getTradeRecords(){
+  try{
+    var trades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
+    if(!Array.isArray(trades)) return [];
+    var cutoff=Date.now()-7*24*60*60*1000;
+    var recent=trades.filter(function(r){return r&&r.time>=cutoff;});
+    localStorage.setItem('bb_trades_history',JSON.stringify(recent));
+    return recent.map(function(r){
+      return {type:'trade',asset:r.pair,side:r.side,amount:r.amount,price:r.price,fee:r.fee||0,time:new Date(r.time).toISOString(),status:r.status==='Won'||r.status==='Closed'?'Completed':r.status==='Lost'?'Rejected':'Pending',orderId:r.id,profit:r.profit,exitPrice:r.exitPrice,source:r.source||'real'};
+    });
+  }catch(e){return [];}
+}
+
+function getAllHistory(){
+  var cutoff=Date.now()-7*24*60*60*1000;
+  var staticData=historyData.filter(function(item){
+    var itemTime=new Date(item.time).getTime();
+    return itemTime>=cutoff;
+  });
+  return staticData.concat(getTradeRecords()).sort(function(a,b){
+    return new Date(b.time)-new Date(a.time);
+  });
+}
+
+let activeFilter = 'all';
+let searchQuery = '';
+let dateFromVal = '';
+let dateToVal = '';
+let currentPage = 1;
+const perPage = 10;
+
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mm = months[d.getMonth()];
+  const dd = d.getDate();
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mi = String(d.getMinutes()).padStart(2,'0');
+  return `${mm} ${dd}, ${yyyy} ${hh}:${mi}`;
+}
+
+function formatNumber(n, decimals) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function getStatusClass(status) {
+  if (status === 'Pending') return 'status-pending';
+  if (status === 'Rejected') return 'status-rejected';
+  return 'status-completed';
+}
+
+function getFilteredData() {
+  return getAllHistory().filter(item => {
+    if (activeFilter === 'trade') {
+      if (item.type !== 'trade') return false;
+    } else if (activeFilter === 'demo') {
+      if (item.type !== 'trade' || item.source !== 'demo') return false;
+    } else if (activeFilter === 'real') {
+      if (item.type !== 'trade' || item.source !== 'real') return false;
+    } else if (activeFilter !== 'all') {
+      if (item.type !== activeFilter) return false;
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const haystack = [item.type, item.asset, item.status, item.side || '', item.network || '', item.from || '', item.to || '', item.orderId || '', item.source || ''].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    if (dateFromVal) {
+      const itemDate = new Date(item.time).setHours(0,0,0,0);
+      const from = new Date(dateFromVal).setHours(0,0,0,0);
+      if (itemDate < from) return false;
+    }
+    if (dateToVal) {
+      const itemDate = new Date(item.time).setHours(23,59,59,999);
+      const to = new Date(dateToVal).setHours(23,59,59,999);
+      if (itemDate > to) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  const data = getFilteredData();
+  const total = data.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * perPage;
+  const pageData = data.slice(start, start + perPage);
+
+  const tbody = document.getElementById('tableBody');
+  const emptyState = document.getElementById('emptyState');
+
+  if (pageData.length === 0) {
+    tbody.innerHTML = '';
+    emptyState.style.display = 'flex';
+  } else {
+    emptyState.style.display = 'none';
+    tbody.innerHTML = pageData.map((item, i) => {
+      const idx = start + i;
+      let typeCell = '';
+      let amountCell = '';
+      const base = item.type === 'trade' ? item.asset.split('/')[0] : item.asset;
+
+      if (item.type === 'deposit') {
+        typeCell = `<div class="flex items-center gap-2"><div style="width:28px;height:28px;border-radius:8px;background:rgba(22,199,132,0.12);display:flex;align-items:center;justify-content:center;"><i data-lucide="arrow-down-left" style="width:14px;height:14px;color:#16c784;"></i></div><span class="badge-deposit">Deposit</span></div>`;
+        amountCell = `<span style="color:#16c784;font-family:'IBM Plex Mono',monospace;font-size:13px;">+${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)} ${item.asset}</span>`;
+      } else if (item.type === 'withdrawal') {
+        typeCell = `<div class="flex items-center gap-2"><div style="width:28px;height:28px;border-radius:8px;background:rgba(247,147,26,0.12);display:flex;align-items:center;justify-content:center;"><i data-lucide="arrow-up-right" style="width:14px;height:14px;color:#f7931a;"></i></div><span class="badge-withdrawal">Withdrawal</span></div>`;
+        amountCell = `<span style="color:#ea3943;font-family:'IBM Plex Mono',monospace;font-size:13px;">-${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)} ${item.asset}</span>`;
+      } else if (item.type === 'trade') {
+        const isBuy = item.side === 'Buy';
+        const iconBg = isBuy ? 'rgba(65,105,225,0.12)' : 'rgba(234,57,67,0.12)';
+        const iconColor = isBuy ? '#4169e1' : '#ea3943';
+        const badgeClass = isBuy ? 'badge-trade-buy' : 'badge-trade-sell';
+        const amountColor = isBuy ? '#16c784' : '#ea3943';
+        const amountPrefix = isBuy ? '+' : '-';
+        typeCell = `<div class="flex items-center gap-2"><div style="width:28px;height:28px;border-radius:8px;background:${iconBg};display:flex;align-items:center;justify-content:center;"><i data-lucide="repeat" style="width:14px;height:14px;color:${iconColor};"></i></div><span class="${badgeClass}">${item.side}</span><span style="font-size:12px;color:var(--text-secondary);">${item.asset}</span><span class="${item.source==='demo'?'badge-demo':'badge-real'}" style="margin-left:4px;">${item.source==='demo'?'DEMO':'REAL'}</span></div>`;
+        amountCell = `<span style="color:${amountColor};font-family:'IBM Plex Mono',monospace;font-size:13px;">${amountPrefix}${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)} USDT</span>`;
+      } else if (item.type === 'borrow') {
+        typeCell = `<div class="flex items-center gap-2"><div style="width:28px;height:28px;border-radius:8px;background:rgba(247,147,26,0.12);display:flex;align-items:center;justify-content:center;"><i data-lucide="banknote" style="width:14px;height:14px;color:#f7931a;"></i></div><span class="badge-borrow">Borrow</span></div>`;
+        amountCell = `<span style="color:#f7931a;font-family:'IBM Plex Mono',monospace;font-size:13px;">+${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)} ${item.asset}</span>`;
+      }
+
+      const statusClass = getStatusClass(item.status);
+      const pulseDot = item.status === 'Pending' ? '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;" class="animate-pulse"></span>' : '';
+
+      return `<tr>
+        <td style="padding:14px 16px;">${typeCell}</td>
+        <td style="padding:14px 16px;">${amountCell}</td>
+        <td style="padding:14px 16px;"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text-secondary);">${formatDateTime(item.time)}</span></td>
+        <td style="padding:14px 16px;"><span class="${statusClass}">${pulseDot}${item.status}</span></td>
+        <td style="padding:14px 16px;text-align:right;"><button onclick="openModal(${idx})" style="font-size:12px;color:#f7931a;cursor:pointer;background:none;border:none;font-weight:500;">View</button></td>
+      </tr>`;
+    }).join('');
+    lucide.createIcons();
+  }
+
+  const end = Math.min(start + perPage, total);
+  document.getElementById('showingText').textContent = total > 0
+    ? `Showing ${start + 1}-${end} of ${total} transactions`
+    : 'Showing 0 of 0 transactions';
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  const container = document.getElementById('pagination');
+  let html = '';
+
+  html += `<button class="page-btn page-btn-nav" ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">Previous</button>`;
+
+  const pages = [];
+  if (totalPages <= 5) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (currentPage > 3) pages.push('...');
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      pages.push(i);
+    }
+    if (currentPage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+  }
+
+  pages.forEach(p => {
+    if (p === '...') {
+      html += `<span style="padding:0 6px;font-size:13px;color:var(--text-tertiary);">...</span>`;
+    } else {
+      html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+    }
+  });
+
+  html += `<button class="page-btn page-btn-nav" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">Next</button>`;
+  container.innerHTML = html;
+}
+
+function goToPage(page) {
+  currentPage = page;
+  renderTable();
+  document.getElementById('tableCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function openModal(idx) {
+  const data = getFilteredData();
+  const item = data[idx];
+  if (!item) return;
+
+  let html = '';
+
+  if (item.type === 'deposit') {
+    html = modalRow('Coin', item.asset);
+    html += modalRow('Amount', `<span style="color:#16c784;">+${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)}</span>`);
+    html += modalRow('Network', item.network);
+    html += modalRow('From', item.from);
+    html += modalRow('To', 'Your BitBase Deposit Address');
+    html += modalRow('TX Hash', `${item.txHash} <button onclick="copyText('${item.txHash}')" class="copy-btn" style="margin-left:8px;padding:4px 10px;font-size:11px;">Copy</button>`);
+    html += modalRow('Status', statusBadge(item.status));
+    html += modalRow('Time', formatDateTime(item.time));
+  } else if (item.type === 'withdrawal') {
+    html = modalRow('Coin', item.asset);
+    html += modalRow('Amount', `<span style="color:#ea3943;">-${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)}</span>`);
+    html += modalRow('Network', item.network);
+    html += modalRow('From', 'Your BitBase Wallet');
+    html += modalRow('To', item.to);
+    html += modalRow('TX Hash', `${item.txHash} <button onclick="copyText('${item.txHash}')" class="copy-btn" style="margin-left:8px;padding:4px 10px;font-size:11px;">Copy</button>`);
+    html += modalRow('Status', statusBadge(item.status));
+    html += modalRow('Time', formatDateTime(item.time));
+  } else if (item.type === 'trade') {
+    html = modalRow('Pair', item.asset);
+    html += modalRow('Side', `<span class="${item.side === 'Buy' ? 'badge-trade-buy' : 'badge-trade-sell'}">${item.side}</span>`);
+    html += modalRow('Source', `<span class="${item.source==='demo'?'badge-demo':'badge-real'}">${item.source==='demo'?'DEMO':'REAL'}</span>`);
+    html += modalRow('Price', `$${formatNumber(item.price, 2)}`);
+    html += modalRow('Amount', `${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)} USDT`);
+    var totalVal=item.status==='Completed'?(item.amount+(item.profit||0)):0;
+    html += modalRow('Total', `${formatNumber(totalVal, 2)} USDT`);
+    html += modalRow('Fee', `$${item.fee.toFixed(2)}`);
+    html += modalRow('Order ID', item.orderId);
+    html += modalRow('Status', statusBadge(item.status));
+    html += modalRow('Time', formatDateTime(item.time));
+  } else if (item.type === 'borrow') {
+    html = modalRow('Coin', item.asset);
+    html += modalRow('Amount', `<span style="color:#f7931a;">+${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)}</span>`);
+    html += modalRow('Interest Rate', item.rate);
+    html += modalRow('Duration', item.duration);
+    html += modalRow('Status', statusBadge(item.status));
+    html += modalRow('Time', formatDateTime(item.time));
+  }
+
+  html += `<div style="padding-top:20px;"><button onclick="closeModal()" class="btn-secondary rounded-lg px-4 text-sm font-medium w-full" style="height:42px;">Close</button></div>`;
+
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('detailModal').classList.add('open');
+  lucide.createIcons();
+}
+
+function modalRow(label, value) {
+  return `<div class="modal-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+}
+
+function statusBadge(status) {
+  return `<span class="${getStatusClass(status)}">${status === 'Pending' ? '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;" class="animate-pulse"></span>' : ''}${status}</span>`;
+}
+
+function closeModal() {
+  document.getElementById('detailModal').classList.remove('open');
+}
+
+document.getElementById('detailModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
+}
+
+function exportCSV() {
+  const data = getFilteredData();
+  const headers = ['Type','Asset','Amount','Value (USD)','Time','Status'];
+  const rows = data.map(item => {
+    let value = '';
+    if (item.type === 'deposit') value = item.amount.toFixed(2);
+    else if (item.type === 'withdrawal') value = item.amount.toFixed(2);
+    else if (item.type === 'trade') value = (item.price * item.amount).toFixed(2);
+    else if (item.type === 'borrow') value = item.amount.toFixed(2);
+    return [item.type, item.asset, item.amount, value, item.time, item.status];
+  });
+
+  let csv = headers.join(',') + '\n';
+  rows.forEach(r => {
+    csv += r.map(v => `"${v}"`).join(',') + '\n';
+  });
+
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bitbase-history-${dateStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.querySelectorAll('#filterTabs .tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#filterTabs .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    currentPage = 1;
+    renderTable();
+  });
+});
+
+let searchTimeout;
+document.getElementById('searchInput').addEventListener('input', function() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    searchQuery = this.value.trim();
+    currentPage = 1;
+    renderTable();
+    updateClearBtn();
+  }, 300);
+});
+
+document.getElementById('dateFrom').addEventListener('change', function() {
+  dateFromVal = this.value;
+  currentPage = 1;
+  renderTable();
+  updateClearBtn();
+});
+
+document.getElementById('dateTo').addEventListener('change', function() {
+  dateToVal = this.value;
+  currentPage = 1;
+  renderTable();
+  updateClearBtn();
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+document.getElementById('clearFilters').addEventListener('click', () => {
+  searchQuery = '';
+  dateFromVal = '';
+  dateToVal = '';
+  currentPage = 1;
+  document.getElementById('searchInput').value = '';
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  document.querySelectorAll('#filterTabs .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('#filterTabs .tab-btn[data-filter="all"]').classList.add('active');
+  activeFilter = 'all';
+  renderTable();
+  updateClearBtn();
+});
+
+function updateClearBtn() {
+  const hasFilters = searchQuery || dateFromVal || dateToVal || activeFilter !== 'all';
+  document.getElementById('clearFilters').classList.toggle('hidden', !hasFilters);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+renderTable();
+lucide.createIcons();
+</script>
+<div class="mobile-bottom-bar">
+  <a href="dashboard.html"><i data-lucide="layout-dashboard"></i>Home</a>
+  <a href="assets.html"><i data-lucide="wallet"></i>Assets</a>
+  <a href="trade.html"><i data-lucide="arrow-left-right"></i>Trade</a>
+  <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

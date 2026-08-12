@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitbase – Settings</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .toggle-switch{width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,0.1);position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;}
+    .toggle-switch.on{background:var(--accent-green);}
+    .toggle-switch .toggle-knob{width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:3px;transition:left 0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.3);}
+    .toggle-switch.on .toggle-knob{left:23px;}
+    .settings-tab-btn{width:100%;text-align:left;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;color:var(--text-secondary);transition:all 0.2s;display:flex;align-items:center;gap:10px;}
+    .settings-tab-btn:hover{color:#fff;background:rgba(255,255,255,0.04);}
+    .settings-tab-btn.active{color:var(--accent-yellow);background:rgba(247,147,26,0.1);}
+    .settings-tab-btn svg,.settings-tab-btn i{width:18px;height:18px;}
+    .settings-panel{display:none;}
+    .settings-panel.active{display:block;}
+    .settings-back-btn{display:none;}
+    @media(max-width:640px){
+      .settings-sidebar{display:none !important;}
+      .settings-sidebar.mobile-open{display:block !important;position:sticky;top:80px;align-self:flex-start;}
+      .settings-back-btn{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;color:var(--text-secondary);background:rgba(255,255,255,0.04);border:1px solid var(--border);cursor:pointer;transition:all 0.2s;margin-bottom:16px;width:fit-content;}
+      .settings-back-btn:hover{color:#fff;background:rgba(255,255,255,0.08);border-color:var(--accent-orange);}
+      .settings-back-btn i{width:18px;height:18px;}
+      .settings-panel.active{animation:settingsSlideIn 0.25s ease;}
+      @keyframes settingsSlideIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+    }
+    .radio-option{display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:8px;border:1px solid var(--border-medium);background:rgba(255,255,255,0.04);cursor:pointer;transition:all 0.2s;font-size:14px;}
+    .radio-option.selected{border-color:rgba(247,147,26,0.3);background:rgba(247,147,26,0.08);color:var(--accent-yellow);}
+    .radio-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--text-tertiary);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color 0.2s;}
+    .radio-option.selected .radio-dot{border-color:var(--accent-orange);}
+    .radio-option.selected .radio-dot::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--accent-orange);}
+
+    .kyc-step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid var(--border-medium);color:var(--text-tertiary);background:var(--bg2);transition:all 0.3s;flex-shrink:0;}
+    .kyc-step-dot.active{border-color:var(--accent-orange);color:var(--accent-orange);background:rgba(247,147,26,0.1);}
+    .kyc-step-dot.done{border-color:var(--accent-green);color:#fff;background:var(--accent-green);}
+    .kyc-step-line{flex:1;height:2px;background:var(--border-medium);transition:background 0.3s;}
+    .kyc-step-line.done{background:var(--accent-green);}
+
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;}
+    .modal-overlay.open{display:flex;}
+    .modal-box{background:var(--bg-secondary);border:1px solid var(--border-medium);border-radius:16px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;animation:slideUp 0.3s ease;}
+    .responsive-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    @media(max-width:540px){.responsive-grid-2{grid-template-columns:1fr !important;}}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border-subtle);}
+    .modal-body{padding:24px;}
+    @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  </style>
+</head>
+<body class="page-body">
+<script>
+(function(){
+  try {
+    var p = JSON.parse(localStorage.getItem('bb_preferences'));
+    if (p && p.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(e) {}
+  try {
+    var uid = localStorage.getItem('bb_uid');
+    if (uid) {
+      var deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      if (deactivated.indexOf(uid) >= 0) {
+        localStorage.removeItem('bb_login_time');
+        window.location.href = 'index.html';
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <div class="flex items-center gap-2">
+      <a href="index.html" class="flex items-center gap-2">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="bitcoin" style="width:16px;height:16px;color:#fff;"></i>
+        </div>
+        <span class="font-heading" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">BITBASE</span>
+      </a>
+    </div>
+    <nav class="dash-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="assets.html">Assets</a>
+      <a href="markets.html">Markets</a>
+      <a href="trade.html">Trade</a>
+      <a href="earn.html">Earn</a>
+      <a href="history.html">History</a>
+      <a href="demo.html">Demo</a>
+      <a href="settings.html" class="active">Settings</a>
+    </nav>
+    <div class="dash-right">
+      <div class="user-pill">
+        <div class="user-avatar">U</div>
+        <div><div class="user-name" style="font-size:13px;font-weight:500;">User</div><div class="user-email" style="font-size:11px;color:var(--text-tertiary);">user@email.com</div></div>
+      </div>
+      <a href="assets.html" class="deposit-btn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Deposit</a>
+      <button class="lg:hidden" onclick="document.getElementById('mobileNav').classList.add('open')" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;"><i data-lucide="menu" style="width:20px;height:20px;"></i></button>
+    </div>
+  </div>
+</header>
+<div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-nav">
+    <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+  </div>
+</div>
+
+<div class="page-content">
+
+  <div class="mb-8">
+    <h1 class="font-heading text-3xl font-bold mb-1">Settings</h1>
+    <p class="text-secondary">Manage your account preferences</p>
+  </div>
+
+  <div class="flex flex-col lg:flex-row gap-6">
+
+    <div id="settingsSidebar" class="lg:w-64 flex-shrink-0 settings-sidebar" style="position:sticky;top:80px;align-self:flex-start;">
+      <div class="glass-card rounded-xl p-2 flex flex-col gap-1">
+        <button class="settings-tab-btn active" data-settings-tab="profile"><i data-lucide="user"></i>Profile</button>
+        <button class="settings-tab-btn" data-settings-tab="security"><i data-lucide="shield"></i>Security</button>
+        <button class="settings-tab-btn" data-settings-tab="notifications"><i data-lucide="bell"></i>Notifications</button>
+        <button class="settings-tab-btn" data-settings-tab="preferences"><i data-lucide="settings"></i>Preferences</button>
+        <button class="settings-tab-btn" data-settings-tab="verification"><i data-lucide="check-circle"></i>Verification</button>
+      </div>
+    </div>
+
+    <div class="flex-1 min-w-0">
+
+      <div id="settings-profile" class="settings-panel active">
+        <button class="settings-back-btn" onclick="settingsBack()"><i data-lucide="arrow-left"></i>Back</button>
+        <div class="glass-card rounded-xl p-8">
+          <div class="flex items-center gap-5 mb-8">
+            <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;">U</div>
+          </div>
+          <div class="flex flex-col gap-5">
+            <div>
+              <label class="input-label">Display Name</label>
+              <input type="text" class="input-field" id="settingsName" value="">
+            </div>
+            <div>
+              <label class="input-label">Email</label>
+              <div class="flex items-center gap-3">
+                <input type="email" class="input-field" value="user@email.com" style="flex:1;">
+                <span class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium" style="background:rgba(22,199,132,0.1);color:var(--accent-green);">Verified &#10003;</span>
+              </div>
+            </div>
+            <div>
+              <label class="input-label">User ID (UID)</label>
+              <div class="flex items-center gap-3">
+                <input type="text" class="input-field" id="uidField" value="" readonly style="flex:1;font-family:'IBM Plex Mono',monospace;letter-spacing:0.15em;font-size:16px;font-weight:600;background:rgba(255,255,255,0.02);cursor:default;">
+                <button onclick="copyUID()" class="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all" style="background:rgba(247,147,26,0.1);border:1px solid rgba(247,147,26,0.3);color:var(--accent-orange);white-space:nowrap;cursor:pointer;" onmouseover="this.style.background='rgba(247,147,26,0.2)'" onmouseout="this.style.background='rgba(247,147,26,0.1)'">
+                  <i data-lucide="copy" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Copy
+                </button>
+              </div>
+              <p class="text-xs mt-1.5" style="color:var(--text-tertiary);">Your unique ID, assigned once when your account was created.</p>
+            </div>
+            <div>
+              <label class="input-label">Username</label>
+              <input type="text" class="input-field" id="settingsUsername" value="">
+            </div>
+            <div>
+              <label class="input-label">Phone</label>
+              <input type="tel" class="input-field" id="settingsPhone" value="">
+            </div>
+            <div>
+              <label class="input-label">Country</label>
+              <select class="input-field" style="appearance:auto;">
+                <option>United States</option>
+                <option>United Kingdom</option>
+                <option>Canada</option>
+                <option>Germany</option>
+                <option>Japan</option>
+                <option>Australia</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-8">
+            <button class="btn-primary rounded-xl px-6 py-3 text-sm font-semibold text-white" onclick="saveProfile()">Save Changes</button>
+            <button class="btn-ghost rounded-xl px-6 py-3 text-sm font-medium" onclick="cancelProfile()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="settings-security" class="settings-panel">
+        <button class="settings-back-btn" onclick="settingsBack()"><i data-lucide="arrow-left"></i>Back</button>
+        <div class="flex flex-col gap-6">
+          <div class="glass-card rounded-xl p-8">
+            <h3 class="font-heading font-semibold text-lg mb-5">Change Password</h3>
+            <div class="flex flex-col gap-4">
+              <div><label class="input-label">Current Password</label><input type="password" class="input-field" placeholder="Enter current password"></div>
+              <div><label class="input-label">New Password</label><input type="password" class="input-field" placeholder="Enter new password"></div>
+              <div><label class="input-label">Confirm New Password</label><input type="password" class="input-field" placeholder="Confirm new password"></div>
+            </div>
+            <button class="btn-primary rounded-xl px-6 py-3 text-sm font-semibold text-white mt-5" onclick="updatePassword()">Update Password</button>
+          </div>
+
+          <div class="glass-card rounded-xl p-8">
+            <h3 class="font-heading font-semibold text-lg mb-5">Login Activity</h3>
+            <div class="table-wrap">
+              <table class="w-full min-w-[600px]">
+                <thead><tr style="border-bottom:1px solid var(--border-subtle);">
+                  <th class="text-left text-xs font-medium uppercase tracking-wider text-tertiary pb-3">IP Address</th>
+                  <th class="text-left text-xs font-medium uppercase tracking-wider text-tertiary pb-3">Device</th>
+                  <th class="text-left text-xs font-medium uppercase tracking-wider text-tertiary pb-3">Location</th>
+                  <th class="text-left text-xs font-medium uppercase tracking-wider text-tertiary pb-3">Time</th>
+                </tr></thead>
+                <tbody id="loginActivityBody">
+                  <tr><td colspan="4" class="py-6 text-center text-sm text-secondary">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <button class="mt-5 px-5 py-2.5 rounded-xl text-sm font-semibold" style="background:rgba(234,57,67,0.1);border:1px solid rgba(234,57,67,0.3);color:var(--accent-red);" onclick="logoutAllDevices()">Logout All Devices</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="settings-notifications" class="settings-panel">
+        <button class="settings-back-btn" onclick="settingsBack()"><i data-lucide="arrow-left"></i>Back</button>
+        <div class="glass-card rounded-xl p-8">
+          <h3 class="font-heading font-semibold text-lg mb-6">Notification Preferences</h3>
+          <div class="flex flex-col gap-5">
+            <div class="flex items-center justify-between py-2" style="border-bottom:1px solid var(--border-subtle);">
+              <div><div class="text-sm font-medium">Email Notifications</div><div class="text-xs text-tertiary">Receive updates via email</div></div>
+              <div class="toggle-switch on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="flex items-center justify-between py-2" style="border-bottom:1px solid var(--border-subtle);">
+              <div><div class="text-sm font-medium">Price Alerts</div><div class="text-xs text-tertiary">Get notified when prices hit your targets</div></div>
+              <div class="toggle-switch on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="flex items-center justify-between py-2" style="border-bottom:1px solid var(--border-subtle);">
+              <div><div class="text-sm font-medium">Deposit Confirmations</div><div class="text-xs text-tertiary">Notifications for successful deposits</div></div>
+              <div class="toggle-switch on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="flex items-center justify-between py-2" style="border-bottom:1px solid var(--border-subtle);">
+              <div><div class="text-sm font-medium">Withdrawal Confirmations</div><div class="text-xs text-tertiary">Notifications for withdrawal requests</div></div>
+              <div class="toggle-switch on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="flex items-center justify-between py-2" style="border-bottom:1px solid var(--border-subtle);">
+              <div class="flex items-center gap-2"><div class="text-sm font-medium">Security Alerts</div><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style="background:rgba(247,147,26,0.1);color:var(--accent-orange);">Required</span></div>
+              <div class="toggle-switch on" style="opacity:0.7;pointer-events:none;"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="flex items-center justify-between py-2">
+              <div><div class="text-sm font-medium">Marketing Emails</div><div class="text-xs text-tertiary">Promotional offers and news</div></div>
+              <div class="toggle-switch" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settings-preferences" class="settings-panel">
+        <button class="settings-back-btn" onclick="settingsBack()"><i data-lucide="arrow-left"></i>Back</button>
+        <div class="glass-card rounded-xl p-8">
+          <h3 class="font-heading font-semibold text-lg mb-6">Preferences</h3>
+          <div class="flex flex-col gap-5">
+            <div><label class="input-label">Language</label><select id="prefLanguage" class="input-field" style="appearance:auto;"><option>English</option><option>Spanish</option><option>French</option><option>German</option><option>Japanese</option></select></div>
+            <div><label class="input-label">Currency</label><select id="prefCurrency" class="input-field" style="appearance:auto;"><option>USD</option><option>EUR</option><option>GBP</option><option>JPY</option><option>AUD</option></select></div>
+            <div>
+              <label class="input-label">Theme</label>
+              <div class="flex gap-3" id="prefThemeGroup">
+                <div class="radio-option selected" data-value="dark" onclick="selectRadio('prefThemeGroup',this)"><div class="radio-dot"></div>Dark</div>
+                <div class="radio-option" data-value="light" onclick="selectRadio('prefThemeGroup',this)"><div class="radio-dot"></div>Light</div>
+              </div>
+            </div>
+            <div><label class="input-label">Timezone</label><select id="prefTimezone" class="input-field" style="appearance:auto;"><option>UTC</option><option>EST (UTC-5)</option><option>PST (UTC-8)</option><option>CET (UTC+1)</option><option>JST (UTC+9)</option></select></div>
+            <div>
+              <label class="input-label">Default Trading View</label>
+              <div class="flex gap-3" id="prefTradingViewGroup">
+                <div class="radio-option" data-value="basic" onclick="selectRadio('prefTradingViewGroup',this)"><div class="radio-dot"></div>Basic</div>
+                <div class="radio-option selected" data-value="advanced" onclick="selectRadio('prefTradingViewGroup',this)"><div class="radio-dot"></div>Advanced</div>
+              </div>
+            </div>
+          </div>
+          <button class="btn-primary rounded-xl px-6 py-3 text-sm font-semibold text-white mt-6" onclick="savePreferences()">Save Preferences</button>
+        </div>
+      </div>
+
+      <div id="settings-verification" class="settings-panel">
+        <button class="settings-back-btn" onclick="settingsBack()"><i data-lucide="arrow-left"></i>Back</button>
+        <div class="glass-card rounded-xl p-8">
+          <h3 class="font-heading font-semibold text-lg mb-6">Identity Verification</h3>
+          <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between py-4" style="border-bottom:1px solid var(--border-subtle);">
+              <div class="flex items-center gap-3">
+                <div style="width:36px;height:36px;border-radius:50%;background:rgba(22,199,132,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="check-circle" style="width:18px;height:18px;color:var(--accent-green);"></i></div>
+                <div><div class="text-sm font-medium">Email Verification</div><div class="text-xs text-tertiary">Verified</div></div>
+              </div>
+              <span class="px-3 py-1 rounded-lg text-xs font-medium" style="background:rgba(22,199,132,0.1);color:var(--accent-green);">Complete</span>
+            </div>
+            <div id="phoneVerificationRow" class="flex items-center justify-between py-4" style="border-bottom:1px solid var(--border-subtle);">
+              <div class="flex items-center gap-3">
+                <div id="phoneVerifyIcon" style="width:36px;height:36px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="clock" style="width:18px;height:18px;color:var(--accent-orange);"></i></div>
+                <div><div class="text-sm font-medium">Phone Verification</div><div class="text-xs text-tertiary" id="phoneVerifyText">Verify your phone number</div></div>
+              </div>
+              <button id="phoneVerifyBtn" onclick="openPhoneVerifyModal()" class="px-4 py-1.5 rounded-lg text-xs font-semibold" style="background:rgba(247,147,26,0.1);border:1px solid rgba(247,147,26,0.3);color:var(--accent-orange);cursor:pointer;">Verify</button>
+            </div>
+            <div class="flex items-center justify-between py-4">
+              <div class="flex items-center gap-3">
+                <div id="kycIcon" style="width:36px;height:36px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="clock" style="width:18px;height:18px;color:var(--accent-orange);"></i></div>
+                <div><div class="text-sm font-medium">Identity Verification (KYC)</div><div class="text-xs text-tertiary" id="kycStatusText">Required for higher limits</div></div>
+              </div>
+              <button id="kycStartBtn" onclick="openKYCModal()" class="px-4 py-1.5 rounded-lg text-xs font-semibold" style="background:rgba(247,147,26,0.1);border:1px solid rgba(247,147,26,0.3);color:var(--accent-orange);cursor:pointer;">Start</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Benefits Card -->
+        <div class="glass-card rounded-xl p-8 mt-6">
+          <h3 class="font-heading font-semibold text-lg mb-4">Verification Benefits</h3>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="flex items-start gap-3">
+              <div style="width:32px;height:32px;border-radius:8px;background:rgba(0,192,135,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="trending-up" style="width:16px;height:16px;color:var(--accent-green);"></i></div>
+              <div><div class="text-sm font-medium">Higher Limits</div><div class="text-xs text-tertiary">Up to $100,000 daily withdrawals</div></div>
+            </div>
+            <div class="flex items-start gap-3">
+              <div style="width:32px;height:32px;border-radius:8px;background:rgba(0,192,135,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="zap" style="width:16px;height:16px;color:var(--accent-green);"></i></div>
+              <div><div class="text-sm font-medium">Instant Transfers</div><div class="text-xs text-tertiary">Faster peer-to-peer transactions</div></div>
+            </div>
+            <div class="flex items-start gap-3">
+              <div style="width:32px;height:32px;border-radius:8px;background:rgba(0,192,135,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="shield" style="width:16px;height:16px;color:var(--accent-green);"></i></div>
+              <div><div class="text-sm font-medium">Enhanced Security</div><div class="text-xs text-tertiary">Account recovery & fraud protection</div></div>
+            </div>
+            <div class="flex items-start gap-3">
+              <div style="width:32px;height:32px;border-radius:8px;background:rgba(0,192,135,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="credit-card" style="width:16px;height:16px;color:var(--accent-green);"></i></div>
+              <div><div class="text-sm font-medium">Fiat Gateway</div><div class="text-xs text-tertiary">Buy crypto with credit/debit cards</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== PHONE VERIFICATION MODAL ===== -->
+<div class="modal-overlay" id="phoneVerifyModal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 style="font-size:16px;font-weight:600;">Verify Phone Number</h3>
+      <button onclick="closePhoneVerifyModal()" style="background:none;border:none;color:var(--text-tertiary);cursor:pointer;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div class="modal-body" id="phoneVerifyBody">
+      <div id="phoneStep1">
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Enter your phone number to verify your account.</p>
+        <div style="margin-bottom:16px;">
+          <label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">Phone Number</label>
+          <div style="display:flex;gap:8px;">
+            <select id="phoneCountryCode" class="input-field" style="width:140px;appearance:auto;font-size:13px;">
+              <option value="+1">+1 US</option><option value="+1">+1 CA</option><option value="+7">+7 RU</option><option value="+20">+20 EG</option><option value="+27">+27 ZA</option><option value="+30">+30 GR</option><option value="+31">+31 NL</option><option value="+32">+32 BE</option><option value="+33">+33 FR</option><option value="+34">+34 ES</option><option value="+36">+36 HU</option><option value="+39">+39 IT</option><option value="+40">+40 RO</option><option value="+41">+41 CH</option><option value="+43">+43 AT</option><option value="+44">+44 UK</option><option value="+45">+45 DK</option><option value="+46">+46 SE</option><option value="+47">+47 NO</option><option value="+48">+48 PL</option><option value="+49">+49 DE</option><option value="+51">+51 PE</option><option value="+52">+52 MX</option><option value="+53">+53 CU</option><option value="+54">+54 AR</option><option value="+55">+55 BR</option><option value="+56">+56 CL</option><option value="+57">+57 CO</option><option value="+58">+58 VE</option><option value="+60">+60 MY</option><option value="+61">+61 AU</option><option value="+62">+62 ID</option><option value="+63">+63 PH</option><option value="+64">+64 NZ</option><option value="+65">+65 SG</option><option value="+66">+66 TH</option><option value="+81">+81 JP</option><option value="+82">+82 KR</option><option value="+84">+84 VN</option><option value="+86">+86 CN</option><option value="+90">+90 TR</option><option value="+91">+91 IN</option><option value="+92">+92 PK</option><option value="+93">+93 AF</option><option value="+94">+94 LK</option><option value="+95">+95 MM</option><option value="+98">+98 IR</option><option value="+211">+211 SS</option><option value="+212">+212 MA</option><option value="+213">+213 DZ</option><option value="+216">+216 TN</option><option value="+218">+218 LY</option><option value="+220">+220 GM</option><option value="+221">+221 SN</option><option value="+222">+222 MR</option><option value="+223">+223 ML</option><option value="+224">+224 GN</option><option value="+225">+225 CI</option><option value="+226">+226 BF</option><option value="+227">+227 NE</option><option value="+228">+228 TG</option><option value="+229">+229 BJ</option><option value="+230">+230 MU</option><option value="+231">+231 LR</option><option value="+232">+232 SL</option><option value="+233">+233 GH</option><option value="+234">+234 NG</option><option value="+235">+235 TD</option><option value="+236">+236 CF</option><option value="+237">+237 CM</option><option value="+238">+238 CV</option><option value="+239">+239 ST</option><option value="+240">+240 GQ</option><option value="+241">+241 GA</option><option value="+242">+242 CG</option><option value="+243">+243 CD</option><option value="+244">+244 AO</option><option value="+245">+245 GW</option><option value="+246">+246 IO</option><option value="+248">+248 RE</option><option value="+249">+249 SD</option><option value="+250">+250 RW</option><option value="+251">+251 ET</option><option value="+252">+252 SO</option><option value="+253">+253 DJ</option><option value="+254">+254 KE</option><option value="+255">+255 TZ</option><option value="+256">+256 UG</option><option value="+257">+257 BI</option><option value="+258">+258 MZ</option><option value="+260">+260 ZM</option><option value="+261">+261 MG</option><option value="+262">+262 RE</option><option value="+263">+263 ZW</option><option value="+264">+264 NA</option><option value="+265">+265 MW</option><option value="+266">+266 LS</option><option value="+267">+267 BW</option><option value="+268">+268 SZ</option><option value="+269">+269 KM</option><option value="+290">+290 SH</option><option value="+291">+291 ER</option><option value="+297">+297 AW</option><option value="+298">+298 FO</option><option value="+299">+299 GL</option><option value="+350">+350 GI</option><option value="+351">+351 PT</option><option value="+352">+352 LU</option><option value="+353">+353 IE</option><option value="+354">+354 IS</option><option value="+355">+355 AL</option><option value="+356">+356 MT</option><option value="+357">+357 CY</option><option value="+358">+358 FI</option><option value="+359">+359 BG</option><option value="+370">+370 LT</option><option value="+371">+371 LV</option><option value="+372">+372 EE</option><option value="+373">+373 MD</option><option value="+374">+374 AM</option><option value="+375">+375 BY</option><option value="+376">+376 AD</option><option value="+377">+377 MC</option><option value="+378">+378 SM</option><option value="+379">+379 VA</option><option value="+380">+380 UA</option><option value="+381">+381 RS</option><option value="+382">+382 ME</option><option value="+383">+383 XK</option><option value="+385">+385 HR</option><option value="+386">+386 SI</option><option value="+387">+387 BA</option><option value="+389">+389 MK</option><option value="+390">+390 IT</option><option value="+420">+420 CZ</option><option value="+421">+421 SK</option><option value="+423">+423 LI</option><option value="+500">+500 FK</option><option value="+501">+501 BZ</option><option value="+502">+502 GT</option><option value="+503">+503 SV</option><option value="+504">+504 HN</option><option value="+505">+505 NI</option><option value="+506">+506 CR</option><option value="+507">+507 PA</option><option value="+508">+508 PM</option><option value="+509">+509 HT</option><option value="+590">+590 GP</option><option value="+591">+591 BO</option><option value="+592">+592 GY</option><option value="+593">+593 EC</option><option value="+594">+594 GF</option><option value="+595">+595 PY</option><option value="+596">+596 MQ</option><option value="+597">+597 SR</option><option value="+598">+598 UY</option><option value="+670">+670 TL</option><option value="+672">+672 AQ</option><option value="+673">+673 BN</option><option value="+674">+674 NR</option><option value="+675">+675 PG</option><option value="+676">+676 TO</option><option value="+677">+677 SB</option><option value="+678">+678 VU</option><option value="+679">+679 FJ</option><option value="+680">+680 PW</option><option value="+681">+681 WF</option><option value="+682">+682 CK</option><option value="+683">+683 NU</option><option value="+685">+685 WS</option><option value="+686">+686 KI</option><option value="+688">+688 TV</option><option value="+690">+690 TK</option><option value="+691">+691 FM</option><option value="+692">+692 MH</option><option value="+850">+850 KP</option><option value="+852">+852 HK</option><option value="+853">+853 MO</option><option value="+855">+855 KH</option><option value="+856">+856 LA</option><option value="+880">+880 BD</option><option value="+886">+886 TW</option><option value="+960">+960 MV</option><option value="+961">+961 LB</option><option value="+962">+962 JO</option><option value="+963">+963 SY</option><option value="+964">+964 IQ</option><option value="+965">+965 KW</option><option value="+966">+966 SA</option><option value="+967">+967 YE</option><option value="+968">+968 OM</option><option value="+971">+971 AE</option><option value="+972">+972 IL</option><option value="+973">+973 BH</option><option value="+974">+974 QA</option><option value="+975">+975 BT</option><option value="+976">+976 MN</option><option value="+977">+977 NP</option><option value="+992">+992 TJ</option><option value="+993">+993 TM</option><option value="+994">+994 AZ</option><option value="+995">+995 GE</option><option value="+996">+996 KG</option><option value="+998">+998 UZ</option>
+            </select>
+            <input type="tel" id="phoneInput" class="input-field" placeholder="555 123 4567" style="flex:1;font-size:13px;">
+          </div>
+        </div>
+        <button onclick="sendPhoneOTP()" style="width:100%;padding:12px;border-radius:10px;font-size:13px;font-weight:600;border:none;color:#fff;cursor:pointer;background:linear-gradient(135deg,#F7931A,#FDB022);box-shadow:0 4px 12px rgba(247,147,26,0.3);">Verify Phone Number</button>
+      </div>
+      <div id="phoneStep3" style="display:none;text-align:center;padding:20px 0;">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,192,135,0.12);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          <i data-lucide="check-circle" style="width:32px;height:32px;color:var(--accent-green);"></i>
+        </div>
+        <h4 style="font-size:16px;font-weight:700;margin-bottom:4px;">Phone Verified!</h4>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">Your phone number has been verified successfully.</p>
+        <button onclick="closePhoneVerifyModal()" style="padding:10px 24px;border-radius:10px;font-size:13px;font-weight:600;border:none;color:#fff;cursor:pointer;background:linear-gradient(135deg,#F7931A,#FDB022);">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== KYC VERIFICATION MODAL ===== -->
+<div class="modal-overlay" id="kycModal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-header">
+      <h3 style="font-size:16px;font-weight:600;" id="kycModalTitle">Identity Verification</h3>
+      <button onclick="closeKYCModal()" style="background:none;border:none;color:var(--text-tertiary);cursor:pointer;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Step Progress -->
+      <div id="kycProgress" style="display:flex;align-items:center;gap:0;margin-bottom:28px;">
+        <div class="kyc-step-dot active" data-step="1">1</div>
+        <div class="kyc-step-line" id="kycLine1"></div>
+        <div class="kyc-step-dot" data-step="2">2</div>
+        <div class="kyc-step-line" id="kycLine2"></div>
+        <div class="kyc-step-dot" data-step="3">3</div>
+      </div>
+
+      <!-- Step 1: Personal Info -->
+      <div class="kyc-step-content" id="kycStep1">
+        <h4 style="font-size:15px;font-weight:600;margin-bottom:4px;">Personal Information</h4>
+        <p style="font-size:12px;color:var(--text-tertiary);margin-bottom:20px;">Please provide your legal identity details</p>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="responsive-grid-2" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">First Name</label><input type="text" id="kycFirstName" class="input-field" placeholder="John"></div>
+            <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">Last Name</label><input type="text" id="kycLastName" class="input-field" placeholder="Doe"></div>
+          </div>
+          <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">Date of Birth</label><input type="date" id="kycDOB" class="input-field"></div>
+          <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">Nationality</label>
+            <select id="kycNationality" class="input-field" style="appearance:auto;">
+              <option value="">Select country</option>
+              <option>Afghanistan</option><option>Albania</option><option>Algeria</option><option>Andorra</option><option>Angola</option><option>Antigua and Barbuda</option><option>Argentina</option><option>Armenia</option><option>Australia</option><option>Austria</option><option>Azerbaijan</option><option>Bahamas</option><option>Bahrain</option><option>Bangladesh</option><option>Barbados</option><option>Belarus</option><option>Belgium</option><option>Belize</option><option>Benin</option><option>Bhutan</option><option>Bolivia</option><option>Bosnia and Herzegovina</option><option>Botswana</option><option>Brazil</option><option>Brunei</option><option>Bulgaria</option><option>Burkina Faso</option><option>Burundi</option><option>Cambodia</option><option>Cameroon</option><option>Canada</option><option>Cape Verde</option><option>Central African Republic</option><option>Chad</option><option>Chile</option><option>China</option><option>Colombia</option><option>Comoros</option><option>Congo (DRC)</option><option>Congo (Republic)</option><option>Costa Rica</option><option>Croatia</option><option>Cuba</option><option>Cyprus</option><option>Czech Republic</option><option>Denmark</option><option>Djibouti</option><option>Dominica</option><option>Dominican Republic</option><option>East Timor</option><option>Ecuador</option><option>Egypt</option><option>El Salvador</option><option>Equatorial Guinea</option><option>Eritrea</option><option>Estonia</option><option>Eswatini</option><option>Ethiopia</option><option>Fiji</option><option>Finland</option><option>France</option><option>Gabon</option><option>Gambia</option><option>Georgia</option><option>Germany</option><option>Ghana</option><option>Greece</option><option>Grenada</option><option>Guatemala</option><option>Guinea</option><option>Guinea-Bissau</option><option>Guyana</option><option>Haiti</option><option>Honduras</option><option>Hungary</option><option>Iceland</option><option>India</option><option>Indonesia</option><option>Iran</option><option>Iraq</option><option>Ireland</option><option>Israel</option><option>Italy</option><option>Ivory Coast</option><option>Jamaica</option><option>Japan</option><option>Jordan</option><option>Kazakhstan</option><option>Kenya</option><option>Kiribati</option><option>Kosovo</option><option>Kuwait</option><option>Kyrgyzstan</option><option>Laos</option><option>Latvia</option><option>Lebanon</option><option>Lesotho</option><option>Liberia</option><option>Libya</option><option>Liechtenstein</option><option>Lithuania</option><option>Luxembourg</option><option>Madagascar</option><option>Malawi</option><option>Malaysia</option><option>Maldives</option><option>Mali</option><option>Malta</option><option>Marshall Islands</option><option>Mauritania</option><option>Mauritius</option><option>Mexico</option><option>Micronesia</option><option>Moldova</option><option>Monaco</option><option>Mongolia</option><option>Montenegro</option><option>Morocco</option><option>Mozambique</option><option>Myanmar</option><option>Namibia</option><option>Nauru</option><option>Nepal</option><option>Netherlands</option><option>New Zealand</option><option>Nicaragua</option><option>Niger</option><option>Nigeria</option><option>North Korea</option><option>North Macedonia</option><option>Norway</option><option>Oman</option><option>Pakistan</option><option>Palau</option><option>Palestine</option><option>Panama</option><option>Papua New Guinea</option><option>Paraguay</option><option>Peru</option><option>Philippines</option><option>Poland</option><option>Portugal</option><option>Qatar</option><option>Romania</option><option>Russia</option><option>Rwanda</option><option>Saint Kitts and Nevis</option><option>Saint Lucia</option><option>Saint Vincent and the Grenadines</option><option>Samoa</option><option>San Marino</option><option>Sao Tome and Principe</option><option>Saudi Arabia</option><option>Senegal</option><option>Serbia</option><option>Seychelles</option><option>Sierra Leone</option><option>Singapore</option><option>Slovakia</option><option>Slovenia</option><option>Solomon Islands</option><option>Somalia</option><option>South Africa</option><option>South Korea</option><option>South Sudan</option><option>Spain</option><option>Sri Lanka</option><option>Sudan</option><option>Suriname</option><option>Sweden</option><option>Switzerland</option><option>Syria</option><option>Taiwan</option><option>Tajikistan</option><option>Tanzania</option><option>Thailand</option><option>Togo</option><option>Tonga</option><option>Trinidad and Tobago</option><option>Tunisia</option><option>Turkey</option><option>Turkmenistan</option><option>Tuvalu</option><option>Uganda</option><option>Ukraine</option><option>United Arab Emirates</option><option>United Kingdom</option><option>United States</option><option>Uruguay</option><option>Uzbekistan</option><option>Vanuatu</option><option>Vatican City</option><option>Venezuela</option><option>Vietnam</option><option>Yemen</option><option>Zambia</option><option>Zimbabwe</option>
+            </select>
+          </div>
+          <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">Street Address</label><input type="text" id="kycAddress" class="input-field" placeholder="123 Main Street"></div>
+          <div class="responsive-grid-2" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">City</label><input type="text" id="kycCity" class="input-field" placeholder="New York"></div>
+            <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">Postal Code</label><input type="text" id="kycPostal" class="input-field" placeholder="10001"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Document -->
+      <div class="kyc-step-content" id="kycStep2" style="display:none;">
+        <h4 style="font-size:15px;font-weight:600;margin-bottom:4px;">Identity Document</h4>
+        <p style="font-size:12px;color:var(--text-tertiary);margin-bottom:20px;">Upload a valid government-issued photo ID</p>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div><label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:4px;">Document Type</label>
+            <select id="kycDocType" class="input-field" style="appearance:auto;">
+              <option>Passport</option><option>Driver's License</option><option>National ID Card</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:8px;">Front of Document</label>
+            <div id="kycUploadFront" onclick="document.getElementById('kycFrontInput').click()" style="border:2px dashed var(--border-medium);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color 0.2s;" onmouseover="this.style.borderColor='var(--accent-orange)'" onmouseout="this.style.borderColor='var(--border-medium)'">
+              <input type="file" id="kycFrontInput" accept="image/*" style="display:none;" onchange="handleDocUpload('front',this)">
+              <div id="kycFrontPlaceholder">
+                <i data-lucide="upload" style="width:32px;height:32px;color:var(--text-tertiary);margin:0 auto 8px;display:block;"></i>
+                <div style="font-size:13px;color:var(--text-secondary);">Click to upload</div>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">JPG, PNG or PDF (max 10MB)</div>
+              </div>
+              <div id="kycFrontPreview" style="display:none;">
+                <i data-lucide="file-check" style="width:32px;height:32px;color:var(--accent-green);margin:0 auto 8px;display:block;"></i>
+                <div style="font-size:13px;color:var(--accent-green);font-weight:500;" id="kycFrontName"></div>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">Click to replace</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-tertiary);display:block;margin-bottom:8px;">Back of Document</label>
+            <div id="kycUploadBack" onclick="document.getElementById('kycBackInput').click()" style="border:2px dashed var(--border-medium);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color 0.2s;" onmouseover="this.style.borderColor='var(--accent-orange)'" onmouseout="this.style.borderColor='var(--border-medium)'">
+              <input type="file" id="kycBackInput" accept="image/*" style="display:none;" onchange="handleDocUpload('back',this)">
+              <div id="kycBackPlaceholder">
+                <i data-lucide="upload" style="width:32px;height:32px;color:var(--text-tertiary);margin:0 auto 8px;display:block;"></i>
+                <div style="font-size:13px;color:var(--text-secondary);">Click to upload</div>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">JPG, PNG or PDF (max 10MB)</div>
+              </div>
+              <div id="kycBackPreview" style="display:none;">
+                <i data-lucide="file-check" style="width:32px;height:32px;color:var(--accent-green);margin:0 auto 8px;display:block;"></i>
+                <div style="font-size:13px;color:var(--accent-green);font-weight:500;" id="kycBackName"></div>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">Click to replace</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Review & Submit -->
+      <div class="kyc-step-content" id="kycStep3" style="display:none;">
+        <h4 style="font-size:15px;font-weight:600;margin-bottom:4px;">Review & Submit</h4>
+        <p style="font-size:12px;color:var(--text-tertiary);margin-bottom:20px;">Please verify your information before submitting</p>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Personal Information</div>
+            <div class="responsive-grid-2" style="grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+              <div><span style="color:var(--text-tertiary);">Name:</span> <span id="kycReviewName" style="font-weight:500;">—</span></div>
+              <div><span style="color:var(--text-tertiary);">DOB:</span> <span id="kycReviewDOB" style="font-weight:500;">—</span></div>
+              <div><span style="color:var(--text-tertiary);">Nationality:</span> <span id="kycReviewNat" style="font-weight:500;">—</span></div>
+              <div><span style="color:var(--text-tertiary);">Address:</span> <span id="kycReviewAddr" style="font-weight:500;">—</span></div>
+            </div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Document</div>
+            <div style="font-size:12px;">
+              <span style="color:var(--text-tertiary);">Type:</span> <span id="kycReviewDocType" style="font-weight:500;">—</span>
+              <span style="color:var(--text-tertiary);margin-left:16px;">Front:</span> <span id="kycReviewFront" style="font-weight:500;color:var(--accent-green);">Uploaded</span>
+              <span style="color:var(--text-tertiary);margin-left:16px;">Back:</span> <span id="kycReviewBack" style="font-weight:500;color:var(--accent-green);">Uploaded</span>
+            </div>
+          </div>
+          <div style="background:rgba(247,147,26,0.06);border:1px solid rgba(247,147,26,0.15);border-radius:10px;padding:12px;display:flex;gap:10px;align-items:flex-start;">
+            <i data-lucide="info" style="width:16px;height:16px;color:var(--accent-orange);flex-shrink:0;margin-top:1px;"></i>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">By submitting, you confirm that all information provided is accurate and you agree to our <a href="#" style="color:var(--accent-orange);">Terms of Service</a> and <a href="#" style="color:var(--accent-orange);">Privacy Policy</a>.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Submitted (success) -->
+      <div class="kyc-step-content" id="kycStep4" style="display:none;text-align:center;padding:20px 0;">
+        <div style="width:64px;height:64px;border-radius:50%;background:rgba(0,192,135,0.12);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+          <i data-lucide="check-circle" style="width:36px;height:36px;color:var(--accent-green);"></i>
+        </div>
+        <h4 style="font-size:18px;font-weight:700;margin-bottom:6px;">Verification Submitted</h4>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Your identity verification has been submitted successfully.</p>
+        <p style="font-size:12px;color:var(--text-tertiary);margin-bottom:20px;">Review typically takes 1–5 minutes. You'll be notified once complete.</p>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;display:inline-flex;align-items:center;gap:8px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-orange);animation:pulse 2s infinite;"></div>
+          <span style="font-size:12px;font-weight:500;">Under Review</span>
+        </div>
+      </div>
+
+      <!-- Navigation Buttons -->
+      <div id="kycNav" style="display:flex;gap:10px;margin-top:24px;">
+        <button id="kycBackBtn" onclick="kycPrevStep()" style="display:none;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border-medium);color:var(--text-secondary);cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent-orange)'" onmouseout="this.style.borderColor='var(--border-medium)'">Back</button>
+        <button id="kycNextBtn" onclick="kycNextStep()" style="flex:1;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;border:none;color:#fff;cursor:pointer;transition:all 0.2s;background:linear-gradient(135deg,#F7931A,#FDB022);box-shadow:0 4px 12px rgba(247,147,26,0.3);" onmouseover="this.style.boxShadow='0 6px 20px rgba(247,147,26,0.4)'" onmouseout="this.style.boxShadow='0 4px 12px rgba(247,147,26,0.3)'">Continue</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== NAME LOADER =====
+(function(){
+  var name=localStorage.getItem('bb_name')||'User';
+  var first=name.split(' ')[0];
+  document.querySelectorAll('.user-avatar').forEach(function(a){a.textContent=first.charAt(0).toUpperCase();});
+  document.querySelectorAll('.user-name').forEach(function(d){d.textContent=first;});
+  var email=localStorage.getItem('bb_email')||'user@email.com';
+  document.querySelectorAll('.user-email').forEach(function(d){d.textContent=email;});
+  var nameField=document.getElementById('settingsName');
+  if(nameField) nameField.value=name;
+  var emailField=document.querySelector('#settings-profile input[type="email"]');
+  if(emailField) emailField.value=email;
+  var usernameField=document.getElementById('settingsUsername');
+  var savedUsername=localStorage.getItem('bb_username');
+  if(usernameField) usernameField.value=savedUsername||'@'+first.toLowerCase().replace(/[^a-z0-9]/g,'');
+  var phoneField=document.getElementById('settingsPhone');
+  var phone=localStorage.getItem('bb_phone')||'';
+  if(phoneField) phoneField.value=phone;
+})();
+lucide.createIcons();
+
+// ===== UID SYSTEM =====
+function getUID() {
+  let uid = localStorage.getItem('bb_uid');
+  if (!uid || uid.length !== 6 || isNaN(uid)) {
+    uid = String(Math.floor(100000 + Math.random() * 900000));
+    localStorage.setItem('bb_uid', uid);
+  }
+  return uid;
+}
+
+function setUIDDisplay() {
+  document.getElementById('uidField').value = getUID();
+}
+
+function loadLoginActivity() {
+  const ua = navigator.userAgent;
+  let browser = 'Unknown Browser';
+  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+  else if (ua.includes('Firefox')) browser = 'Firefox';
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+  else if (ua.includes('Edg')) browser = 'Edge';
+  else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera';
+
+  let os = 'Unknown OS';
+  if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Mac OS X')) os = 'macOS';
+  else if (ua.includes('Linux')) os = 'Linux';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+  const loginTime = localStorage.getItem('bb_login_time');
+  let timeStr = 'Unknown';
+  if (loginTime) {
+    const d = new Date(parseInt(loginTime));
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    timeStr = months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear() + ' ' +
+      String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  document.getElementById('loginActivityBody').innerHTML =
+    '<tr style="border-bottom:1px solid var(--border-subtle);">' +
+    '<td class="py-3 text-sm font-mono">—</td>' +
+    '<td class="py-3 text-sm">' + browser + ' on ' + os + ' <span style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600;background:rgba(22,199,132,0.12);color:#16c784;">Current</span></td>' +
+    '<td class="py-3 text-sm">This device</td>' +
+    '<td class="py-3 text-sm text-secondary">' + timeStr + '</td>' +
+    '</tr>';
+}
+
+function copyUID() {
+  const uid = document.getElementById('uidField').value;
+  navigator.clipboard.writeText(uid).then(() => {
+    showToast('UID copied to clipboard!', 'var(--accent-green)');
+  }).catch(() => {
+    const field = document.getElementById('uidField');
+    field.select();
+    document.execCommand('copy');
+    showToast('UID copied to clipboard!', 'var(--accent-green)');
+  });
+}
+
+function showToast(msg, color) {
+  const old = document.querySelector('.toast');
+  if (old) old.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:3000;background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.5);animation:slideUp 0.3s ease;';
+  t.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span>' + msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// Initialize UID on page load
+setUIDDisplay();
+loadLoginActivity();
+
+// ===== KYC MODAL =====
+let kycCurrentStep = 1;
+const kycTotalSteps = 3;
+
+function openKYCModal() {
+  document.getElementById('kycModal').classList.add('open');
+  kycCurrentStep = 1;
+  updateKYCStep();
+  lucide.createIcons();
+}
+function closeKYCModal() {
+  document.getElementById('kycModal').classList.remove('open');
+}
+
+function updateKYCStep() {
+  // Update step dots
+  document.querySelectorAll('.kyc-step-dot').forEach(dot => {
+    const s = parseInt(dot.dataset.step);
+    dot.classList.remove('active', 'done');
+    if (s === kycCurrentStep) dot.classList.add('active');
+    else if (s < kycCurrentStep) dot.classList.add('done');
+  });
+  // Update lines
+  for (let i = 1; i < kycTotalSteps; i++) {
+    const line = document.getElementById('kycLine' + i);
+    if (line) line.classList.toggle('done', i < kycCurrentStep);
+  }
+  // Show/hide content
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('kycStep' + i);
+    if (el) el.style.display = i === kycCurrentStep ? '' : 'none';
+  }
+  // Update buttons
+  const backBtn = document.getElementById('kycBackBtn');
+  const nextBtn = document.getElementById('kycNextBtn');
+  const nav = document.getElementById('kycNav');
+  backBtn.style.display = kycCurrentStep > 1 && kycCurrentStep < 4 ? '' : 'none';
+  if (kycCurrentStep === 3) {
+    nextBtn.textContent = 'Submit Verification';
+    nextBtn.style.background = 'linear-gradient(135deg,#00c087,#00a36b)';
+    nextBtn.style.boxShadow = '0 4px 12px rgba(0,192,135,0.3)';
+  } else if (kycCurrentStep === 4) {
+    nav.style.display = 'none';
+    document.getElementById('kycProgress').style.display = 'none';
+    document.getElementById('kycModalTitle').textContent = 'Verification Status';
+  } else {
+    nextBtn.textContent = 'Continue';
+    nextBtn.style.background = 'linear-gradient(135deg,#F7931A,#FDB022)';
+    nextBtn.style.boxShadow = '0 4px 12px rgba(247,147,26,0.3)';
+    nav.style.display = 'flex';
+    document.getElementById('kycProgress').style.display = 'flex';
+    document.getElementById('kycModalTitle').textContent = 'Identity Verification';
+  }
+  lucide.createIcons();
+}
+
+function kycNextStep() {
+  if (kycCurrentStep === 1) {
+    const fn = document.getElementById('kycFirstName').value.trim();
+    const ln = document.getElementById('kycLastName').value.trim();
+    const dob = document.getElementById('kycDOB').value;
+    const nat = document.getElementById('kycNationality').value;
+    const addr = document.getElementById('kycAddress').value.trim();
+    if (!fn || !ln || !dob || !nat || !addr) {
+      showToast('Please fill in all required fields', 'var(--accent-red)');
+      return;
+    }
+    document.getElementById('kycReviewName').textContent = fn + ' ' + ln;
+    document.getElementById('kycReviewDOB').textContent = dob;
+    document.getElementById('kycReviewNat').textContent = nat;
+    document.getElementById('kycReviewAddr').textContent = addr;
+  }
+  if (kycCurrentStep === 3) {
+    // Submit KYC to localStorage
+    kycCurrentStep = 4;
+    updateKYCStep();
+    var userName=localStorage.getItem('bb_name')||'User';
+    var userEmail=localStorage.getItem('bb_email')||'user@email.com';
+    var uid=localStorage.getItem('bb_uid')||'000000';
+    var submissions=[];
+    try{submissions=JSON.parse(localStorage.getItem('bb_kyc_submissions')||'[]');}catch(e){}
+    submissions.push({
+      id:'KYC-'+uid+'-'+Date.now(),
+      userId:uid,userName:userName,userEmail:userEmail,
+      firstName:document.getElementById('kycFirstName').value.trim(),
+      lastName:document.getElementById('kycLastName').value.trim(),
+      dob:document.getElementById('kycDOB').value,
+      nationality:document.getElementById('kycNationality').value,
+      address:document.getElementById('kycAddress').value.trim(),
+      city:document.getElementById('kycCity').value.trim(),
+      postal:document.getElementById('kycPostal').value.trim(),
+      docType:document.getElementById('kycDocType').value,
+      frontDoc:kycFrontData,backDoc:kycBackData,
+      status:'pending',createdAt:Date.now(),resolvedAt:0
+    });
+    localStorage.setItem('bb_kyc_submissions',JSON.stringify(submissions));
+    localStorage.setItem('bb_kyc_status','pending');
+    // Update verification status on the page
+    document.getElementById('kycIcon').style.background = 'rgba(247,147,26,0.1)';
+    document.getElementById('kycIcon').innerHTML = '<i data-lucide="clock" style="width:18px;height:18px;color:var(--accent-orange);"></i>';
+    document.getElementById('kycStatusText').textContent = 'Under Review';
+    document.getElementById('kycStartBtn').textContent = 'Pending';
+    document.getElementById('kycStartBtn').disabled = true;
+    document.getElementById('kycStartBtn').style.opacity = '0.5';
+    document.getElementById('kycStartBtn').style.cursor = 'default';
+    showToast('Verification submitted! Awaiting admin approval.', 'var(--accent-green)');
+    lucide.createIcons();
+    return;
+  }
+  kycCurrentStep++;
+  updateKYCStep();
+}
+
+function kycPrevStep() {
+  if (kycCurrentStep > 1) {
+    kycCurrentStep--;
+    updateKYCStep();
+  }
+}
+
+var kycFrontData=null;
+var kycBackData=null;
+function handleDocUpload(side, input) {
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+    var reader=new FileReader();
+    reader.onload=function(e){
+      if(side==='front')kycFrontData={name:file.name,type:file.type,dataUrl:e.target.result};
+      else kycBackData={name:file.name,type:file.type,dataUrl:e.target.result};
+    };
+    reader.readAsDataURL(file);
+    document.getElementById('kyc' + side.charAt(0).toUpperCase() + side.slice(1) + 'Placeholder').style.display = 'none';
+    document.getElementById('kyc' + side.charAt(0).toUpperCase() + side.slice(1) + 'Preview').style.display = '';
+    document.getElementById('kyc' + side.charAt(0).toUpperCase() + side.slice(1) + 'Name').textContent = file.name;
+    document.getElementById('kycReview' + side.charAt(0).toUpperCase() + side.slice(1)).textContent = 'Uploaded';
+    lucide.createIcons();
+  }
+}
+
+// Close modal on overlay click
+document.getElementById('kycModal').addEventListener('click', function(e) {
+  if (e.target === this) closeKYCModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeKYCModal();
+});
+
+// ===== PHONE VERIFICATION =====
+function openPhoneVerifyModal(){
+  document.getElementById('phoneStep1').style.display='';
+  document.getElementById('phoneStep3').style.display='none';
+  document.getElementById('phoneVerifyModal').classList.add('open');
+  lucide.createIcons();
+}
+function closePhoneVerifyModal(){
+  document.getElementById('phoneVerifyModal').classList.remove('open');
+}
+function sendPhoneOTP(){
+  var num=document.getElementById('phoneInput').value.replace(/\s/g,'');
+  if(!num||num.length<6){showToast('Please enter a valid phone number','var(--accent-red)');return;}
+  localStorage.setItem('bb_phone_verified','1');
+  localStorage.setItem('bb_phone',document.getElementById('phoneCountryCode').value+' '+num);
+  updatePhoneVerificationUI();
+  document.getElementById('phoneStep1').style.display='none';
+  document.getElementById('phoneStep3').style.display='';
+  lucide.createIcons();
+}
+function updatePhoneVerificationUI(){
+  var verified=localStorage.getItem('bb_phone_verified')==='1';
+  var icon=document.getElementById('phoneVerifyIcon');
+  var text=document.getElementById('phoneVerifyText');
+  var btn=document.getElementById('phoneVerifyBtn');
+  if(!icon||!text||!btn)return;
+  if(verified){
+    icon.style.background='rgba(22,199,132,0.1)';
+    icon.innerHTML='<i data-lucide="check-circle" style="width:18px;height:18px;color:var(--accent-green);"></i>';
+    text.textContent='Verified';
+    text.style.color='var(--accent-green)';
+    btn.outerHTML='<span class="px-3 py-1 rounded-lg text-xs font-medium" style="background:rgba(22,199,132,0.1);color:var(--accent-green);">Complete</span>';
+  }
+  lucide.createIcons();
+}
+updatePhoneVerificationUI();
+
+// Close phone modal on overlay click
+document.getElementById('phoneVerifyModal').addEventListener('click',function(e){if(e.target===this)closePhoneVerifyModal();});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closePhoneVerifyModal();});
+
+// Tab switching
+function isSettingsMobile(){return window.innerWidth<=640;}
+
+document.querySelectorAll('.settings-tab-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.settings-tab-btn').forEach(function(b){b.classList.remove('active');});
+    this.classList.add('active');
+    var tab = this.getAttribute('data-settings-tab');
+    document.querySelectorAll('.settings-panel').forEach(function(p){p.classList.remove('active');});
+    document.getElementById('settings-' + tab).classList.add('active');
+    if(isSettingsMobile()){
+      document.getElementById('settingsSidebar').classList.remove('mobile-open');
+    }
+    lucide.createIcons();
+  });
+});
+
+function settingsBack(){
+  document.querySelectorAll('.settings-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.settings-tab-btn').forEach(function(b){b.classList.remove('active');});
+  if(isSettingsMobile()){
+    document.getElementById('settingsSidebar').classList.add('mobile-open');
+  }
+  lucide.createIcons();
+}
+
+window.addEventListener('resize',function(){
+  if(!isSettingsMobile()){
+    document.getElementById('settingsSidebar').classList.remove('mobile-open');
+  }
+});
+
+// ===== PROFILE =====
+function saveProfile() {
+   var nameVal=document.getElementById('settingsName').value.trim();
+   var emailVal=document.querySelector('#settings-profile input[type="email"]').value.trim();
+   var phoneVal=document.getElementById('settingsPhone').value.trim();
+   var usernameVal=document.getElementById('settingsUsername').value.trim();
+   var oldUid=localStorage.getItem('bb_uid');
+   var oldName=localStorage.getItem('bb_name');
+   var oldEmail=localStorage.getItem('bb_email');
+   if(nameVal) localStorage.setItem('bb_name',nameVal);
+   if(emailVal) localStorage.setItem('bb_email',emailVal);
+   if(phoneVal) localStorage.setItem('bb_phone',phoneVal);
+   if(usernameVal) localStorage.setItem('bb_username',usernameVal);
+   // Sync to admin users list
+   try{
+     var uid=oldUid||localStorage.getItem('bb_uid');
+     var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+     for(var i=0;i<adminUsers.length;i++){
+       if(adminUsers[i].uid===uid){
+         adminUsers[i].name=nameVal||oldName||adminUsers[i].name;
+         adminUsers[i].email=emailVal||oldEmail||adminUsers[i].email;
+         adminUsers[i].cashBalance=localStorage.getItem('bb_cash_balance')||adminUsers[i].cashBalance;
+         adminUsers[i].assetBalances=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
+         break;
+       }
+     }
+     localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
+   }catch(e){}
+   showToast('Profile changes saved successfully!', 'var(--accent-green)');
+}
+function cancelProfile() {
+  showToast('Changes discarded', 'var(--text-tertiary)');
+}
+
+// ===== SECURITY =====
+function updatePassword() {
+  var pwFields = document.querySelectorAll('#settings-security input[type="password"]');
+  var current = pwFields[0].value.trim();
+  var newPw = pwFields[1].value.trim();
+  var confirm = pwFields[2].value.trim();
+  if (!current || !newPw || !confirm) {
+    showToast('Please fill in all password fields', 'var(--accent-red)');
+    return;
+  }
+  var storedPass = localStorage.getItem('bb_password');
+  if (!storedPass || current !== storedPass) {
+    showToast('Current password is incorrect', 'var(--accent-red)');
+    return;
+  }
+  if (newPw.length < 8) {
+    showToast('New password must be at least 8 characters', 'var(--accent-red)');
+    return;
+  }
+  if (newPw !== confirm) {
+    showToast('New passwords do not match', 'var(--accent-red)');
+    return;
+  }
+  localStorage.setItem('bb_password', newPw);
+  pwFields[0].value = '';
+  pwFields[1].value = '';
+  pwFields[2].value = '';
+  showToast('Password updated successfully!', 'var(--accent-green)');
+}
+function logoutAllDevices() {
+  if (confirm('Are you sure you want to logout from all devices?')) {
+    showToast('Logged out from all devices', 'var(--accent-orange)');
+  }
+}
+
+// ===== PREFERENCES =====
+function selectRadio(groupId, el) {
+  document.querySelectorAll('#' + groupId + ' .radio-option').forEach(function(r){r.classList.remove('selected');});
+  el.classList.add('selected');
+  if (groupId === 'prefThemeGroup') applyTheme(el.dataset.value);
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+
+function savePreferences() {
+  var prefs = {
+    language: document.getElementById('prefLanguage').value,
+    currency: document.getElementById('prefCurrency').value,
+    timezone: document.getElementById('prefTimezone').value,
+    theme: document.querySelector('#prefThemeGroup .radio-option.selected').dataset.value,
+    tradingView: document.querySelector('#prefTradingViewGroup .radio-option.selected').dataset.value
+  };
+  localStorage.setItem('bb_preferences', JSON.stringify(prefs));
+  showToast('Preferences saved successfully!', 'var(--accent-green)');
+}
+
+function loadPreferences() {
+  var raw = localStorage.getItem('bb_preferences');
+  if (!raw) return;
+  try {
+    var p = JSON.parse(raw);
+    if (p.language) document.getElementById('prefLanguage').value = p.language;
+    if (p.currency) document.getElementById('prefCurrency').value = p.currency;
+    if (p.timezone) document.getElementById('prefTimezone').value = p.timezone;
+    if (p.theme) {
+      document.querySelectorAll('#prefThemeGroup .radio-option').forEach(function(r){
+        r.classList.toggle('selected', r.dataset.value === p.theme);
+      });
+      applyTheme(p.theme);
+    }
+    if (p.tradingView) {
+      document.querySelectorAll('#prefTradingViewGroup .radio-option').forEach(function(r){
+        r.classList.toggle('selected', r.dataset.value === p.tradingView);
+      });
+    }
+  } catch(e) {}
+}
+
+loadPreferences();
+
+// ===== KYC STATUS CHECK =====
+(function(){
+  var kycStatus=localStorage.getItem('bb_kyc_status')||'';
+  if(kycStatus==='approved'){
+    document.getElementById('kycIcon').style.background='rgba(22,199,132,0.1)';
+    document.getElementById('kycIcon').innerHTML='<i data-lucide="check-circle" style="width:18px;height:18px;color:var(--accent-green);"></i>';
+    document.getElementById('kycStatusText').textContent='Verified';
+    document.getElementById('kycStartBtn').textContent='Complete';
+    document.getElementById('kycStartBtn').disabled=true;
+    document.getElementById('kycStartBtn').style.background='rgba(22,199,132,0.1)';
+    document.getElementById('kycStartBtn').style.borderColor='rgba(22,199,132,0.3)';
+    document.getElementById('kycStartBtn').style.color='var(--accent-green)';
+    document.getElementById('kycStartBtn').style.opacity='1';
+    document.getElementById('kycStartBtn').style.cursor='default';
+    lucide.createIcons();
+  }else if(kycStatus==='pending'){
+    document.getElementById('kycIcon').style.background='rgba(247,147,26,0.1)';
+    document.getElementById('kycIcon').innerHTML='<i data-lucide="clock" style="width:18px;height:18px;color:var(--accent-orange);"></i>';
+    document.getElementById('kycStatusText').textContent='Under Review';
+    document.getElementById('kycStartBtn').textContent='Pending';
+    document.getElementById('kycStartBtn').disabled=true;
+    document.getElementById('kycStartBtn').style.opacity='0.5';
+    document.getElementById('kycStartBtn').style.cursor='default';
+    lucide.createIcons();
+  }else if(kycStatus==='rejected'){
+    document.getElementById('kycIcon').style.background='rgba(239,68,68,0.1)';
+    document.getElementById('kycIcon').innerHTML='<i data-lucide="x-circle" style="width:18px;height:18px;color:#ef4444;"></i>';
+    document.getElementById('kycStatusText').textContent='Rejected — Please re-submit';
+    document.getElementById('kycStartBtn').textContent='Re-submit';
+    document.getElementById('kycStartBtn').disabled=false;
+    document.getElementById('kycStartBtn').style.background='rgba(239,68,68,0.1)';
+    document.getElementById('kycStartBtn').style.borderColor='rgba(239,68,68,0.3)';
+    document.getElementById('kycStartBtn').style.color='#ef4444';
+    document.getElementById('kycStartBtn').style.opacity='1';
+    document.getElementById('kycStartBtn').style.cursor='pointer';
+    localStorage.removeItem('bb_kyc_status');
+    lucide.createIcons();
+  }
+})();
+</script>
+<div class="mobile-bottom-bar">
+  <a href="dashboard.html"><i data-lucide="layout-dashboard"></i>Home</a>
+  <a href="assets.html"><i data-lucide="wallet"></i>Assets</a>
+  <a href="trade.html"><i data-lucide="arrow-left-right"></i>Trade</a>
+  <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
