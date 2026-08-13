@@ -222,18 +222,95 @@ DB.COLLECTIONS = [
   'bb_balance_history'
 ];
 
+// Merge two ticket arrays by id, unioning messages (deduped) and
+// sorting by time. Server first, then local, so nothing is clobbered.
+DB._ticketMerge = function (local, server) {
+  var map = {};
+  var order = [];
+  function upsertTicket(t) {
+    if (!t || !t.id) return;
+    if (!map[t.id]) {
+      map[t.id] = { id: t.id, userId: t.userId, userName: t.userName, userEmail: t.userEmail, status: t.status || 'open', createdAt: t.createdAt || Date.now(), messages: [] };
+      order.push(t.id);
+    }
+    var cur = map[t.id];
+    if (t.status === 'resolved') cur.status = 'resolved';
+    if (!cur.userName && t.userName) cur.userName = t.userName;
+    if (!cur.userEmail && t.userEmail) cur.userEmail = t.userEmail;
+    if (t.lastAdminReply) cur.lastAdminReply = t.lastAdminReply;
+    var seen = {};
+    for (var i = 0; i < cur.messages.length; i++) {
+      var m = cur.messages[i];
+      seen[(m.from || '') + '|' + (m.time || 0) + '|' + (m.text || '')] = true;
+    }
+    var msgs = t.messages || [];
+    for (var j = 0; j < msgs.length; j++) {
+      var mm = msgs[j];
+      var key = (mm.from || '') + '|' + (mm.time || 0) + '|' + (mm.text || '');
+      if (!seen[key]) { cur.messages.push(mm); seen[key] = true; }
+    }
+    cur.messages.sort(function (a, b) { return (a.time || 0) - (b.time || 0); });
+  }
+  for (var a = 0; a < (server || []).length; a++) upsertTicket(server[a]);
+  for (var b = 0; b < (local || []).length; b++) upsertTicket(local[b]);
+  var result = [];
+  for (var c = 0; c < order.length; c++) result.push(map[order[c]]);
+  return result;
+};
+
+// Drop chat messages older than 2 days (keeps ticket shells).
+DB.TICKET_TTL = 2 * 24 * 60 * 60 * 1000;
+DB._cleanTickets = function (tickets) {
+  if (!Array.isArray(tickets)) return tickets;
+  var cutoff = Date.now() - DB.TICKET_TTL;
+  var out = [];
+  for (var i = 0; i < tickets.length; i++) {
+    var t = tickets[i];
+    if (!t) continue;
+    t.messages = (t.messages || []).filter(function (m) { return m.time && m.time >= cutoff; });
+    out.push(t);
+  }
+  return out;
+};
+
 DB.pushCollection = function (key) {
   if (!DB.ready) return Promise.resolve();
   var data = localStorage.getItem(key);
   if (data === null || data === undefined) return Promise.resolve();
-  return DB.client.from('app_collections').upsert({ key: key, payload: DB.safeParse(data) }, { onConflict: 'key' }).then(DB._ok, DB._ok);
+  var payload = DB.safeParse(data);
+  if (key === 'bb_support_tickets') {
+    if (!Array.isArray(payload)) payload = [];
+    payload = DB._cleanTickets(payload);
+    // Read the current server payload, merge local into it, then upsert.
+    // Prevents one device's array from clobbering everyone else's chats.
+    return DB.client.from('app_collections').select('payload').eq('key', key).limit(1).single().then(function (res) {
+      var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
+      if (!Array.isArray(serverPayload)) serverPayload = [];
+      serverPayload = DB._cleanTickets(serverPayload);
+      var merged = DB._ticketMerge(payload, serverPayload);
+      localStorage.setItem(key, JSON.stringify(merged));
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(DB._ok, DB._ok);
+    }, function () { return DB._ok(null); });
+  }
+  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(DB._ok, DB._ok);
 };
 
 DB.pullCollection = function (key) {
   if (!DB.ready) return Promise.resolve();
   return DB.client.from('app_collections').select('payload').eq('key', key).single().then(function (res) {
     if (res && res.data && res.data.payload !== null && res.data.payload !== undefined) {
-      localStorage.setItem(key, JSON.stringify(res.data.payload));
+      var serverPayload = res.data.payload;
+      if (key === 'bb_support_tickets') {
+        if (!Array.isArray(serverPayload)) serverPayload = [];
+        serverPayload = DB._cleanTickets(serverPayload);
+        var localTickets = [];
+        try { localTickets = JSON.parse(localStorage.getItem('bb_support_tickets') || '[]'); } catch (e) { localTickets = []; }
+        if (!Array.isArray(localTickets)) localTickets = [];
+        localTickets = DB._cleanTickets(localTickets);
+        localStorage.setItem(key, JSON.stringify(DB._ticketMerge(localTickets, serverPayload)));
+      } else {
+        localStorage.setItem(key, JSON.stringify(res.data.payload));
+      }
     }
   }, function () { return null; });
 };

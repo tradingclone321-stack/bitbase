@@ -1141,7 +1141,7 @@ function replyToTicket(){
         tickets[i].messages.push({from:'admin',text:text,time:Date.now()});
         tickets[i].lastAdminReply=Date.now();
         found=true;
-        localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
+        saveTickets(tickets);
         input.value='';
         renderChatMessages(tickets[i]);
         adminLastMsgCount=tickets[i].messages.length;

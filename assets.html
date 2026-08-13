@@ -1315,30 +1315,34 @@ function openSupport(){
   supportOpen=true;
   var msgs=document.getElementById('supportMessages');
   msgs.innerHTML='';
-  // Load existing ticket messages from localStorage
-  var uid=localStorage.getItem('bb_uid')||'000000';
-  var loadedExisting=false;
-  try{
-    var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-    for(var i=0;i<tickets.length;i++){
-      if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
-        for(var j=0;j<tickets[i].messages.length;j++){
-          var m=tickets[i].messages[j];
-          if(m.from==='admin'){
-            addBotMsgNoScroll(m.text,m.time);
-          }else{
-            addUserMsgNoScroll(m.text||'Sent an attachment',null,m.time);
+  var renderLoaded=function(){
+    // Load existing ticket messages from localStorage
+    var uid=localStorage.getItem('bb_uid')||'000000';
+    var loadedExisting=false;
+    try{
+      var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+      for(var i=0;i<tickets.length;i++){
+        if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
+          for(var j=0;j<tickets[i].messages.length;j++){
+            var m=tickets[i].messages[j];
+            if(m.from==='admin'){
+              addBotMsgNoScroll(m.text,m.time);
+            }else{
+              addUserMsgNoScroll(m.text||'Sent an attachment',null,m.time);
+            }
           }
+          loadedExisting=true;
+          break;
         }
-        loadedExisting=true;
-        break;
       }
+    }catch(e){}
+    if(!loadedExisting){
+      addBotMsg('Hello! Welcome to BitBase Support. How can I help you today?');
     }
-  }catch(e){}
-  if(!loadedExisting){
-    addBotMsg('Hello! Welcome to BitBase Support. How can I help you today?');
-  }
-  msgs.scrollTop=msgs.scrollHeight;
+    msgs.scrollTop=msgs.scrollHeight;
+  };
+  var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
+  pullPromise.then(renderLoaded,renderLoaded);
   startSupportPolling();
   lucide.createIcons();
 }
@@ -1347,33 +1351,41 @@ function startSupportPolling(){
   if(supportPollTimer)clearInterval(supportPollTimer);
   var uid=localStorage.getItem('bb_uid')||'000000';
   var lastMsgCount=0;
-  try{
-    var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-    for(var i=0;i<tickets.length;i++){
-      if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
-        lastMsgCount=tickets[i].messages.length;break;
-      }
-    }
-  }catch(e){}
-  supportPollTimer=setInterval(function(){
-    if(!supportOpen){clearInterval(supportPollTimer);return;}
+  function captureCount(){
     try{
       var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
       for(var i=0;i<tickets.length;i++){
         if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
-          var msgs=tickets[i].messages;
-          if(msgs.length>lastMsgCount){
-            for(var j=lastMsgCount;j<msgs.length;j++){
-              var m=msgs[j];
-              if(m.from==='admin'){addBotMsg(m.text);}
-            }
-            lastMsgCount=msgs.length;
-          }
-          break;
+          lastMsgCount=tickets[i].messages.length;break;
         }
       }
     }catch(e){}
-  },3000);
+  }
+  captureCount();
+  function poll(){
+    if(!supportOpen){clearInterval(supportPollTimer);return;}
+    // Pull latest chats from Supabase (merge) so admin replies arrive live
+    var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
+    pullPromise.then(function(){
+      try{
+        var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+        for(var i=0;i<tickets.length;i++){
+          if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
+            var msgs=tickets[i].messages;
+            if(msgs.length>lastMsgCount){
+              for(var j=lastMsgCount;j<msgs.length;j++){
+                var m=msgs[j];
+                if(m.from==='admin'){addBotMsg(m.text);}
+              }
+              lastMsgCount=msgs.length;
+            }
+            break;
+          }
+        }
+      }catch(e){}
+    });
+  }
+  supportPollTimer=setInterval(poll,3000);
 }
 function closeSupport(){
   document.getElementById('supportPanel').style.display='none';
