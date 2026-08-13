@@ -184,17 +184,21 @@
 lucide.createIcons();
 
 // Show admin link if user has admin access
-(function(){
+function refreshAdminLink(){
   var uid=localStorage.getItem('bb_uid');
   if(!uid)return;
   try{
     var list=JSON.parse(localStorage.getItem('bb_admin_access_list')||'[]');
     if(list.indexOf(uid)>=0){
-      document.getElementById('adminLink').style.display='inline-flex';
+      var al=document.getElementById('adminLink');if(al)al.style.display='inline-flex';
       var ml=document.getElementById('mobileAdminLink');if(ml)ml.style.display='block';
+    }else{
+      var al2=document.getElementById('adminLink');if(al2)al2.style.display='none';
+      var ml2=document.getElementById('mobileAdminLink');if(ml2)ml2.style.display='none';
     }
   }catch(e){}
-})();
+}
+refreshAdminLink();
 
 // ===== HOLDINGS DATA (current TradingView prices) =====
 var CASH_BALANCE = (function(){var v=localStorage.getItem('bb_cash_balance');return v!==null?parseFloat(v):0;})();
@@ -562,6 +566,13 @@ renderStats('1M');
 
 // ===== SERVER BALANCE SYNC =====
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  var origPoll=DB.pullLocalUser;
+  DB.pullLocalUser=function(){
+    return origPoll().then(function(changed){
+      refreshAdminLink();
+      return changed;
+    });
+  };
   DB.startLocalPolling(10000);
 }
 </script>

@@ -327,6 +327,11 @@
                             localStorage.setItem('bb_asset_balances', JSON.stringify(ab));
                         } catch(e){}
                         localStorage.setItem('bb_kyc_status', centralUser.kyc_status || 'none');
+                        if (centralUser.is_admin != null) {
+                            var aList = [];
+                            try { aList = JSON.parse(localStorage.getItem('bb_admin_access_list') || '[]'); } catch(e){ aList = []; }
+                            if (centralUser.is_admin && aList.indexOf(myUid) < 0) { aList.push(myUid); localStorage.setItem('bb_admin_access_list', JSON.stringify(aList)); }
+                        }
                     }
                     var deactivated = [];
                     try { deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]'); } catch(e){}

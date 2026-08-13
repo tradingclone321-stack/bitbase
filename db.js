@@ -176,6 +176,12 @@ DB.pullLocalUser = function () {
       if (r.email && r.email !== localStorage.getItem('bb_email')) { localStorage.setItem('bb_email', r.email); changed = true; }
       if (r.password) localStorage.setItem('bb_password', r.password);
       if (r.kyc_status && r.kyc_status !== localStorage.getItem('bb_kyc_status')) { localStorage.setItem('bb_kyc_status', r.kyc_status); changed = true; }
+      if (r.is_admin != null) {
+        var aList = []; try { aList = JSON.parse(localStorage.getItem('bb_admin_access_list') || '[]'); } catch (e) { aList = []; }
+        var aIdx = aList.indexOf(String(uid));
+        if (r.is_admin && aIdx < 0) { aList.push(String(uid)); localStorage.setItem('bb_admin_access_list', JSON.stringify(aList)); changed = true; }
+        else if (!r.is_admin && aIdx >= 0) { aList.splice(aIdx, 1); localStorage.setItem('bb_admin_access_list', JSON.stringify(aList)); changed = true; }
+      }
       if (r.profit_module != null) localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
       return changed;
     }
