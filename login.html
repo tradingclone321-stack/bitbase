@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="db.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -251,6 +254,21 @@
                 var storedPass = localStorage.getItem('bb_password');
 
                 if (!storedEmail || !storedPass) {
+                    // No local account on this device — try the central users table
+                    if (typeof DB !== 'undefined' && DB.ready) {
+                        DB.loginUser(email, pass).then(function(row){
+                            if (row) {
+                                completeLogin(row);
+                            } else {
+                                showError('loginError');
+                                document.getElementById('loginError').textContent = 'No account found. Please create an account first.';
+                                document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                                document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                                document.getElementById('loginError').style.color = '#ea3943';
+                            }
+                        });
+                        return;
+                    }
                     showError('loginError');
                     document.getElementById('loginError').textContent = 'No account found. Please create an account first.';
                     document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
@@ -269,6 +287,22 @@
                 }
 
                 if (email !== storedEmail || pass !== storedPass) {
+                    // Try the central Supabase users table (account may have been
+                    // created on another device).
+                    if (typeof DB !== 'undefined' && DB.ready) {
+                        DB.loginUser(email, pass).then(function(row){
+                            if (row) {
+                                completeLogin(row);
+                            } else {
+                                showError('loginError');
+                                document.getElementById('loginError').textContent = 'Incorrect email or password. Please try again.';
+                                document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                                document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                                document.getElementById('loginError').style.color = '#ea3943';
+                            }
+                        });
+                        return;
+                    }
                     showError('loginError');
                     document.getElementById('loginError').textContent = 'Incorrect email or password. Please try again.';
                     document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
@@ -277,42 +311,61 @@
                     return;
                 }
 
-                var myUid=localStorage.getItem('bb_uid');
-                if(myUid){
-                  var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
-                  if(deactivated.indexOf(myUid)>=0){
-                    showError('loginError');
-                    document.getElementById('loginError').textContent = 'Your account has been deactivated. Contact support for assistance.';
-                    document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
-                    document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
-                    document.getElementById('loginError').style.color = '#ea3943';
-                    return;
-                  }
-                }
+                completeLogin(null);
 
-var successDiv = document.getElementById('loginError');
-                 successDiv.textContent = 'Sign in successful! Redirecting...';
-                 successDiv.style.background = 'rgba(22,199,132,0.1)';
-                 successDiv.style.borderColor = 'rgba(22,199,132,0.2)';
-                 successDiv.style.color = '#16c784';
-                 successDiv.classList.remove('hidden');
-                 localStorage.setItem('bb_login_time', Date.now());
-                 try{
-                   var syncUid=localStorage.getItem('bb_uid');
-                   var syncName=localStorage.getItem('bb_name');
-                   var syncEmail=localStorage.getItem('bb_email');
-                   if(syncUid){
-                     var newUser={uid:syncUid,name:syncName||'User',email:syncEmail||'user@email.com',cashBalance:parseFloat(localStorage.getItem('bb_cash_balance'))||0,assetBalances:JSON.parse(localStorage.getItem('bb_asset_balances')||'{}')};
-                     var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-                     var found=false;
-                     for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===syncUid){adminUsers[i]=newUser;found=true;break;}}
-                     if(!found)adminUsers.push(newUser);
-                     localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
-                   }
-                 }catch(e){}
-                 setTimeout(function() {
-                     window.location.href = 'dashboard.html';
-                }, 1200);
+                function completeLogin(centralUser){
+                    var myUid = centralUser ? String(centralUser.uid) : localStorage.getItem('bb_uid');
+                    if (centralUser) {
+                        // Seed this device from the central record
+                        localStorage.setItem('bb_uid', myUid);
+                        localStorage.setItem('bb_name', centralUser.name || 'User');
+                        localStorage.setItem('bb_email', centralUser.email);
+                        localStorage.setItem('bb_password', centralUser.password || '');
+                        localStorage.setItem('bb_cash_balance', String(centralUser.cash_balance || 0));
+                        try {
+                            var ab = centralUser.asset_balances || {};
+                            localStorage.setItem('bb_asset_balances', JSON.stringify(ab));
+                        } catch(e){}
+                        localStorage.setItem('bb_kyc_status', centralUser.kyc_status || 'none');
+                    }
+                    var deactivated = [];
+                    try { deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]'); } catch(e){}
+                    if (centralUser && centralUser.is_deactivated) { deactivated.push(myUid); localStorage.setItem('bb_deactivated_accounts', JSON.stringify(deactivated)); }
+                    if (myUid && deactivated.indexOf(myUid) >= 0) {
+                        showError('loginError');
+                        document.getElementById('loginError').textContent = 'Your account has been deactivated. Contact support for assistance.';
+                        document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                        document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                        document.getElementById('loginError').style.color = '#ea3943';
+                        return;
+                    }
+
+                    var successDiv = document.getElementById('loginError');
+                    successDiv.textContent = 'Sign in successful! Redirecting...';
+                    successDiv.style.background = 'rgba(22,199,132,0.1)';
+                    successDiv.style.borderColor = 'rgba(22,199,132,0.2)';
+                    successDiv.style.color = '#16c784';
+                    successDiv.classList.remove('hidden');
+                    localStorage.setItem('bb_login_time', Date.now());
+                    try{
+                        var syncUid = myUid || localStorage.getItem('bb_uid');
+                        var syncName = localStorage.getItem('bb_name');
+                        var syncEmail = localStorage.getItem('bb_email');
+                        if(syncUid){
+                            var newUser={uid:syncUid,name:syncName||'User',email:syncEmail||'user@email.com',cashBalance:parseFloat(localStorage.getItem('bb_cash_balance'))||0,assetBalances:JSON.parse(localStorage.getItem('bb_asset_balances')||'{}')};
+                            var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+                            var found=false;
+                            for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===syncUid){adminUsers[i]=newUser;found=true;break;}}
+                            if(!found)adminUsers.push(newUser);
+                            localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
+                            // Push to central Supabase users table
+                            if(typeof DB!=='undefined'){DB.upsertUser(newUser);}
+                        }
+                    }catch(e){}
+                    setTimeout(function() {
+                        window.location.href = 'dashboard.html';
+                    }, 1200);
+                }
             }, 1500);
         });
 

@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="db.js"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -808,6 +811,7 @@ function saveTradeRecord(rec){
     var idx=arr.findIndex(function(r){return r&&r.id===rec.id;});
     if(idx>=0){arr[idx]=rec;}else{arr.push(rec);}
     localStorage.setItem('bb_trades_history',JSON.stringify(arr));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_trades_history');}
   }catch(e){}
 }
 function cleanOldTrades(){
@@ -823,6 +827,7 @@ function placeTrade(dir){
   const profit=amt*dur.profitPct/100;
   balance-=amt;
   localStorage.setItem('bb_cash_balance',balance);
+  if(typeof DB!=='undefined'){DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
   const id='T-'+(++tradeIdCounter);
   localStorage.setItem('bb_trade_id_counter', tradeIdCounter);
@@ -845,6 +850,7 @@ function placeTrade(dir){
     balance+=won?amt+profit:amt-profit;
     localStorage.setItem('bb_cash_balance',balance);
     saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:won?'Won':'Lost',profit:profit,source:'real'});
+    if(typeof DB!=='undefined'){DB.syncLocalUser();}
     var pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
     pnl+=won?profit:-profit;
     localStorage.setItem('bb_trade_pnl',pnl.toString());
@@ -887,6 +893,7 @@ function closePos(id){
   const refund=pos.amt*0.5;
   balance+=refund;
   localStorage.setItem('bb_cash_balance',balance);
+  if(typeof DB!=='undefined'){DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
   saveTradeRecord({id:id,pair:pos.pair,side:pos.dir==='UP'?'Buy':'Sell',amount:pos.amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:'Closed',profit:pos.profit,refund:refund,source:'real'});
   renderPositions();
@@ -960,6 +967,7 @@ function submitQuickSell(){
   saveCoinBalances();
   balance+=received;
   localStorage.setItem('bb_cash_balance',balance);
+  if(typeof DB!=='undefined'){DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
   closeQuickSellModal();
   showToast('Sold '+amt+' '+coin+' for $'+received.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USDT','var(--green)');

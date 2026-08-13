@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="db.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -648,9 +651,11 @@ function adminLogin(){
   if(pw===getAdminPass()){
     localStorage.setItem(ADMIN_KEY,'1');
     showAdminPanel();
+    syncFromServer();
   }else if(currentUserHasAdminAccess()){
     localStorage.setItem(ADMIN_KEY,'1');
     showAdminPanel();
+    syncFromServer();
   }else{
     showToast('Invalid password','error');
   }
@@ -758,7 +763,7 @@ function getAllTickets(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveTickets(tickets){localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));}
+function saveTickets(tickets){localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));if(typeof DB!=='undefined')DB.pushCollection('bb_support_tickets');}
 function getAllDemoTrades(){
   try{
     var raw=localStorage.getItem('bb_demo_trades_hist');
@@ -870,6 +875,7 @@ function toggleProfitModule(uid){
   var current=localStorage.getItem(key)==='true';
   localStorage.setItem(key,(!current)?'true':'false');
   localStorage.removeItem('bb_profit_module');
+  if(typeof DB!=='undefined'){DB.updateUser(uid,{profit_module:!current});}
   refreshUsers();
 }
 function openUserEdit(uid){
@@ -893,6 +899,7 @@ function deactivateUser(uid){
   var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
   if(deactivated.indexOf(uid)<0)deactivated.push(uid);
   localStorage.setItem('bb_deactivated_accounts',JSON.stringify(deactivated));
+  if(typeof DB!=='undefined'){DB.updateUser(uid,{is_deactivated:true});}
   refreshUsers();
   showToast('User '+uid+' deactivated','error');
 }
@@ -901,6 +908,7 @@ function reactivateUser(uid){
   var idx=deactivated.indexOf(uid);
   if(idx>=0)deactivated.splice(idx,1);
   localStorage.setItem('bb_deactivated_accounts',JSON.stringify(deactivated));
+  if(typeof DB!=='undefined'){DB.updateUser(uid,{is_deactivated:false});}
   refreshUsers();
   showToast('User '+uid+' reactivated','success');
 }
@@ -939,6 +947,7 @@ function saveUserEdit(){
   if(adminAccessState&&idx<0){adminList.push(uid);}
   else if(!adminAccessState&&idx>=0){adminList.splice(idx,1);}
   localStorage.setItem('bb_admin_access_list',JSON.stringify(adminList));
+  if(typeof DB!=='undefined'){DB.updateUser(uid,{is_admin:adminAccessState});}
   // Update localStorage (single user)
   if(localStorage.getItem('bb_uid')===uid){
     localStorage.setItem('bb_name',name);
@@ -958,6 +967,7 @@ function saveUserEdit(){
       if(multi[i].uid===uid){multi[i].name=name;multi[i].email=email;multi[i].cashBalance=balance;break;}
     }
     localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+    if(typeof DB!=='undefined'){DB.pushUsers();}
   }catch(e){}
   closeUserEditModal();
   refreshUsers();
@@ -1243,7 +1253,7 @@ function getAllWithdrawals(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveWithdrawals(arr){localStorage.setItem('bb_withdrawal_requests',JSON.stringify(arr));}
+function saveWithdrawals(arr){localStorage.setItem('bb_withdrawal_requests',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_withdrawal_requests');}
 function refreshWithdrawals(){
   var requests=getAllWithdrawals();
   var body=document.getElementById('withdrawalsBody');
@@ -1306,6 +1316,8 @@ function approveWithdrawal(id){
           var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
           if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
           localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+          var reqUid=requests[i].userId;
+          if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{cash_balance:bal});}
         }else{
           var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
           if(ab[coin]){
@@ -1349,7 +1361,7 @@ function getAllLoans(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveLoans(arr){localStorage.setItem('bb_loans',JSON.stringify(arr));}
+function saveLoans(arr){localStorage.setItem('bb_loans',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_loans');}
 function getLoanDurationLabel(days){
   var labels={7:'7 Days',30:'30 Days',90:'90 Days',180:'6 Months',365:'1 Year'};
   return labels[days]||days+' Days';
@@ -1434,6 +1446,7 @@ function approveLoan(id){
             if(multi[j].uid===uid){multi[j].cashBalance=bal;break;}
           }
           localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+          if(typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:bal});}
         }
       }catch(e){}
       saveLoans(loans);
@@ -1481,7 +1494,7 @@ function getAllKYC(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveKYC(arr){localStorage.setItem('bb_kyc_submissions',JSON.stringify(arr));}
+function saveKYC(arr){localStorage.setItem('bb_kyc_submissions',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_kyc_submissions');}
 function refreshKYC(){
   var subs=getAllKYC();
   var body=document.getElementById('kycBody');
@@ -1536,6 +1549,7 @@ function approveKYC(id){
       subs[i].resolvedAt=Date.now();
       // Update user's KYC status in their localStorage
       try{localStorage.setItem('bb_kyc_status','approved');}catch(e){}
+      if(typeof DB!=='undefined'&&subs[i].userId){DB.updateUser(subs[i].userId,{kyc_status:'approved'});}
       saveKYC(subs);
       refreshKYC();
       showToast('KYC approved','success');
@@ -1551,6 +1565,7 @@ function rejectKYC(id){
       subs[i].status='rejected';
       subs[i].resolvedAt=Date.now();
       try{localStorage.setItem('bb_kyc_status','rejected');}catch(e){}
+      if(typeof DB!=='undefined'&&subs[i].userId){DB.updateUser(subs[i].userId,{kyc_status:'rejected'});}
       saveKYC(subs);
       refreshKYC();
       showToast('KYC rejected','success');
@@ -1677,6 +1692,7 @@ function adjustBalance(){
       if(multi[i].uid===uid){multi[i].cashBalance=newBal;break;}
     }
     localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+    if(typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:newBal});}
   }catch(e){}
   // Log history
   try{
@@ -1684,6 +1700,7 @@ function adjustBalance(){
     hist.unshift({uid:uid,newBalance:newBal,reason:reason||'Manual adjustment',time:Date.now()});
     if(hist.length>50)hist=hist.slice(0,50);
     localStorage.setItem('bb_balance_history',JSON.stringify(hist));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_balance_history');}
   }catch(e){}
   document.getElementById('balNew').value='';
   document.getElementById('balReason').value='';
@@ -1726,7 +1743,7 @@ function getDepositAddresses(){
     return JSON.parse(raw);
   }catch(e){return JSON.parse(JSON.stringify(DEPOSIT_DEFAULTS));}
 }
-function saveDepositAddresses(obj){localStorage.setItem('bb_deposit_addresses',JSON.stringify(obj));}
+function saveDepositAddresses(obj){localStorage.setItem('bb_deposit_addresses',JSON.stringify(obj));if(typeof DB!=='undefined')DB.pushCollection('bb_deposit_addresses');}
 function loadDepositAddress(){
   var coin=document.getElementById('depCoinSelect').value;
   var addrs=getDepositAddresses();
@@ -1819,7 +1836,7 @@ function getAllDepositRequests(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveDepositRequests(arr){localStorage.setItem('bb_deposit_requests',JSON.stringify(arr));}
+function saveDepositRequests(arr){localStorage.setItem('bb_deposit_requests',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_deposit_requests');}
 function refreshDepositRequests(){
   var requests=getAllDepositRequests();
   var body=document.getElementById('depRequestsBody');
@@ -1883,6 +1900,8 @@ function approveDeposit(id){
         if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
         else{ab.USDT={balance:bal,qty:bal};}
         localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+        var reqUid=requests[i].userId;
+        if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{cash_balance:bal});}
       }catch(e){}
       saveDepositRequests(requests);
       refreshDepositRequests();
@@ -2010,7 +2029,7 @@ var currentEarnFilter='all';
 function getEarnPositions(){
   try{return JSON.parse(localStorage.getItem('bb_earn_positions'))||[];}catch(e){return[];}
 }
-function saveEarnPositions(arr){localStorage.setItem('bb_earn_positions',JSON.stringify(arr));}
+function saveEarnPositions(arr){localStorage.setItem('bb_earn_positions',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_earn_positions');}
 function filterEarn(f){
   currentEarnFilter=f;
   document.querySelectorAll('#tab-earn .filter-row .btn-sm').forEach(function(el){el.className='btn-sm';});
@@ -2099,8 +2118,29 @@ function showToast(msg,type){
 }
 
 // ===== INIT =====
+function syncFromServer(cb){
+  if(typeof DB==='undefined'||!DB.ready){ if(cb)cb(); return; }
+  DB.pullAll().then(function(){
+    // refresh all tabs after central data is merged into localStorage
+    refreshAll();
+    var active=document.querySelector('.nav-item.active');
+    var tab=active?active.getAttribute('data-tab'):'dashboard';
+    if(tab==='users')refreshUsers();
+    if(tab==='support')refreshTickets();
+    if(tab==='trades')refreshTrades();
+    if(tab==='withdrawals')refreshWithdrawals();
+    if(tab==='loans')refreshLoans();
+    if(tab==='kyc')refreshKYC();
+    if(tab==='balances')refreshBalances();
+    if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
+    if(tab==='analytics')refreshAnalytics();
+    if(tab==='earn')refreshEarn();
+    if(cb)cb();
+  });
+}
 if(isLoggedIn()){
   showAdminPanel();
+  syncFromServer();
 }else{
   lucide.createIcons();
   if(currentUserHasAdminAccess()){

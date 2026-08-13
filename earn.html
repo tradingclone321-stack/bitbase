@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="db.js"></script>
 </head>
 <body class="page-body">
 <script>
@@ -351,7 +354,7 @@ document.addEventListener('keydown',function(e){ if(e.key==='Escape') document.q
 
 // ===== POSITIONS STORAGE =====
 function getPositions(){ try{ return JSON.parse(localStorage.getItem('bb_earn_positions'))||[]; }catch(e){return [];} }
-function savePositions(arr){ localStorage.setItem('bb_earn_positions',JSON.stringify(arr)); }
+function savePositions(arr){ localStorage.setItem('bb_earn_positions',JSON.stringify(arr)); if(typeof DB!=='undefined')DB.pushCollection('bb_earn_positions'); }
 
 function isCrypto(coin){ return coin==='BTC'||coin==='ETH'||coin==='SOL'||coin==='BNB'||coin==='DAI'; }
 
@@ -458,6 +461,7 @@ function deductBalance(coin,amount){
     if(data[coin]){data[coin].balance=Math.max(0,data[coin].balance-amount);data[coin].qty=Math.max(0,data[coin].qty-amount);}
   }
   localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+  if(typeof DB!=='undefined')DB.syncLocalUser();
 }
 function returnBalance(coin,amount){
   var data={};
@@ -473,6 +477,7 @@ function returnBalance(coin,amount){
     else{data[coin]={balance:amount,qty:amount};}
   }
   localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+  if(typeof DB!=='undefined')DB.syncLocalUser();
 }
 // ===== FLEXIBLE SAVINGS =====
 var FLEX_RATES={USDT:{apy:3.50,min:10},USDC:{apy:3.20,min:10},BTC:{apy:1.50,min:0.001},ETH:{apy:2.00,min:0.01},SOL:{apy:2.80,min:0.1}};

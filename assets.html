@@ -8,6 +8,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="db.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -659,6 +662,7 @@ function saveCoinBalances(){
   var data={};
   for(var k in COINS){data[k]={balance:COINS[k].balance,qty:COINS[k].qty};}
   localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+  if(typeof DB!=='undefined'){DB.syncLocalUser();}
 }
 function loadCoinBalances(){
   try{
@@ -917,6 +921,7 @@ function submitDepositRequest(){
       status:'pending',createdAt:Date.now(),resolvedAt:0
     });
     localStorage.setItem('bb_deposit_requests',JSON.stringify(requests));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_deposit_requests');}
     document.getElementById('depositAmount').value='';
     removeDepositProof();
     closeModal('depositModal');
@@ -973,6 +978,7 @@ function submitWithdraw() {
       status:'pending',createdAt:Date.now(),resolvedAt:0
     });
     localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_withdrawal_requests');}
     document.getElementById('withdrawAddress').value = '';
     document.getElementById('withdrawAmount').value = '';
     updateWithdrawInfo();
@@ -1183,6 +1189,7 @@ function submitLoan(){
       time:Date.now()
     });
     localStorage.setItem('bb_loans',JSON.stringify(loans));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
     btn.disabled=false;spinner.style.display='none';
     document.getElementById('loanBorrowAmt').value='';
     document.getElementById('loanInterestSection').style.display='none';
@@ -1470,6 +1477,7 @@ function sendSupportMsg(){
     });
   }
   localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
+  if(typeof DB!=='undefined'){DB.pushCollection('bb_support_tickets');}
 }
 </script>
 <div class="mobile-bottom-bar">

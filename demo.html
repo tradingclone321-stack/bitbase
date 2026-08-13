@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="db.js"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -423,7 +426,7 @@ function loadDemoPositions(){try{return JSON.parse(localStorage.getItem(DEMO_KEY
 function saveDemoPositions(p){localStorage.setItem(DEMO_KEY+'_pos',JSON.stringify(p));}
 function loadDemoHistory(){try{return JSON.parse(localStorage.getItem(DEMO_KEY+'_hist'))||[];}catch(e){return [];}
 }
-function saveDemoHistory(h){localStorage.setItem(DEMO_KEY+'_hist',JSON.stringify(h));}
+function saveDemoHistory(h){localStorage.setItem(DEMO_KEY+'_hist',JSON.stringify(h));if(typeof DB!=='undefined')DB.pushCollection('bb_demo_trades_hist');}
 
 // ===== DATA =====
 const PAIRS = [
@@ -772,6 +775,7 @@ function placeTrade(dir){
   var sharedTrades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
   sharedTrades.unshift({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'demo'});
   localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades));
+  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
   renderPositions();
   showTradePanel(pos);
   showToast(`${dir} trade placed: ${fmtD(amt)} on ${currentPair.sym}`,'var(--green)');
@@ -795,6 +799,7 @@ function placeTrade(dir){
     var shIdx=sharedTrades2.findIndex(function(r){return r.id===id;});
     if(shIdx>=0){sharedTrades2[shIdx].status=pos.status;sharedTrades2[shIdx].exitPrice=pos.exitPrice;}
     localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades2));
+    if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
     renderPositions();
     showTradeResult(pos);
     showToast(won?`Trade ${id} won! +${fmtD(profit)}`:`Trade ${id} lost. -${fmtD(profit)}`,won?'var(--green)':'var(--red)');
@@ -839,6 +844,7 @@ function closePos(id){
   var shIdx3=sharedTrades3.findIndex(function(r){return r.id===id;});
   if(shIdx3>=0){sharedTrades3[shIdx3].status='Closed';sharedTrades3[shIdx3].exitPrice=pos.exitPrice;}
   localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades3));
+  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
   try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
   renderPositions();
   if(activeTradePanel&&activeTradePanel.id===id)removeTradePanel();
@@ -866,7 +872,8 @@ setInterval(()=>{
       var sharedTrades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
       var shIdx=sharedTrades.findIndex(function(r){return r.id===p.id;});
       if(shIdx>=0){sharedTrades[shIdx].status=p.status;sharedTrades[shIdx].exitPrice=p.exitPrice;}
-      localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades));
+  localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades));
+  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
       try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
       if(activeTradePanel&&activeTradePanel.id===p.id){
         showTradeResult(p);

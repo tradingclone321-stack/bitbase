@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="db.js"></script>
   <style>
     .toggle-switch{width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,0.1);position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;}
     .toggle-switch.on{background:var(--accent-green);}
@@ -701,6 +704,7 @@ function kycNextStep() {
     });
     localStorage.setItem('bb_kyc_submissions',JSON.stringify(submissions));
     localStorage.setItem('bb_kyc_status','pending');
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_kyc_submissions');if(typeof DB.updateUser==='function'&&uid){DB.updateUser(uid,{kyc_status:'pending'});}}
     // Update verification status on the page
     document.getElementById('kycIcon').style.background = 'rgba(247,147,26,0.1)';
     document.getElementById('kycIcon').innerHTML = '<i data-lucide="clock" style="width:18px;height:18px;color:var(--accent-orange);"></i>';
@@ -851,6 +855,7 @@ function saveProfile() {
        }
      }
      localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
+     if(typeof DB!=='undefined'){DB.upsertUser({uid:uid,name:nameVal||oldName,email:emailVal||oldEmail,cashBalance:parseFloat(localStorage.getItem('bb_cash_balance'))||0,assetBalances:JSON.parse(localStorage.getItem('bb_asset_balances')||'{}')});}
    }catch(e){}
    showToast('Profile changes saved successfully!', 'var(--accent-green)');
 }
