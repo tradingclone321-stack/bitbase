@@ -837,7 +837,8 @@ function refreshUsers(){
   var html='';
   for(var i=0;i<users.length;i++){
     var u=users[i];
-    var pmOn=localStorage.getItem('bb_profit_module_'+u.uid)==='true';
+    var pmMap={};try{pmMap=JSON.parse(localStorage.getItem('bb_profit_modules')||'{}');}catch(e){}
+    var pmOn=(u.uid in pmMap)?!!pmMap[u.uid]:(localStorage.getItem('bb_profit_module_'+u.uid)==='true');
     var isDeactivated=deactivated.indexOf(u.uid)>=0;
     var totalAssets=parseFloat(u.cashBalance)||0;
     if(u.assetBalances){
@@ -873,9 +874,19 @@ function getCoinPrice(sym){
 function toggleProfitModule(uid){
   var key='bb_profit_module_'+uid;
   var current=localStorage.getItem(key)==='true';
-  localStorage.setItem(key,(!current)?'true':'false');
+  var next=!current;
+  localStorage.setItem(key,next?'true':'false');
   localStorage.removeItem('bb_profit_module');
-  if(typeof DB!=='undefined'){DB.updateUser(uid,{profit_module:!current});}
+  // Record in the shared profit-modules map (synced to all devices)
+  try{
+    var map=JSON.parse(localStorage.getItem('bb_profit_modules')||'{}');
+    map[uid]=next;
+    localStorage.setItem('bb_profit_modules',JSON.stringify(map));
+  }catch(e){}
+  if(typeof DB!=='undefined'){
+    DB.updateUser(uid,{profit_module:next});
+    DB.pushCollection('bb_profit_modules');
+  }
   refreshUsers();
 }
 function openUserEdit(uid){

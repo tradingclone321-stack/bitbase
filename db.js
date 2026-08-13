@@ -182,7 +182,13 @@ DB.pullLocalUser = function () {
         if (r.is_admin && aIdx < 0) { aList.push(String(uid)); localStorage.setItem('bb_admin_access_list', JSON.stringify(aList)); changed = true; }
         else if (!r.is_admin && aIdx >= 0) { aList.splice(aIdx, 1); localStorage.setItem('bb_admin_access_list', JSON.stringify(aList)); changed = true; }
       }
-      if (r.profit_module != null) localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
+      if (r.profit_module != null) {
+        // Prefer the shared profit-modules map (fresh 5s sync); only fall
+        // back to the users-table column when no map entry exists yet.
+        var hasMap = false;
+        try { var pmMap = JSON.parse(localStorage.getItem('bb_profit_modules') || '{}'); hasMap = Object.prototype.hasOwnProperty.call(pmMap, String(uid)); } catch (e) {}
+        if (!hasMap) localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
+      }
       return changed;
     }
     return false;
@@ -192,16 +198,48 @@ DB.pullLocalUser = function () {
 // Keep the current device's user row in sync from Supabase.
 // Polls pullLocalUser every intervalMs; reloads the page when the
 // server row differs from localStorage (admin adjustments, approvals).
+// Also starts a faster 5s poll for the shared profit-module flags so
+// admin toggles apply without waiting for the page reload.
 DB.startLocalPolling = function (intervalMs) {
-  if (DB._localPollTimer) return;
   intervalMs = intervalMs || 10000;
-  var poll = function () {
-    DB.pullLocalUser().then(function (changed) {
-      if (changed && window.location && window.location.reload) window.location.reload();
-    });
-  };
-  poll();
-  DB._localPollTimer = setInterval(poll, intervalMs);
+  if (!DB._localPollTimer) {
+    var poll = function () {
+      DB.pullLocalUser().then(function (changed) {
+        if (changed && window.location && window.location.reload) window.location.reload();
+        DB.pullProfitModules();
+      }, function () {
+        DB.pullProfitModules();
+      });
+    };
+    poll();
+    DB._localPollTimer = setInterval(poll, intervalMs);
+  }
+  if (!DB._profitPollTimer) {
+    DB.pullProfitModules();
+    DB._profitPollTimer = setInterval(DB.pullProfitModules, 5000);
+  }
+};
+
+// Shared profit-module flags (uid -> bool). Stored in app_collections so
+// admin toggles reach every device without depending on the users table.
+DB.applyProfitModules = function (map) {
+  try {
+    if (!map || typeof map !== 'object') return;
+    for (var uid in map) {
+      if (Object.prototype.hasOwnProperty.call(map, uid)) {
+        localStorage.setItem('bb_profit_module_' + uid, map[uid] ? 'true' : 'false');
+      }
+    }
+  } catch (e) {}
+};
+DB.pullProfitModules = function () {
+  if (!DB.ready) return Promise.resolve();
+  return DB.client.from('app_collections').select('payload').eq('key', 'bb_profit_modules').single().then(function (res) {
+    if (res && res.data && res.data.payload) {
+      localStorage.setItem('bb_profit_modules', JSON.stringify(res.data.payload));
+      DB.applyProfitModules(res.data.payload);
+    }
+  }, function () { return null; });
 };
 
 // Try logging in against the central users table (used when the
@@ -225,7 +263,8 @@ DB.COLLECTIONS = [
   'bb_loans',
   'bb_kyc_submissions',
   'bb_earn_positions',
-  'bb_balance_history'
+  'bb_balance_history',
+  'bb_profit_modules'
 ];
 
 // Merge two ticket arrays by id, unioning messages (deduped) and
