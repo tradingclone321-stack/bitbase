@@ -559,6 +559,11 @@ renderHoldings();
 renderStats('1M');
   renderChart('1M');
   renderRecentActivity();
+
+// ===== SERVER BALANCE SYNC =====
+if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  DB.startLocalPolling(10000);
+}
 </script>
 <div class="mobile-bottom-bar">
   <a href="dashboard.html" class="active"><i data-lucide="layout-dashboard"></i>Home</a>

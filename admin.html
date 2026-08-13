@@ -1304,34 +1304,52 @@ function approveWithdrawal(id){
       if(requests[i].status!=='pending'){showToast('Request already processed','error');return;}
       requests[i].status='approved';
       requests[i].resolvedAt=Date.now();
-      // Deduct from user balance
+      // Deduct from the TARGET user's balance
       var coin=requests[i].coin;
       var totalDeduct=requests[i].amount+requests[i].fee;
+      var reqUid=requests[i].userId;
       try{
         if(coin==='USDT'){
-          var bal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
-          bal-=totalDeduct;
+          var bal=getUserCashInList(reqUid)-totalDeduct;
           if(bal<0)bal=0;
-          localStorage.setItem('bb_cash_balance',bal);
-          var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-          if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-          localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-          var reqUid=requests[i].userId;
-          if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{cash_balance:bal});}
-        }else{
-          var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-          if(ab[coin]){
-            ab[coin].balance=(ab[coin].balance||0)-totalDeduct;
-            ab[coin].qty=(ab[coin].qty||0)-totalDeduct;
-            if(ab[coin].balance<0)ab[coin].balance=0;
-            if(ab[coin].qty<0)ab[coin].qty=0;
+          setUserCashInList(reqUid,bal);
+          if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
+            localStorage.setItem('bb_cash_balance',bal);
+            var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
+            if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
+            localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
           }
-          localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+        }else{
+          // Deduct from the target user's coin asset balances
+          var tab={};
+          try{
+            var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+            for(var m=0;m<multi.length;m++){
+              if(String(multi[m].uid)===String(reqUid)){tab=multi[m].assetBalances||{};break;}
+            }
+          }catch(e){}
+          if(tab[coin]){
+            tab[coin].balance=(tab[coin].balance||0)-totalDeduct;
+            tab[coin].qty=(tab[coin].qty||0)-totalDeduct;
+            if(tab[coin].balance<0)tab[coin].balance=0;
+            if(tab[coin].qty<0)tab[coin].qty=0;
+          }
+          try{
+            var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+            for(var m=0;m<multi.length;m++){
+              if(String(multi[m].uid)===String(reqUid)){multi[m].assetBalances=tab;break;}
+            }
+            localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+          }catch(e){}
+          if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{asset_balances:tab});}
+          if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
+            localStorage.setItem('bb_asset_balances',JSON.stringify(tab));
+          }
         }
       }catch(e){}
       saveWithdrawals(requests);
       refreshWithdrawals();
-      showToast('Withdrawal approved & balance deducted','success');
+      showToast('Withdrawal approved & user balance deducted','success');
       break;
     }
   }
@@ -1429,24 +1447,17 @@ function approveLoan(id){
       if(loans[i].status!=='pending'){showToast('Loan already processed','error');return;}
       loans[i].status='active';
       loans[i].approvedAt=Date.now();
-      // Credit USDT to user
+      // Credit USDT to the TARGET user
+      var uid=loans[i].userId;
       try{
-        var bal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
-        bal+=loans[i].borrowAmt;
-        localStorage.setItem('bb_cash_balance',bal);
-        var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-        if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-        else{ab.USDT={qty:bal,balance:bal};}
-        localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-        // Update admin_users
-        var uid=loans[i].userId;
-        if(uid){
-          var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-          for(var j=0;j<multi.length;j++){
-            if(multi[j].uid===uid){multi[j].cashBalance=bal;break;}
-          }
-          localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-          if(typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:bal});}
+        var bal=getUserCashInList(uid)+loans[i].borrowAmt;
+        setUserCashInList(uid,bal);
+        if(uid&&localStorage.getItem('bb_uid')===uid){
+          localStorage.setItem('bb_cash_balance',bal);
+          var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
+          if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
+          else{ab.USDT={qty:bal,balance:bal};}
+          localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
         }
       }catch(e){}
       saveLoans(loans);
@@ -1881,6 +1892,29 @@ function filterDepRequests(f){
   else if(f==='rejected'){document.getElementById('depReqRejected').style.background='rgba(239,68,68,0.25)';document.getElementById('depReqRejected').style.color='#ef4444';}
   refreshDepositRequests();
 }
+function getUserCashInList(uid){
+  try{
+    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+    for(var j=0;j<multi.length;j++){
+      if(String(multi[j].uid)===String(uid)){return parseFloat(multi[j].cashBalance)||0;}
+    }
+  }catch(e){}
+  return 0;
+}
+function setUserCashInList(uid,newBal,userName,userEmail){
+  var found=false;
+  try{
+    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+    for(var j=0;j<multi.length;j++){
+      if(String(multi[j].uid)===String(uid)){multi[j].cashBalance=newBal;found=true;break;}
+    }
+    if(!found){
+      multi.push({uid:uid,name:userName||'User',email:userEmail||'',cashBalance:newBal,assetBalances:{USDT:{balance:newBal,qty:newBal}}});
+    }
+    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+  }catch(e){}
+  if(uid&&typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:newBal});}
+}
 function approveDeposit(id){
   var requests=getAllDepositRequests();
   for(var i=0;i<requests.length;i++){
@@ -1888,24 +1922,26 @@ function approveDeposit(id){
       if(requests[i].status!=='pending'){showToast('Already processed','error');return;}
       requests[i].status='approved';
       requests[i].resolvedAt=Date.now();
-      // Credit user balance — convert to USDT equivalent
+      // Credit the TARGET user's balance — convert to USDT equivalent
       var coin=requests[i].coin;
       var amount=requests[i].amount;
+      var reqUid=requests[i].userId;
       try{
         var usdtAmount=coin==='USDT'?amount:(amount*(getCoinPrice(coin)||0));
-        var bal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
-        bal+=usdtAmount;
-        localStorage.setItem('bb_cash_balance',bal);
-        var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-        if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-        else{ab.USDT={balance:bal,qty:bal};}
-        localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-        var reqUid=requests[i].userId;
-        if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{cash_balance:bal});}
+        var bal=getUserCashInList(reqUid)+usdtAmount;
+        setUserCashInList(reqUid,bal,requests[i].userName,requests[i].userEmail);
+        // If the target is the admin's own device account, mirror locally
+        if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
+          localStorage.setItem('bb_cash_balance',bal);
+          var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
+          if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
+          else{ab.USDT={balance:bal,qty:bal};}
+          localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+        }
       }catch(e){}
       saveDepositRequests(requests);
       refreshDepositRequests();
-      showToast('Deposit approved & USDT balance credited','success');
+      showToast('Deposit approved & credited to user','success');
       break;
     }
   }
@@ -2154,9 +2190,11 @@ window.addEventListener('storage',function(e){
   }
 });
 setInterval(function(){
+  if(document.hidden) return;
   var tab=document.querySelector('.nav-item.active');
   if(tab&&tab.getAttribute('data-tab')==='trades')refreshTrades();
-},3000);
+  syncFromServer();
+},10000);
 
 function refreshAll(){
   refreshDashboard();

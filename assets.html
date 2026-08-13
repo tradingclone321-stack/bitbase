@@ -1479,6 +1479,11 @@ function sendSupportMsg(){
   localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
   if(typeof DB!=='undefined'){DB.pushCollection('bb_support_tickets');}
 }
+
+// ===== SERVER BALANCE SYNC =====
+if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  DB.startLocalPolling(10000);
+}
 </script>
 <div class="mobile-bottom-bar">
   <a href="dashboard.html"><i data-lucide="layout-dashboard"></i>Home</a>

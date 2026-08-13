@@ -154,6 +154,50 @@ DB.updateUser = function (uid, patch) {
   return DB.client.from('users').update(patch).eq('uid', Number(uid)).then(DB._ok, DB._ok);
 };
 
+// Pull the current device's own user row from Supabase into localStorage.
+// Returns true if anything changed (callers may reload/re-render).
+DB.pullLocalUser = function () {
+  if (!DB.ready) return Promise.resolve(false);
+  var uid = localStorage.getItem('bb_uid');
+  if (!uid) return Promise.resolve(false);
+  return DB.client.from('users').select('*').eq('uid', Number(uid)).limit(1).single().then(function (res) {
+    if (res && res.data) {
+      var r = res.data;
+      var changed = false;
+      var oldCash = localStorage.getItem('bb_cash_balance');
+      localStorage.setItem('bb_cash_balance', String(r.cash_balance != null ? r.cash_balance : 0));
+      if (oldCash !== localStorage.getItem('bb_cash_balance')) changed = true;
+      try {
+        var oldAb = localStorage.getItem('bb_asset_balances');
+        localStorage.setItem('bb_asset_balances', JSON.stringify(r.asset_balances || {}));
+        if (oldAb !== localStorage.getItem('bb_asset_balances')) changed = true;
+      } catch (e) {}
+      if (r.name && r.name !== localStorage.getItem('bb_name')) { localStorage.setItem('bb_name', r.name); changed = true; }
+      if (r.email && r.email !== localStorage.getItem('bb_email')) { localStorage.setItem('bb_email', r.email); changed = true; }
+      if (r.password) localStorage.setItem('bb_password', r.password);
+      if (r.kyc_status && r.kyc_status !== localStorage.getItem('bb_kyc_status')) { localStorage.setItem('bb_kyc_status', r.kyc_status); changed = true; }
+      if (r.profit_module != null) localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
+      return changed;
+    }
+    return false;
+  }, function (e) { console.warn('[DB] pullLocalUser failed', e); return false; });
+};
+
+// Keep the current device's user row in sync from Supabase.
+// Polls pullLocalUser every intervalMs; reloads the page when the
+// server row differs from localStorage (admin adjustments, approvals).
+DB.startLocalPolling = function (intervalMs) {
+  if (DB._localPollTimer) return;
+  intervalMs = intervalMs || 10000;
+  var poll = function () {
+    DB.pullLocalUser().then(function (changed) {
+      if (changed && window.location && window.location.reload) window.location.reload();
+    });
+  };
+  poll();
+  DB._localPollTimer = setInterval(poll, intervalMs);
+};
+
 // Try logging in against the central users table (used when the
 // device has no localStorage for this email yet).
 DB.loginUser = function (email, pass) {

@@ -996,6 +996,11 @@ requestAnimationFrame(()=>{
   updateSummary();
   lucide.createIcons();
 });
+
+// ===== SERVER BALANCE SYNC =====
+if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  DB.startLocalPolling(10000);
+}
 </script>
 <style>
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.3);}}
