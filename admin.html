@@ -2280,13 +2280,29 @@ function completeAiQuantsOrder(realIdx){
   var o=orders[realIdx];
   if(!o||o.status!=='active')return;
   if(!confirm('Complete '+getPlanName(o.plan)+' of $'+o.amount.toFixed(2)+' for '+(o.userName||o.uid)+'?'))return;
+  var uid=o.uid;
+  var fullProfit=o.amount*o.rate/100*o.days;
+  var settled=o.earned||0;
+  var remainingProfit=Math.max(0,fullProfit-settled);
+  var credit=o.amount+remainingProfit;
+  try{
+    var bal=getUserCashInList(uid)+credit;
+    setUserCashInList(uid,bal,o.userName,o.userEmail);
+    if(uid&&localStorage.getItem('bb_uid')===uid){
+      localStorage.setItem('bb_cash_balance',bal);
+      var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
+      if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
+      else{ab.USDT={balance:bal,qty:bal};}
+      localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+    }
+  }catch(e){}
   o.status='completed';
   o.completedAt=Date.now();
-  o.earned=(o.earned||0)+(o.amount*o.rate/100*o.days);
+  o.earned=fullProfit;
   orders[realIdx]=o;
   saveAiQuants(orders);
   refreshAiQuants();
-  showToast('Plan completed & settled','success');
+  showToast('Plan completed & $'+credit.toFixed(2)+' credited to user','success');
 }
 function deleteAiQuantsOrder(realIdx){
   var orders=getAiQuants();
