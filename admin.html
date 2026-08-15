@@ -166,6 +166,9 @@
     <div class="nav-item" data-tab="earn" onclick="switchTab('earn')">
       <i data-lucide="badge-percent"></i><span>Earn</span>
     </div>
+    <div class="nav-item" data-tab="aiquants" onclick="switchTab('aiquants')">
+      <i data-lucide="cpu"></i><span>AI Quants</span>
+    </div>
     <div class="nav-item" data-tab="withdrawals" onclick="switchTab('withdrawals')">
       <i data-lucide="arrow-up-right"></i><span>Withdrawals</span>
     </div>
@@ -592,6 +595,29 @@
       </div>
     </div>
 
+    <div id="tab-aiquants" class="tab-content" style="display:none;">
+      <div class="admin-header">
+        <h1>AI Quant Plans</h1>
+        <div class="filter-row" style="display:flex;gap:8px;">
+          <button class="btn-sm btn-primary" onclick="filterAiQuants('all')" id="aqAll">All</button>
+          <button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="filterAiQuants('active')" id="aqActive">Active</button>
+          <button class="btn-sm" style="background:rgba(247,147,26,0.12);color:#f7931a;" onclick="filterAiQuants('completed')" id="aqCompleted">Completed</button>
+        </div>
+      </div>
+      <div class="admin-stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-value" id="aqTotalInvested">$0</div><div class="stat-label">Total Invested</div></div>
+        <div class="stat-card"><div class="stat-value" id="aqTotalSettled">$0</div><div class="stat-label">Profit Settled</div></div>
+        <div class="stat-card"><div class="stat-value" id="aqActiveCount">0</div><div class="stat-label">Active Plans</div></div>
+        <div class="stat-card"><div class="stat-value" id="aqCompletedCount">0</div><div class="stat-label">Completed Plans</div></div>
+      </div>
+      <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr>            <th>Plan</th><th>User</th><th>Invested</th><th>Daily Rate</th><th>Profit Settled</th><th>Term</th><th>Started</th><th>Ends</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="aqBody"><tr><td colspan="10" class="empty-state">No AI quant plans</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -712,6 +738,7 @@ function switchTab(tab){
   if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
   if(tab==='analytics')refreshAnalytics();
   if(tab==='earn')refreshEarn();
+  if(tab==='aiquants')refreshAiQuants();
 }
 
 // ===== DATA HELPERS =====
@@ -2178,6 +2205,106 @@ function deleteEarnPosition(idx){
   showToast('Position deleted','success');
 }
 
+// ===== AI QUANTS =====
+var currentAiQuantsFilter='all';
+function getAiQuants(){
+  try{return JSON.parse(localStorage.getItem('bb_ai_quants'))||[];}catch(e){return[];}
+}
+function saveAiQuants(arr){localStorage.setItem('bb_ai_quants',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_ai_quants');}
+function filterAiQuants(f){
+  currentAiQuantsFilter=f;
+  document.querySelectorAll('#tab-aiquants .filter-row .btn-sm').forEach(function(el){el.className='btn-sm';});
+  var btn=document.getElementById('aq'+f.charAt(0).toUpperCase()+f.slice(1));
+  if(btn)btn.className='btn-sm btn-primary';
+  refreshAiQuants();
+}
+function getPlanName(key){
+  var names={demo:'AI Quant Demo',trial:'AI Quant Trial',standard:'AI Quant Standard',professional:'AI Quant Professional',premium:'AI Quant Premium'};
+  return names[key]||key;
+}
+function refreshAiQuants(){
+  var orders=getAiQuants();
+  var filtered=orders;
+  if(currentAiQuantsFilter!=='all')filtered=orders.filter(function(o){return o.status===currentAiQuantsFilter;});
+  filtered=filtered.slice().sort(function(a,b){return (b.started||0)-(a.started||0);});
+
+  var totalInvested=0,totalSettled=0,activeCount=0,completedCount=0;
+  for(var i=0;i<orders.length;i++){
+    var o=orders[i];
+    if(o.status==='active'){totalInvested+=o.amount||0;activeCount++;}
+    else{completedCount++;}
+    totalSettled+=o.earned||0;
+  }
+  document.getElementById('aqTotalInvested').textContent='$'+totalInvested.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('aqTotalSettled').textContent='$'+totalSettled.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('aqActiveCount').textContent=activeCount;
+  document.getElementById('aqCompletedCount').textContent=completedCount;
+
+  var body=document.getElementById('aqBody');
+  if(filtered.length===0){body.innerHTML='<tr><td colspan="10" class="empty-state">No AI quant plans</td></tr>';return;}
+  var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+  var userMap={};
+  for(var u=0;u<adminUsers.length;u++)userMap[adminUsers[u].uid]=adminUsers[u].name||'User';
+  var now=Date.now();
+  var DAY_MS=24*60*60*1000;
+  var html='';
+  for(var i=0;i<filtered.length;i++){
+    var o=filtered[i];
+    var isActive=o.status==='active';
+    var statusHtml=isActive?'<span class="badge-yellow">Active</span>':'<span class="badge-green">Completed</span>';
+    var endDate=o.started+o.days*DAY_MS;
+    var elapsed=now-o.started;
+    var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
+    var progressHtml=isActive?'<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-top:6px;"><div style="height:100%;width:'+progress.toFixed(1)+'%;background:linear-gradient(90deg,#f7931a,#fdb022);"></div></div>':'';
+    html+='<tr>'+
+      '<td style="color:#4169E1;font-weight:600;">'+getPlanName(o.plan)+'</td>'+
+      '<td style="font-size:12px;">'+ (o.userName||userMap[o.uid]||'User') + '<br><span style="color:rgba(255,255,255,0.4);">'+(o.uid||'')+'</span></td>'+
+      '<td style="font-family:monospace;">$'+Number(o.amount||0).toFixed(2)+'</td>'+
+      '<td style="font-family:monospace;color:#16c784;">'+o.rate+'%</td>'+
+      '<td style="font-family:monospace;color:#16c784;">+$'+(o.earned||0).toFixed(2)+'</td>'+
+      '<td style="font-size:12px;">'+o.days+'d</td>'+
+      '<td style="font-size:12px;">'+new Date(o.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</td>'+
+      '<td style="font-size:12px;">'+new Date(endDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+progressHtml+'</td>'+
+      '<td>'+statusHtml+'</td>'+
+      '<td style="white-space:nowrap;">'+
+        (isActive?'<button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;margin-right:4px;" onclick="completeAiQuantsOrder('+i+')">Complete</button>':'')+
+        '<button class="btn-sm btn-danger" onclick="deleteAiQuantsOrder('+i+')">Delete</button>'+
+      '</td>'+
+    '</tr>';
+  }
+  body.innerHTML=html;
+}
+function completeAiQuantsOrder(idx){
+  var orders=getAiQuants();
+  var allFiltered=orders;
+  if(currentAiQuantsFilter!=='all')allFiltered=orders.filter(function(o){return o.status===currentAiQuantsFilter;});
+  var o=allFiltered[idx];
+  if(!o||o.status!=='active')return;
+  if(!confirm('Complete '+getPlanName(o.plan)+' of $'+o.amount.toFixed(2)+' for '+(o.userName||o.uid)+'?'))return;
+  var realIdx=orders.indexOf(o);
+  if(realIdx<0)return;
+  var now=Date.now();
+  o.status='completed';
+  o.completedAt=now;
+  o.earned=(o.earned||0)+(o.amount*o.rate/100*o.days);
+  orders[realIdx]=o;
+  saveAiQuants(orders);
+  refreshAiQuants();
+  showToast('Plan completed & settled','success');
+}
+function deleteAiQuantsOrder(idx){
+  var orders=getAiQuants();
+  var allFiltered=orders;
+  if(currentAiQuantsFilter!=='all')allFiltered=orders.filter(function(o){return o.status===currentAiQuantsFilter;});
+  var o=allFiltered[idx];
+  if(!o)return;
+  if(!confirm('Delete this AI quant plan for '+(o.userName||o.uid)+'?'))return;
+  var realIdx=orders.indexOf(o);
+  if(realIdx>=0){orders.splice(realIdx,1);saveAiQuants(orders);}
+  refreshAiQuants();
+  showToast('Plan deleted','success');
+}
+
 // ===== TOAST =====
 function showToast(msg,type){
   var old=document.querySelector('.toast');if(old)old.remove();
@@ -2206,6 +2333,7 @@ function syncFromServer(cb){
     if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
     if(tab==='analytics')refreshAnalytics();
     if(tab==='earn')refreshEarn();
+    if(tab==='aiquants')refreshAiQuants();
     if(cb)cb();
   });
 }

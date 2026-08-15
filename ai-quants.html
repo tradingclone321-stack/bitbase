@@ -134,6 +134,52 @@
     </div>
   </div>
 
+  <!-- PLAN DETAILS POPUP -->
+  <div class="modal-overlay" id="planDetailsModal" onclick="if(event.target===this)closeModal('planDetailsModal')">
+    <div class="modal-box" style="max-width:460px;">
+      <div class="modal-header">
+        <h3 class="font-heading font-semibold" id="detailsTitle">Plan Details</h3>
+        <button onclick="closeModal('planDetailsModal')" style="color:var(--text-tertiary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;text-align:center;margin-bottom:20px;">
+          <div style="width:52px;height:52px;border-radius:50%;background:rgba(65,105,225,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;" id="detailsIconWrap">
+            <i data-lucide="cpu" style="width:24px;height:24px;color:var(--accent-blue);"></i>
+          </div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent-yellow);margin-bottom:4px;">AI QUANT PLAN</div>
+          <div class="font-mono text-3xl font-bold" style="color:var(--accent-green);" id="detailsReturn">0%</div>
+          <div class="text-xs text-tertiary mt-1">Daily Return</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="clock" style="width:15px;height:15px;"></i> Duration</span>
+            <span class="text-sm font-medium" id="detailsDuration">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="coins" style="width:15px;height:15px;"></i> Minimum Investment</span>
+            <span class="text-sm font-medium" id="detailsMin">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="calendar-check" style="width:15px;height:15px;"></i> Settlement</span>
+            <span class="text-sm font-medium" id="detailsSettle">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="shield-check" style="width:15px;height:15px;"></i> Return of Principal</span>
+            <span class="text-sm font-medium" style="color:var(--accent-green);">At term end</span>
+          </div>
+        </div>
+
+        <p class="text-sm text-secondary" style="line-height:1.6;margin-bottom:20px;" id="detailsDesc">—</p>
+
+        <div style="display:flex;gap:10px;">
+          <button onclick="closeModal('planDetailsModal')" class="w-full rounded-xl py-3 text-sm font-semibold" style="border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--text-secondary);">Close</button>
+          <button onclick="detailsToInvest()" class="w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2" style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;" id="detailsCta">Invest Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- QUANT INVEST MODAL -->
   <div class="modal-overlay" id="quantModal" onclick="if(event.target===this)closeModal('quantModal')">
     <div class="modal-box" style="max-width:440px;">
@@ -270,12 +316,32 @@ function addUsdt(amount,deduct){
     html+='<div class="flex items-center justify-between"><span class="text-xs text-tertiary">Settlement</span><span class="font-medium">'+p.settle+'</span></div>';
     html+='</div>';
     html+='<div style="flex:1;"></div>';
-    html+='<button onclick="openPlan(\''+p.key+'\')" class="w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2" style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;transition:opacity 0.2s;" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">'+p.cta+'<i data-lucide="arrow-right" style="width:15px;height:15px;"></i></button>';
+    html+='<button onclick="showPlanDetails(\''+p.key+'\')" class="w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2" style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;transition:opacity 0.2s;" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">'+p.cta+'<i data-lucide="arrow-right" style="width:15px;height:15px;"></i></button>';
     html+='</div>';
   }
   grid.innerHTML=html;
   lucide.createIcons();
 })();
+
+// ===== PLAN DETAILS POPUP =====
+var detailsKey='standard';
+function showPlanDetails(key){
+  var p=getPlan(key);
+  if(!p)return;
+  detailsKey=p.key;
+  document.getElementById('detailsTitle').textContent=p.title;
+  document.getElementById('detailsReturn').textContent=p.lo+'% – '+p.hi+'%';
+  document.getElementById('detailsDuration').textContent=p.days+' day'+(p.days>1?'s':'');
+  document.getElementById('detailsMin').textContent=p.min+' USDT';
+  document.getElementById('detailsSettle').textContent=p.settle;
+  document.getElementById('detailsDesc').textContent=p.desc;
+  document.getElementById('detailsCta').innerHTML=p.cta+'<i data-lucide="arrow-right" style="width:15px;height:15px;"></i>';
+  openModal('planDetailsModal');
+}
+function detailsToInvest(){
+  closeModal('planDetailsModal');
+  openPlan(detailsKey);
+}
 
 // ===== MODAL =====
 function openPlan(key){
