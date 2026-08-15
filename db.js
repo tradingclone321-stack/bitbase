@@ -154,6 +154,11 @@ DB.updateUser = function (uid, patch) {
   return DB.client.from('users').update(patch).eq('uid', Number(uid)).then(DB._ok, DB._ok);
 };
 
+DB.deleteUser = function (uid) {
+  if (!DB.ready) return Promise.resolve();
+  return DB.client.from('users').delete().eq('uid', Number(uid)).then(DB._ok, DB._ok);
+};
+
 // Pull the current device's own user row from Supabase into localStorage.
 // Returns true if anything changed (callers may reload/re-render).
 DB.pullLocalUser = function () {

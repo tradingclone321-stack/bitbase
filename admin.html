@@ -891,7 +891,7 @@ function refreshUsers(){
       '<td><div style="display:flex;align-items:center;gap:8px;"><div onclick="toggleProfitModule(\''+u.uid+'\')" style="width:38px;height:20px;border-radius:10px;cursor:pointer;position:relative;transition:background 0.3s;background:'+(pmOn?'#16c784':'rgba(255,255,255,0.15)')+';flex-shrink:0;"><div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;transition:left 0.3s;left:'+(pmOn?'20px':'2px')+';"></div></div><span style="font-size:11px;font-weight:600;color:'+(pmOn?'#16c784':'rgba(255,255,255,0.4)')+';">'+(pmOn?'ON':'OFF')+'</span></div></td>'+
       '<td><span class="'+(u.kycStatus==='approved'?'badge-green':u.kycStatus==='rejected'?'badge-red':'badge-yellow')+'" style="font-size:10px;">'+(u.kycStatus==='approved'?'Verified':u.kycStatus==='rejected'?'Rejected':'None')+'</span></td>'+
       '<td>'+statusBadge+'</td>'+
-      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'</div></td>'+
+      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'<button class="btn-sm btn-danger" onclick="deleteUserAccount(\''+u.uid+'\')">Delete</button></div></td>'+
     '</tr>';
   }
   body.innerHTML=html;
@@ -973,6 +973,70 @@ function reactivateUser(uid){
   if(typeof DB!=='undefined'){DB.updateUser(uid,{is_deactivated:false});}
   refreshUsers();
   showToast('User '+uid+' reactivated','success');
+}
+function deleteUserAccount(uid){
+  var users=getAllUsers();
+  var user=null;
+  for(var i=0;i<users.length;i++){if(String(users[i].uid)===String(uid)){user=users[i];break;}}
+  if(!user)return;
+  if(!confirm('PERMANENTLY DELETE account '+uid+' ('+(user.name||'User')+')?\n\nAll their balances, orders and records will be removed. This cannot be undone.'))return;
+  if(!confirm('Are you absolutely sure? Type CONFIRM to proceed.'))return;
+  // Remove from the multi-user store
+  try{
+    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+    multi=multi.filter(function(m){return String(m.uid)!==String(uid);});
+    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+  }catch(e){}
+  // Remove from admin access + deactivated lists
+  try{
+    var aList=JSON.parse(localStorage.getItem('bb_admin_access_list')||'[]');
+    aList=aList.filter(function(a){return String(a)!==String(uid);});
+    localStorage.setItem('bb_admin_access_list',JSON.stringify(aList));
+  }catch(e){}
+  try{
+    var dList=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
+    dList=dList.filter(function(d){return String(d)!==String(uid);});
+    localStorage.setItem('bb_deactivated_accounts',JSON.stringify(dList));
+  }catch(e){}
+  // Clean up the user's records in shared collections
+  var collections={
+    'bb_ai_quants':['uid','userName'],
+    'bb_loans':['userId','uid'],
+    'bb_deposit_requests':['userId','uid'],
+    'bb_withdrawal_requests':['userId','uid'],
+    'bb_earn_positions':['uid','userId'],
+    'bb_kyc_submissions':['userId','uid'],
+    'bb_profit_modules':null,
+    'bb_trades_history':['uid','userId'],
+    'bb_balance_history':['uid','userId']
+  };
+  for(var key in collections){
+    try{
+      if(key==='bb_profit_modules'){
+        var map=JSON.parse(localStorage.getItem('bb_profit_modules')||'{}');
+        if(map[uid]!=null){delete map[uid];localStorage.setItem('bb_profit_modules',JSON.stringify(map));if(typeof DB!=='undefined')DB.pushCollection('bb_profit_modules');}
+        continue;
+      }
+      var arr=JSON.parse(localStorage.getItem(key)||'[]');
+      if(!Array.isArray(arr))arr=[];
+      var fields=collections[key];
+      var filtered=arr.filter(function(item){
+        for(var f=0;f<fields.length;f++){
+          if(item[fields[f]]!=null&&String(item[fields[f]])===String(uid))return false;
+        }
+        return true;
+      });
+      if(filtered.length!==arr.length){
+        localStorage.setItem(key,JSON.stringify(filtered));
+        if(typeof DB!=='undefined')DB.pushCollection(key);
+      }
+    }catch(e){}
+  }
+  localStorage.removeItem('bb_profit_module_'+uid);
+  // Remove from the central users table
+  if(typeof DB!=='undefined'){DB.deleteUser(uid);}
+  refreshUsers();
+  showToast('Account '+uid+' permanently deleted','success');
 }
 var adminAccessState=false;
 function getAdminAccessList(){
