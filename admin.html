@@ -1823,6 +1823,7 @@ function getSelectedUserBal(){
 }
 function setUserBalance(uid,newBal){
   if(newBal<0)newBal=0;
+  var newAb=null;
   // Update main user
   if(localStorage.getItem('bb_uid')===uid){
     localStorage.setItem('bb_cash_balance',newBal);
@@ -1831,16 +1832,30 @@ function setUserBalance(uid,newBal){
       if(ab.USDT){ab.USDT.balance=newBal;ab.USDT.qty=newBal;}
       else{ab.USDT={balance:newBal,qty:newBal};}
       localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+      newAb=ab;
     }catch(e){}
   }
   // Update multi-user store
   try{
     var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
     for(var i=0;i<multi.length;i++){
-      if(String(multi[i].uid)===String(uid)){multi[i].cashBalance=newBal;break;}
+      if(String(multi[i].uid)===String(uid)){
+        multi[i].cashBalance=newBal;
+        if(!newAb){
+          newAb=multi[i].assetBalances||{};
+          if(newAb.USDT){newAb.USDT.balance=newBal;newAb.USDT.qty=newBal;}
+          else{newAb.USDT={balance:newBal,qty:newBal};}
+        }
+        multi[i].assetBalances=newAb;
+        break;
+      }
     }
     localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-    if(typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:newBal});}
+    // Push BOTH cash_balance and asset_balances so the user's device
+    // picks up the new USDT balance in bb_asset_balances as well.
+    if(typeof DB!=='undefined'){
+      DB.updateUser(uid,{cash_balance:newBal,asset_balances:newAb||{USDT:{balance:newBal,qty:newBal}}});
+    }
   }catch(e){}
   return newBal;
 }
