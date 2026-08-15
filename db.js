@@ -264,7 +264,8 @@ DB.COLLECTIONS = [
   'bb_kyc_submissions',
   'bb_earn_positions',
   'bb_balance_history',
-  'bb_profit_modules'
+  'bb_profit_modules',
+  'bb_ai_quants'
 ];
 
 // Merge two ticket arrays by id, unioning messages (deduped) and

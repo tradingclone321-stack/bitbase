@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitbase – AI Quants</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="db.js"></script>
+</head>
+<body class="page-body">
+<script>
+(function(){
+  try {
+    var p = JSON.parse(localStorage.getItem('bb_preferences'));
+    if (p && p.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(e) {}
+  try {
+    var uid = localStorage.getItem('bb_uid');
+    if (uid) {
+      var deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      if (deactivated.indexOf(uid) >= 0) {
+        localStorage.removeItem('bb_login_time');
+        window.location.href = 'index.html';
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+
+<header class="dash-header">
+  <div class="dash-header-inner">
+    <div class="flex items-center gap-2">
+      <a href="index.html" class="flex items-center gap-2">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#F7931A,#FDB022);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="bitcoin" style="width:16px;height:16px;color:#fff;"></i>
+        </div>
+        <span class="font-heading" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">BITBASE</span>
+      </a>
+    </div>
+    <nav class="dash-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="assets.html">Assets</a>
+      <a href="markets.html">Markets</a>
+      <a href="trade.html">Trade</a>
+      <a href="earn.html">Earn</a>
+      <a href="ai-quants.html" class="active">AI Quants</a>
+      <a href="history.html">History</a>
+      <a href="demo.html">Demo</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <div class="dash-right">
+      <div class="user-pill">
+        <div class="user-avatar">U</div>
+        <div><div class="user-name" style="font-size:13px;font-weight:500;">User</div><div class="user-email" style="font-size:11px;color:var(--text-tertiary);">user@email.com</div></div>
+      </div>
+      <a href="assets.html" class="deposit-btn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Deposit</a>
+      <button class="lg:hidden" onclick="document.getElementById('mobileNav').classList.add('open')" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;"><i data-lucide="menu" style="width:20px;height:20px;"></i></button>
+    </div>
+  </div>
+</header>
+<div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-nav">
+    <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+  </div>
+</div>
+
+<div class="page-content" style="max-width:1100px;margin:0 auto;">
+
+  <div class="mb-8">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent-yellow);margin-bottom:8px;">AI QUANTS</div>
+    <h1 class="font-heading text-3xl font-bold mb-1">AI Smart Quantitative</h1>
+    <p class="text-secondary">Professional AI-powered quantitative investment strategies with intelligent market analysis and stable daily returns</p>
+  </div>
+
+  <div class="glass-card rounded-xl p-8 mb-8" id="summaryCard">
+    <div class="flex flex-col sm:flex-row justify-between gap-6 mb-4">
+      <div>
+        <div class="text-sm text-secondary mb-1">Total Invested</div>
+        <div class="font-mono text-2xl font-bold" id="sumInvested">$0.00</div>
+      </div>
+      <div>
+        <div class="text-sm text-secondary mb-1">Total Profit Settled</div>
+        <div class="font-mono text-2xl font-bold" style="color:var(--accent-green);" id="sumSettled">$0.00</div>
+      </div>
+      <div>
+        <div class="text-sm text-secondary mb-1">Active Plans</div>
+        <div class="font-mono text-2xl font-bold" id="sumActive">0</div>
+      </div>
+    </div>
+    <div class="text-sm" style="color:var(--accent-orange);">Profit settles to your USDT balance every 24 hours · Principal returned when the term ends</div>
+  </div>
+
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8" id="plansGrid">
+    <!-- injected by JS -->
+  </div>
+
+  <div class="glass-card rounded-xl p-8 mb-8">
+    <h2 class="font-heading text-xl font-semibold mb-6">How It Works</h2>
+    <div class="flex flex-col gap-5">
+      <div class="flex items-start gap-4">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="font-mono text-sm font-bold" style="color:var(--accent-orange);">1</span></div>
+        <p class="text-sm text-secondary pt-1">Choose an AI quant plan and invest USDT from your account</p>
+      </div>
+      <div class="flex items-start gap-4">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="font-mono text-sm font-bold" style="color:var(--accent-orange);">2</span></div>
+        <p class="text-sm text-secondary pt-1">Your funds are traded by the AI algorithm for the plan term</p>
+      </div>
+      <div class="flex items-start gap-4">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="font-mono text-sm font-bold" style="color:var(--accent-orange);">3</span></div>
+        <p class="text-sm text-secondary pt-1">Daily profit is credited every 24 hours directly to your USDT balance</p>
+      </div>
+      <div class="flex items-start gap-4">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(247,147,26,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="font-mono text-sm font-bold" style="color:var(--accent-orange);">4</span></div>
+        <p class="text-sm text-secondary pt-1">When the term ends, your principal is returned and you can reinvest any time</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-8">
+    <h2 class="font-heading font-semibold text-xl mb-5">Your Quant Plans</h2>
+    <div id="orderList" class="flex flex-col gap-4">
+      <div id="emptyOrders" class="glass-card rounded-xl p-8 text-center">
+        <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          <i data-lucide="bot" style="width:22px;height:22px;color:var(--text-tertiary);"></i>
+        </div>
+        <p class="text-sm text-secondary">No quant plans yet</p>
+        <p class="text-xs text-tertiary mt-1">Start investing with an AI strategy above</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUANT INVEST MODAL -->
+  <div class="modal-overlay" id="quantModal" onclick="if(event.target===this)closeModal('quantModal')">
+    <div class="modal-box" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 class="font-heading font-semibold" id="modalTitle">Invest</h3>
+        <button onclick="closeModal('quantModal')" style="color:var(--text-tertiary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(247,147,26,0.08);border:1px solid rgba(247,147,26,0.2);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+          <i data-lucide="clock" style="width:16px;height:16px;color:var(--accent-orange);flex-shrink:0;"></i>
+          <div><div class="text-xs font-medium" style="color:var(--accent-orange);" id="modalDuration">Daily settlement · Plan term</div><div class="text-xs text-tertiary">Profit credits every 24h · Principal returned at term end</div></div>
+        </div>
+        <div class="mb-4">
+          <label class="input-label">Investment Amount (USDT)</label>
+          <div style="position:relative;">
+            <input type="number" id="quantAmount" class="input-field" placeholder="0.00" style="width:100%;padding-right:60px;" oninput="updateCalc()">
+            <button onclick="setMax()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--accent-orange);font-weight:600;">MAX</button>
+          </div>
+          <div class="text-xs text-tertiary mt-1" id="minHint">Min. investment: —</div>
+          <div class="text-xs text-secondary mt-1" id="availHint" style="color:var(--accent-green);">Available: 0.00 USDT</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Daily Return</span><span class="font-mono text-sm font-medium" id="calcDailyPct" style="color:var(--accent-green);">0%</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Est. Daily Profit</span><span class="font-mono text-sm font-medium" id="calcDailyProfit">$0.00</span></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-xs text-tertiary">Est. Total Profit (term)</span><span class="font-mono text-sm font-medium" id="calcTotalProfit">$0.00</span></div>
+          <div class="flex justify-between items-center"><span class="text-xs text-tertiary">Principal Return</span><span class="font-mono text-sm font-medium" id="calcPrincipal">$0.00</span></div>
+        </div>
+        <button id="submitBtn" onclick="submitPlan()" class="btn-primary w-full rounded-xl py-3 text-sm font-semibold text-white" disabled style="opacity:0.5;cursor:not-allowed;"><span id="submitLabel">Invest Now</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;"></div>
+
+</div>
+
+<style>
+  [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
+  [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:var(--bg-secondary);border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:100%;max-height:90vh;overflow-y:auto;animation:slideUp 0.3s ease;}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);}
+  .modal-body{padding:24px;}
+  .input-label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:500;}
+  .input-field{width:100%;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#fff;font-size:14px;outline:none;transition:border-color 0.2s;appearance:none;-webkit-appearance:none;}
+  .input-field:focus{border-color:#f7931a;box-shadow:0 0 0 3px rgba(247,147,26,0.1);}
+  .input-field::placeholder{color:var(--text-tertiary);}
+  @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+</style>
+
+<script>
+// ===== PLAN DATA =====
+var PLANS=[
+  {key:'demo',title:'AI Quant Demo',days:1,min:10,lo:0.5,hi:1.0,rate:0.75,settle:'Daily Settlement',desc:'Perfect for first-time users to experience AI quantitative trading with low risk.',cta:'Start Demo',icon:'rocket'},
+  {key:'trial',title:'AI Quant Trial',days:7,min:100,lo:0.3,hi:0.8,rate:0.55,settle:'Daily Settlement',desc:'Short-term AI strategy ideal for beginners testing market performance.',cta:'Start Trial',icon:'shield'},
+  {key:'standard',title:'AI Quant Standard',days:30,min:1000,lo:0.5,hi:1.2,rate:0.85,settle:'Daily Settlement',desc:'Balanced long-term quantitative strategy offering stable automated returns.',cta:'Invest Now',icon:'trending-up'},
+  {key:'professional',title:'AI Quant Professional',days:90,min:5000,lo:0.8,hi:1.5,rate:1.15,settle:'Daily Settlement',desc:'Professional-grade AI trading strategy optimized for experienced investors.',cta:'Go Premium',icon:'briefcase'},
+  {key:'premium',title:'AI Quant Premium',days:180,min:10000,lo:1.0,hi:2.0,rate:1.5,settle:'Daily Settlement',desc:'Highest-tier AI investment plan designed for maximum long-term growth.',cta:'Join Premium',icon:'crown'}
+];
+var DAY_MS=24*60*60*1000;
+var selectedKey='standard';
+
+// ===== NAME LOADER =====
+(function(){
+  var name=localStorage.getItem('bb_name')||'User';
+  var first=name.split(' ')[0];
+  document.querySelectorAll('.user-avatar').forEach(function(a){a.textContent=first.charAt(0).toUpperCase();});
+  document.querySelectorAll('.user-name').forEach(function(d){d.textContent=first;});
+  var email=localStorage.getItem('bb_email')||'user@email.com';
+  document.querySelectorAll('.user-email').forEach(function(d){d.textContent=email;});
+})();
+lucide.createIcons();
+
+// ===== MODAL HELPERS =====
+function openModal(id){ document.getElementById(id).classList.add('open'); lucide.createIcons(); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(function(m){m.classList.remove('open');}); });
+
+// ===== ORDERS STORAGE =====
+function getOrders(){ try{ return JSON.parse(localStorage.getItem('bb_ai_quants'))||[]; }catch(e){return [];} }
+function saveOrders(arr){ localStorage.setItem('bb_ai_quants',JSON.stringify(arr)); if(typeof DB!=='undefined')DB.pushCollection('bb_ai_quants'); }
+function getPlan(key){ for(var i=0;i<PLANS.length;i++) if(PLANS[i].key===key) return PLANS[i]; return null; }
+
+// ===== BALANCE =====
+function getUsdtBalance(){
+  var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
+  try{
+    var raw=localStorage.getItem('bb_asset_balances');
+    if(raw){ var data=JSON.parse(raw); if(data.USDT&&data.USDT.balance!==undefined)cb=data.USDT.balance; }
+  }catch(e){}
+  return cb;
+}
+function addUsdt(amount,deduct){
+  var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
+  cb=deduct?Math.max(0,cb-amount):cb+amount;
+  localStorage.setItem('bb_cash_balance',cb.toString());
+  try{
+    var raw=localStorage.getItem('bb_asset_balances');
+    var data=raw?JSON.parse(raw):{};
+    if(!data.USDT)data.USDT={balance:0,qty:0};
+    data.USDT.balance=deduct?Math.max(0,data.USDT.balance-amount):data.USDT.balance+amount;
+    data.USDT.qty=data.USDT.balance;
+    localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+  }catch(e){}
+  if(typeof DB!=='undefined')DB.syncLocalUser();
+}
+
+// ===== RENDER PLANS =====
+(function(){
+  var grid=document.getElementById('plansGrid');
+  var html='';
+  for(var i=0;i<PLANS.length;i++){
+    var p=PLANS[i];
+    var iconColor='var(--accent-green)',bgColor='rgba(22,199,132,0.1)';
+    if(p.key==='trial'){iconColor='var(--accent-orange)';bgColor='rgba(247,147,26,0.1)';}
+    if(p.key==='professional'){iconColor='var(--accent-blue)';bgColor='rgba(65,105,225,0.1)';}
+    if(p.key==='premium'){iconColor='var(--accent-yellow)';bgColor='rgba(253,176,34,0.1)';}
+    html+='<div class="glass-card rounded-xl p-6 flex flex-col">';
+    html+='<div style="width:48px;height:48px;border-radius:50%;background:'+bgColor+';display:flex;align-items:center;justify-content:center;margin-bottom:16px;">';
+    html+='<i data-lucide="'+p.icon+'" style="width:22px;height:22px;color:'+iconColor+';"></i></div>';
+    html+='<div class="flex items-center justify-between gap-2 mb-1">';
+    html+='<h3 class="font-heading font-semibold text-lg">'+p.title+'</h3>';
+    html+='<span style="padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(247,147,26,0.1);border:1px solid rgba(247,147,26,0.2);color:var(--accent-orange);white-space:nowrap;">'+p.days+' Day'+(p.days>1?'s':'')+'</span>';
+    html+='</div>';
+    html+='<p class="text-sm text-secondary mb-4">'+p.desc+'</p>';
+    html+='<div class="text-center mb-4" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px 12px;">';
+    html+='<div class="font-mono text-2xl font-bold" style="color:var(--accent-green);">'+p.lo+'% – '+p.hi+'%</div>';
+    html+='<div class="text-xs text-tertiary mt-1">Daily Return</div>';
+    html+='</div>';
+    html+='<div class="flex flex-col gap-2 mb-4 text-sm">';
+    html+='<div class="flex items-center justify-between"><span class="text-xs text-tertiary">Minimum</span><span class="font-medium">'+p.min+' USDT</span></div>';
+    html+='<div class="flex items-center justify-between"><span class="text-xs text-tertiary">Settlement</span><span class="font-medium">'+p.settle+'</span></div>';
+    html+='</div>';
+    html+='<div style="flex:1;"></div>';
+    html+='<button onclick="openPlan(\''+p.key+'\')" class="w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2" style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;transition:opacity 0.2s;" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">'+p.cta+'<i data-lucide="arrow-right" style="width:15px;height:15px;"></i></button>';
+    html+='</div>';
+  }
+  grid.innerHTML=html;
+  lucide.createIcons();
+})();
+
+// ===== MODAL =====
+function openPlan(key){
+  var p=getPlan(key);
+  if(!p)return;
+  selectedKey=p.key;
+  document.getElementById('modalTitle').textContent=p.title;
+  document.getElementById('modalDuration').textContent=p.days+' day'+(p.days>1?'s':'')+' term · '+p.settle;
+  document.getElementById('quantAmount').value='';
+  document.getElementById('submitLabel').textContent=p.cta;
+  updateCalc();
+  openModal('quantModal');
+}
+function updateCalc(){
+  var p=getPlan(selectedKey);
+  var amount=parseFloat(document.getElementById('quantAmount').value)||0;
+  var avail=getUsdtBalance();
+  document.getElementById('minHint').textContent='Min. investment: '+p.min+' USDT';
+  document.getElementById('availHint').textContent='Available: '+avail.toFixed(2)+' USDT';
+  document.getElementById('calcDailyPct').textContent=p.lo+'% – '+p.hi+'%';
+  var daily=amount*p.rate/100;
+  document.getElementById('calcDailyProfit').textContent='$'+daily.toFixed(2);
+  document.getElementById('calcTotalProfit').textContent='$'+(daily*p.days).toFixed(2);
+  document.getElementById('calcPrincipal').textContent='$'+amount.toFixed(2);
+  var btn=document.getElementById('submitBtn');
+  if(amount>=p.min&&amount<=avail){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  else{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}
+}
+function setMax(){
+  var avail=getUsdtBalance();
+  document.getElementById('quantAmount').value=Math.floor(avail*100)/100;
+  updateCalc();
+}
+function submitPlan(){
+  var p=getPlan(selectedKey);
+  var amount=parseFloat(document.getElementById('quantAmount').value);
+  if(!amount||isNaN(amount)||amount<p.min){showToast('Minimum investment is '+p.min+' USDT','error');return;}
+  var avail=getUsdtBalance();
+  if(amount>avail){showToast('Insufficient USDT balance. Available: '+avail.toFixed(2)+' USDT','error');return;}
+  var btn=document.getElementById('submitBtn');
+  btn.disabled=true;
+  document.getElementById('submitLabel').textContent='Processing...';
+  setTimeout(function(){
+    addUsdt(amount,true);
+    var orders=getOrders();
+    var now=Date.now();
+    orders.push({
+      id:'Q'+now,
+      plan:p.key,
+      planName:p.title,
+      rate:p.rate,
+      days:p.days,
+      amount:amount,
+      started:now,
+      lastPayout:now,
+      earned:0,
+      status:'active',
+      uid:localStorage.getItem('bb_uid')||'',
+      userName:localStorage.getItem('bb_name')||'User',
+      userEmail:localStorage.getItem('bb_email')||''
+    });
+    saveOrders(orders);
+    renderOrders();
+    closeModal('quantModal');
+    document.getElementById('submitLabel').textContent=p.cta;
+    document.getElementById('quantAmount').value='';
+    showToast(p.title+' started — $'+amount.toFixed(2)+' invested. Daily settlement begins in 24h.','success');
+  },1200);
+}
+
+// ===== SETTLE & RENDER ORDERS =====
+function settleOrders(){
+  var orders=getOrders();
+  var changed=false;
+  var now=Date.now();
+  for(var i=0;i<orders.length;i++){
+    var o=orders[i];
+    if(o.status!=='active')continue;
+    if(now-o.lastPayout>=DAY_MS){
+      var cycles=Math.floor((now-o.lastPayout)/DAY_MS);
+      var profit=o.amount*o.rate/100;
+      var total=profit*cycles;
+      o.earned+=total;
+      o.lastPayout+=cycles*DAY_MS;
+      addUsdt(total,false);
+      showToast(o.planName+' daily settlement: +$'+total.toFixed(2)+' profit credited.','success');
+      changed=true;
+    }
+    if(now-o.started>=o.days*DAY_MS){
+      o.status='completed';
+      o.completedAt=now;
+      addUsdt(o.amount,false);
+      showToast(o.planName+' completed — principal $'+o.amount.toFixed(2)+' returned.','success');
+      changed=true;
+    }
+  }
+  if(changed)saveOrders(orders);
+  renderOrders();
+}
+
+function fmtDur(ms){
+  var total=Math.max(0,Math.floor(ms/1000));
+  var d=Math.floor(total/86400);total%=86400;
+  var h=Math.floor(total/3600);total%=3600;
+  var m=Math.floor(total/60);total%=60;
+  var s=total;
+  if(d>0)return d+'d '+h+'h '+m+'m';
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+function renderOrders(){
+  var orders=getOrders();
+  var now=Date.now();
+  var invested=0,settled=0,active=0;
+  for(var i=0;i<orders.length;i++){
+    if(orders[i].status==='active'){invested+=orders[i].amount;active++;}
+    settled+=orders[i].earned||0;
+  }
+  document.getElementById('sumInvested').textContent='$'+invested.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('sumSettled').textContent='$'+settled.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('sumActive').textContent=active;
+
+  var list=document.getElementById('orderList');
+  if(!orders.length){
+    list.innerHTML='<div id="emptyOrders" class="glass-card rounded-xl p-8 text-center"><div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><i data-lucide="bot" style="width:22px;height:22px;color:var(--text-tertiary);"></i></div><p class="text-sm text-secondary">No quant plans yet</p><p class="text-xs text-tertiary mt-1">Start investing with an AI strategy above</p></div>';
+    lucide.createIcons();
+    return;
+  }
+  var html='';
+  for(var i=orders.length-1;i>=0;i--){
+    var o=orders[i];
+    var p=getPlan(o.plan)||{title:o.planName};
+    var elapsed=now-o.started;
+    var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
+    var remaining=o.days*DAY_MS-elapsed;
+    var nextPay=o.lastPayout+DAY_MS;
+    html+='<div class="glass-card rounded-xl p-6">';
+    html+='<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">';
+    html+='<div class="flex items-center gap-3">';
+    html+='<div style="width:40px;height:40px;border-radius:10px;background:rgba(65,105,225,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="cpu" style="width:18px;height:18px;color:var(--accent-blue);"></i></div>';
+    html+='<div><div class="font-medium text-sm">'+p.title+'</div><div class="text-xs text-tertiary">'+o.days+'d term · '+o.rate.toFixed(2)+'% daily</div></div>';
+    html+='</div>';
+    if(o.status==='active'){
+      html+='<span class="text-xs font-medium" style="color:var(--accent-orange);">'+fmtDur(remaining)+' left</span>';
+    }else{
+      html+='<span class="text-xs font-medium" style="color:var(--accent-green);">Completed</span>';
+    }
+    html+='</div>';
+
+    html+='<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">';
+    html+='<div><div class="text-xs text-tertiary mb-1">Invested</div><div class="font-mono text-sm font-medium">$'+o.amount.toFixed(2)+'</div></div>';
+    html+='<div><div class="text-xs text-tertiary mb-1">Profit Settled</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">$'+(o.earned||0).toFixed(2)+'</div></div>';
+    html+='<div><div class="text-xs text-tertiary mb-1">Est. Term Profit</div><div class="font-mono text-sm font-medium">$'+(o.amount*o.rate/100*o.days).toFixed(2)+'</div></div>';
+    if(o.status==='active'){
+      html+='<div><div class="text-xs text-tertiary mb-1">Next Settlement</div><div class="font-mono text-sm font-medium">'+fmtDur(nextPay-now)+'</div></div>';
+    }else{
+      html+='<div><div class="text-xs text-tertiary mb-1">Status</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">Principal returned</div></div>';
+    }
+    html+='</div>';
+
+    if(o.status==='active'){
+      html+='<div class="flex items-center justify-between text-xs text-tertiary mb-2"><span>'+new Date(o.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span><span>Ends '+new Date(o.started+o.days*DAY_MS).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>';
+      html+='<div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;"><div style="width:'+progress.toFixed(1)+'%;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent-orange),var(--accent-yellow));"></div></div>';
+      html+='<div class="text-right text-xs text-tertiary mt-1">'+progress.toFixed(1)+'% of '+o.days+'d term</div>';
+    }
+    html+='</div>';
+  }
+  list.innerHTML=html;
+  lucide.createIcons();
+}
+
+// ===== TOAST =====
+function showToast(msg,type){
+  var container=document.getElementById('toastContainer');
+  var toast=document.createElement('div');
+  toast.style.cssText='padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;color:#fff;animation:slideUp 0.3s ease;backdrop-filter:blur(10px);max-width:380px;';
+  if(type==='error'){toast.style.background='rgba(234,57,67,0.9);border:1px solid rgba(234,57,67,0.3);';toast.innerHTML='&#10005; '+msg;}
+  else{toast.style.background='rgba(22,199,132,0.9);border:1px solid rgba(22,199,132,0.3);';toast.innerHTML='&#10003; '+msg;}
+  container.appendChild(toast);
+  setTimeout(function(){toast.style.opacity='0';toast.style.transition='opacity 0.3s';setTimeout(function(){toast.remove();},300);},3000);
+}
+
+// ===== INIT =====
+renderOrders();
+settleOrders();
+setInterval(settleOrders,1000);
+
+// ===== SERVER SYNC =====
+if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  DB.startLocalPolling(10000);
+  DB.pullCollection('bb_ai_quants').then(function(){ renderOrders(); });
+}
+</script>
+<div class="mobile-bottom-bar">
+  <a href="dashboard.html"><i data-lucide="layout-dashboard"></i>Home</a>
+  <a href="assets.html"><i data-lucide="wallet"></i>Assets</a>
+  <a href="trade.html"><i data-lucide="arrow-left-right"></i>Trade</a>
+  <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
