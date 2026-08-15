@@ -224,7 +224,7 @@ function getUsdtBalance(){
   var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
   try{
     var raw=localStorage.getItem('bb_asset_balances');
-    if(raw){ var data=JSON.parse(raw); if(data.USDT&&data.USDT.balance!==undefined)cb=data.USDT.balance; }
+    if(raw){ var data=JSON.parse(raw); if(data.USDT&&data.USDT.balance!==undefined)cb=Math.max(cb,parseFloat(data.USDT.balance)||0); }
   }catch(e){}
   return cb;
 }
