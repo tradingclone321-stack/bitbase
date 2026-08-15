@@ -301,7 +301,7 @@ function updateCalc(){
   document.getElementById('calcTotalProfit').textContent='$'+(daily*p.days).toFixed(2);
   document.getElementById('calcPrincipal').textContent='$'+amount.toFixed(2);
   var btn=document.getElementById('submitBtn');
-  if(amount>=p.min&&amount<=avail){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+  if(amount>=p.min){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
   else{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}
 }
 function setMax(){
