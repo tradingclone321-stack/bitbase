@@ -324,6 +324,50 @@ DB._cleanTickets = function (tickets) {
   return out;
 };
 
+// Merge two id-keyed arrays so neither side clobbers the other's
+// records. When the same id exists on both sides, the "resolved"
+// version wins (approved / rejected / paid / completed / resolved),
+// otherwise the one that changed most recently wins.
+DB._mergeById = function (local, server, idKey) {
+  idKey = idKey || 'id';
+  var map = {};
+  var order = [];
+  var RESOLVED = ['approved', 'rejected', 'paid', 'completed', 'resolved'];
+  function isResolved(v) { return RESOLVED.indexOf((v.status || '').toLowerCase()) >= 0; }
+  function newer(a, b) { return (b.resolvedAt || b.createdAt || 0) > (a.resolvedAt || a.createdAt || 0); }
+  function add(item) {
+    if (!item || item[idKey] == null) return;
+    var key = String(item[idKey]);
+    if (map[key] === undefined) {
+      map[key] = item;
+      order.push(key);
+      return;
+    }
+    var cur = map[key];
+    // A resolved status beats a pending one, regardless of side.
+    if (isResolved(item) && !isResolved(cur)) { map[key] = item; return; }
+    if (isResolved(cur) && !isResolved(item)) { return; }
+    // Same resolution level: keep the newer change.
+    if (newer(item, cur)) map[key] = item;
+  }
+  for (var i = 0; i < (server || []).length; i++) add(server[i]);
+  for (var j = 0; j < (local || []).length; j++) add(local[j]);
+  var out = [];
+  for (var k = 0; k < order.length; k++) out.push(map[order[k]]);
+  return out;
+};
+
+// Collections that hold shared id-keyed request/position arrays where
+// one device's push must not wipe another device's admin resolutions.
+DB.MERGE_COLLECTIONS = [
+  'bb_deposit_requests',
+  'bb_withdrawal_requests',
+  'bb_loans',
+  'bb_kyc_submissions',
+  'bb_earn_positions',
+  'bb_ai_quants'
+];
+
 DB.pushCollection = function (key) {
   if (!DB.ready) return Promise.resolve();
   var data = localStorage.getItem(key);
@@ -339,6 +383,18 @@ DB.pushCollection = function (key) {
       if (!Array.isArray(serverPayload)) serverPayload = [];
       serverPayload = DB._cleanTickets(serverPayload);
       var merged = DB._ticketMerge(payload, serverPayload);
+      localStorage.setItem(key, JSON.stringify(merged));
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(DB._ok, DB._ok);
+    }, function () { return DB._ok(null); });
+  }
+  if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
+    if (!Array.isArray(payload)) payload = [];
+    // Merge with the current server payload so a user's new deposit
+    // doesn't overwrite the admin's earlier approvals/rejections.
+    return DB.client.from('app_collections').select('payload').eq('key', key).limit(1).single().then(function (res) {
+      var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
+      if (!Array.isArray(serverPayload)) serverPayload = [];
+      var merged = DB._mergeById(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
       return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(DB._ok, DB._ok);
     }, function () { return DB._ok(null); });
@@ -359,6 +415,14 @@ DB.pullCollection = function (key) {
         if (!Array.isArray(localTickets)) localTickets = [];
         localTickets = DB._cleanTickets(localTickets);
         localStorage.setItem(key, JSON.stringify(DB._ticketMerge(localTickets, serverPayload)));
+      } else if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
+        // Merge with the local copy so locally-added records (e.g. a
+        // deposit the user just submitted) survive the pull.
+        if (!Array.isArray(serverPayload)) serverPayload = [];
+        var localArr = [];
+        try { localArr = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localArr = []; }
+        if (!Array.isArray(localArr)) localArr = [];
+        localStorage.setItem(key, JSON.stringify(DB._mergeById(localArr, serverPayload)));
       } else {
         localStorage.setItem(key, JSON.stringify(res.data.payload));
       }
