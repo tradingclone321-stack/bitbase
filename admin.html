@@ -430,11 +430,15 @@
           <select id="balUserSelect" class="form-input" onchange="loadUserBalances()"></select>
           <label class="form-label">Current Cash Balance</label>
           <input type="text" id="balCurrent" class="form-input" readonly style="opacity:0.6;">
-          <label class="form-label">New Cash Balance (USDT)</label>
-          <input type="text" id="balNew" class="form-input" placeholder="Enter new amount">
+          <label class="form-label">Adjustment Amount (USDT)</label>
+          <input type="text" id="balAmount" class="form-input" placeholder="Enter amount to credit/debit">
           <label class="form-label">Reason (optional)</label>
           <input type="text" id="balReason" class="form-input" placeholder="e.g. Manual correction">
-          <button class="btn-sm btn-primary" style="width:100%;padding:12px;margin-top:8px;" onclick="adjustBalance()">Update Balance</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+            <button class="btn-sm" style="width:100%;padding:12px;background:rgba(22,199,132,0.15);color:#16c784;border:none;border-radius:10px;font-weight:600;cursor:pointer;" onclick="creditBalance()">+ Credit (Add)</button>
+            <button class="btn-sm" style="width:100%;padding:12px;background:rgba(239,68,68,0.15);color:#ef4444;border:none;border-radius:10px;font-weight:600;cursor:pointer;" onclick="debitBalance()">− Debit (Subtract)</button>
+          </div>
+          <button class="btn-sm btn-primary" style="width:100%;padding:12px;margin-top:8px;" onclick="adjustBalance()">Set Exact Balance</button>
         </div>
         <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:24px;">
           <div class="section-title">Balance History</div>
@@ -1809,17 +1813,23 @@ function loadUserBalances(){
     }
   }
 }
-function adjustBalance(){
+function getSelectedUserBal(){
   var uid=document.getElementById('balUserSelect').value;
-  var newBal=parseFloat(document.getElementById('balNew').value);
-  var reason=document.getElementById('balReason').value.trim();
-  if(isNaN(newBal)||newBal<0){showToast('Enter a valid amount','error');return;}
+  var users=getAllUsers();
+  for(var i=0;i<users.length;i++){
+    if(users[i].uid===uid)return {uid:uid,bal:parseFloat(users[i].cashBalance)||0};
+  }
+  return {uid:uid,bal:0};
+}
+function setUserBalance(uid,newBal){
+  if(newBal<0)newBal=0;
   // Update main user
   if(localStorage.getItem('bb_uid')===uid){
     localStorage.setItem('bb_cash_balance',newBal);
     try{
       var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
       if(ab.USDT){ab.USDT.balance=newBal;ab.USDT.qty=newBal;}
+      else{ab.USDT={balance:newBal,qty:newBal};}
       localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
     }catch(e){}
   }
@@ -1827,23 +1837,61 @@ function adjustBalance(){
   try{
     var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
     for(var i=0;i<multi.length;i++){
-      if(multi[i].uid===uid){multi[i].cashBalance=newBal;break;}
+      if(String(multi[i].uid)===String(uid)){multi[i].cashBalance=newBal;break;}
     }
     localStorage.setItem('bb_admin_users',JSON.stringify(multi));
     if(typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:newBal});}
   }catch(e){}
-  // Log history
+  return newBal;
+}
+function logBalanceChange(uid,type,amount,newBal,reason){
   try{
     var hist=JSON.parse(localStorage.getItem('bb_balance_history')||'[]');
-    hist.unshift({uid:uid,newBalance:newBal,reason:reason||'Manual adjustment',time:Date.now()});
+    hist.unshift({uid:uid,type:type,amount:amount,newBalance:newBal,reason:reason||'Manual adjustment',time:Date.now()});
     if(hist.length>50)hist=hist.slice(0,50);
     localStorage.setItem('bb_balance_history',JSON.stringify(hist));
     if(typeof DB!=='undefined'){DB.pushCollection('bb_balance_history');}
   }catch(e){}
-  document.getElementById('balNew').value='';
+}
+function creditBalance(){
+  var sel=getSelectedUserBal();
+  var amount=parseFloat(document.getElementById('balAmount').value);
+  var reason=document.getElementById('balReason').value.trim();
+  if(isNaN(amount)||amount<=0){showToast('Enter a valid amount','error');return;}
+  if(!confirm('Credit +'+fmtUSD(amount)+' to '+sel.uid+'?'))return;
+  var newBal=setUserBalance(sel.uid,sel.bal+amount);
+  logBalanceChange(sel.uid,'credit',amount,newBal,reason);
+  document.getElementById('balAmount').value='';
   document.getElementById('balReason').value='';
   refreshBalances();
-  showToast('Balance updated to '+fmtUSD(newBal),'success');
+  showToast('Credited +'+fmtUSD(amount)+' to '+sel.uid+' (new balance '+fmtUSD(newBal)+')','success');
+}
+function debitBalance(){
+  var sel=getSelectedUserBal();
+  var amount=parseFloat(document.getElementById('balAmount').value);
+  var reason=document.getElementById('balReason').value.trim();
+  if(isNaN(amount)||amount<=0){showToast('Enter a valid amount','error');return;}
+  if(amount>sel.bal){showToast('Cannot debit more than current balance ('+fmtUSD(sel.bal)+')','error');return;}
+  if(!confirm('Debit −'+fmtUSD(amount)+' from '+sel.uid+'?'))return;
+  var newBal=setUserBalance(sel.uid,sel.bal-amount);
+  logBalanceChange(sel.uid,'debit',amount,newBal,reason);
+  document.getElementById('balAmount').value='';
+  document.getElementById('balReason').value='';
+  refreshBalances();
+  showToast('Debited −'+fmtUSD(amount)+' from '+sel.uid+' (new balance '+fmtUSD(newBal)+')','success');
+}
+function adjustBalance(){
+  var sel=getSelectedUserBal();
+  var newBal=parseFloat(document.getElementById('balAmount').value);
+  var reason=document.getElementById('balReason').value.trim();
+  if(isNaN(newBal)||newBal<0){showToast('Enter a valid amount','error');return;}
+  if(!confirm('Set balance of '+sel.uid+' to '+fmtUSD(newBal)+'?'))return;
+  var bal=setUserBalance(sel.uid,newBal);
+  logBalanceChange(sel.uid,'set',newBal,bal,reason);
+  document.getElementById('balAmount').value='';
+  document.getElementById('balReason').value='';
+  refreshBalances();
+  showToast('Balance set to '+fmtUSD(bal),'success');
 }
 function renderBalanceHistory(){
   var container=document.getElementById('balanceHistory');
@@ -1853,8 +1901,12 @@ function renderBalanceHistory(){
     var html='';
     for(var i=0;i<hist.length;i++){
       var h=hist[i];
+      var deltaHtml='';
+      if(h.type==='credit')deltaHtml='<span style="color:#16c784;">+'+fmtUSD(h.amount)+'</span>';
+      else if(h.type==='debit')deltaHtml='<span style="color:#ef4444;">−'+fmtUSD(h.amount)+'</span>';
+      else if(h.type==='set')deltaHtml='<span style="color:#4169E1;">set</span>';
       html+='<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;">'+
-        '<div><div style="font-size:12px;font-weight:600;">'+fmtUSD(h.newBalance)+' <span style="color:rgba(255,255,255,0.4);font-weight:400;">→ '+h.uid+'</span></div>'+
+        '<div><div style="font-size:12px;font-weight:600;">'+deltaHtml+' <span style="color:rgba(255,255,255,0.4);font-weight:400;">→ '+h.uid+' (bal '+fmtUSD(h.newBalance)+')</span></div>'+
         '<div style="font-size:11px;color:rgba(255,255,255,0.3);">'+h.reason+'</div></div>'+
         '<div style="font-size:11px;color:rgba(255,255,255,0.3);">'+fmtTime(h.time)+'</div>'+
       '</div>';
