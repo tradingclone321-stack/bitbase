@@ -271,8 +271,8 @@
       </div>
       <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
         <table class="data-table">
-          <thead><tr><th>UID</th><th>Name</th><th>Email</th><th>Cash Balance</th><th>Total Assets</th><th>Admin</th><th>Profit</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody id="usersBody"><tr><td colspan="9" class="empty-state">No registered users</td></tr></tbody>
+          <thead><tr><th>UID</th><th>Name</th><th>Email</th><th>Cash Balance</th><th>Total Assets</th><th>Admin</th><th>Profit</th><th>KYC</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="usersBody"><tr><td colspan="10" class="empty-state">No registered users</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -728,7 +728,8 @@ function getAllUsers(){
       name:name||'User',
       email:email||'user@email.com',
       cashBalance:getCashBalance(),
-      assetBalances:getAssetBalances()
+      assetBalances:getAssetBalances(),
+      kycStatus:localStorage.getItem('bb_kyc_status')||'none'
     });
   }
   // Also check for multi-user data
@@ -831,7 +832,7 @@ function refreshDashboard(){
 function refreshUsers(){
   var users=getAllUsers();
   var body=document.getElementById('usersBody');
-  if(users.length===0){body.innerHTML='<tr><td colspan="9" class="empty-state">No registered users</td></tr>';return;}
+  if(users.length===0){body.innerHTML='<tr><td colspan="10" class="empty-state">No registered users</td></tr>';return;}
   var adminList=getAdminAccessList();
   var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
   var html='';
@@ -861,8 +862,9 @@ function refreshUsers(){
       '<td style="font-family:monospace;">'+fmtUSD(totalAssets)+'</td>'+
       '<td>'+adminBadge+'</td>'+
       '<td><div style="display:flex;align-items:center;gap:8px;"><div onclick="toggleProfitModule(\''+u.uid+'\')" style="width:38px;height:20px;border-radius:10px;cursor:pointer;position:relative;transition:background 0.3s;background:'+(pmOn?'#16c784':'rgba(255,255,255,0.15)')+';flex-shrink:0;"><div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;transition:left 0.3s;left:'+(pmOn?'20px':'2px')+';"></div></div><span style="font-size:11px;font-weight:600;color:'+(pmOn?'#16c784':'rgba(255,255,255,0.4)')+';">'+(pmOn?'ON':'OFF')+'</span></div></td>'+
+      '<td><span class="'+(u.kycStatus==='approved'?'badge-green':u.kycStatus==='rejected'?'badge-red':'badge-yellow')+'" style="font-size:10px;">'+(u.kycStatus==='approved'?'Verified':u.kycStatus==='rejected'?'Rejected':'None')+'</span></td>'+
       '<td>'+statusBadge+'</td>'+
-      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button>'+toggleBtn+'</div></td>'+
+      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'</div></td>'+
     '</tr>';
   }
   body.innerHTML=html;
@@ -888,6 +890,28 @@ function toggleProfitModule(uid){
     DB.pushCollection('bb_profit_modules');
   }
   refreshUsers();
+}
+function manualKYC(uid){
+  var users=getAllUsers();
+  var user=null;
+  for(var i=0;i<users.length;i++){if(String(users[i].uid)===String(uid)){user=users[i];break;}}
+  var kycStatus=user&&user.kycStatus?user.kycStatus:'none';
+  var next=kycStatus==='approved'?'none':'approved';
+  // Update in the multi-user list so the admin table reflects it
+  try{
+    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+    for(var j=0;j<multi.length;j++){
+      if(String(multi[j].uid)===String(uid)){multi[j].kycStatus=next;break;}
+    }
+    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+  }catch(e){}
+  if(String(localStorage.getItem('bb_uid'))===String(uid)){
+    try{localStorage.setItem('bb_kyc_status',next);}catch(e){}
+  }
+  // Push to the central users table so the user's device picks it up
+  if(typeof DB!=='undefined'){DB.updateUser(uid,{kyc_status:next});}
+  refreshUsers();
+  showToast('KYC '+(next==='approved'?'verified':'unverified')+' for user '+uid,'success');
 }
 function openUserEdit(uid){
   var users=getAllUsers();
