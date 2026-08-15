@@ -476,33 +476,8 @@ function submitPlan(){
   },1200);
 }
 
-// ===== SETTLE & RENDER ORDERS =====
+// ===== RENDER ORDERS =====
 function settleOrders(){
-  var orders=getOrders();
-  var changed=false;
-  var now=Date.now();
-  for(var i=0;i<orders.length;i++){
-    var o=orders[i];
-    if(o.status!=='active')continue;
-    if(now-o.lastPayout>=DAY_MS){
-      var cycles=Math.floor((now-o.lastPayout)/DAY_MS);
-      var profit=o.amount*o.rate/100;
-      var total=profit*cycles;
-      o.earned+=total;
-      o.lastPayout+=cycles*DAY_MS;
-      addUsdt(total,false);
-      showToast(o.planName+' daily settlement: +$'+total.toFixed(2)+' profit credited.','success');
-      changed=true;
-    }
-    if(now-o.started>=o.days*DAY_MS){
-      o.status='completed';
-      o.completedAt=now;
-      addUsdt(o.amount,false);
-      showToast(o.planName+' completed — principal $'+o.amount.toFixed(2)+' returned.','success');
-      changed=true;
-    }
-  }
-  if(changed)saveOrders(orders);
   renderOrders();
 }
 
