@@ -212,6 +212,70 @@
     </div>
   </div>
 
+  <!-- ORDER DETAILS POPUP -->
+  <div class="modal-overlay" id="orderDetailsModal" onclick="if(event.target===this)closeModal('orderDetailsModal')">
+    <div class="modal-box" style="max-width:460px;">
+      <div class="modal-header">
+        <h3 class="font-heading font-semibold" id="odTitle">Order Details</h3>
+        <button onclick="closeModal('orderDetailsModal')" style="color:var(--text-tertiary);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;text-align:center;margin-bottom:20px;">
+          <div style="width:52px;height:52px;border-radius:50%;background:rgba(65,105,225,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+            <i data-lucide="cpu" style="width:24px;height:24px;color:var(--accent-blue);"></i>
+          </div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent-yellow);margin-bottom:4px;">AI QUANT ORDER</div>
+          <div class="font-mono text-3xl font-bold" style="color:var(--accent-green);" id="odReturn">0%</div>
+          <div class="text-xs text-tertiary mt-1">Daily Return</div>
+          <div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;" id="odStatusWrap"><span id="odStatus">Active</span></div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="coins" style="width:15px;height:15px;"></i> Invested Amount</span>
+            <span class="text-sm font-medium font-mono" id="odInvested">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="trending-up" style="width:15px;height:15px;"></i> Profit Settled</span>
+            <span class="text-sm font-medium font-mono" style="color:var(--accent-green);" id="odSettled">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="calendar" style="width:15px;height:15px;"></i> Plan Term</span>
+            <span class="text-sm font-medium" id="odTerm">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="hourglass" style="width:15px;height:15px;"></i> Time Remaining</span>
+            <span class="text-sm font-medium font-mono" style="color:var(--accent-orange);" id="odRemaining">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="calendar-check" style="width:15px;height:15px;"></i> Next Settlement</span>
+            <span class="text-sm font-medium font-mono" id="odNext">—</span>
+          </div>
+          <div class="flex items-center justify-between" style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+            <span class="text-sm text-tertiary flex items-center gap-2"><i data-lucide="flag" style="width:15px;height:15px;"></i> Started / Ends</span>
+            <span class="text-sm font-medium" id="odDates">—</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div class="flex items-center justify-between text-xs text-tertiary mb-2">
+            <span>Progress</span><span id="odProgressLabel">0%</span>
+          </div>
+          <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;">
+            <div id="odProgressBar" style="height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent-orange),var(--accent-yellow));width:0%;"></div>
+          </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px 16px;margin-bottom:20px;" id="odEstRow">
+          <div class="flex items-center justify-between"><span class="text-xs text-tertiary">Est. Term Profit</span><span class="font-mono text-sm font-medium" style="color:var(--accent-green);" id="odEstProfit">$0.00</span></div>
+          <div class="flex items-center justify-between mt-2"><span class="text-xs text-tertiary">Est. Total Return</span><span class="font-mono text-sm font-medium" id="odEstTotal">$0.00</span></div>
+        </div>
+
+        <button onclick="closeModal('orderDetailsModal')" class="w-full rounded-xl py-3 text-sm font-semibold" style="border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--text-secondary);">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST CONTAINER -->
   <div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;"></div>
 
@@ -452,6 +516,67 @@ function fmtDur(ms){
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
 }
 
+// ===== ORDER DETAILS POPUP =====
+var currentOrderIndex=-1;
+function showOrderDetails(idx){
+  var orders=getOrders();
+  var o=orders[idx];
+  if(!o)return;
+  currentOrderIndex=idx;
+  var now=Date.now();
+  var p=getPlan(o.plan)||{title:o.planName};
+  var elapsed=now-o.started;
+  var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
+  var remaining=o.days*DAY_MS-elapsed;
+  var nextPay=o.lastPayout+DAY_MS;
+  var isActive=o.status==='active';
+  var estProfit=o.amount*o.rate/100*o.days;
+  var dailyProfit=o.amount*o.rate/100;
+
+  document.getElementById('odTitle').textContent=p.title;
+  document.getElementById('odReturn').textContent=o.rate.toFixed(2)+'%';
+  var sw=document.getElementById('odStatusWrap');
+  var st=document.getElementById('odStatus');
+  if(isActive){
+    sw.style.background='rgba(247,147,26,0.12)';
+    sw.style.color='var(--accent-orange)';
+    st.textContent='Active';
+  }else{
+    sw.style.background='rgba(22,199,132,0.12)';
+    sw.style.color='var(--accent-green)';
+    st.textContent='Completed';
+  }
+  document.getElementById('odInvested').textContent='$'+o.amount.toFixed(2);
+  document.getElementById('odSettled').textContent='$'+(o.earned||0).toFixed(2)+' / $'+estProfit.toFixed(2);
+  document.getElementById('odTerm').textContent=o.days+' days · ~$'+dailyProfit.toFixed(2)+'/day';
+  document.getElementById('odRemaining').textContent=isActive?fmtDur(remaining):'—';
+  document.getElementById('odNext').textContent=isActive?fmtDur(nextPay-now):'—';
+  document.getElementById('odDates').textContent=new Date(o.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' → '+new Date(o.started+o.days*DAY_MS).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('odProgressLabel').textContent=isActive?progress.toFixed(1)+'%':'100%';
+  document.getElementById('odProgressBar').style.width=(isActive?progress:100)+'%';
+  document.getElementById('odEstProfit').textContent='$'+estProfit.toFixed(2);
+  document.getElementById('odEstTotal').textContent='$'+(o.amount+estProfit).toFixed(2);
+  openModal('orderDetailsModal');
+}
+function refreshOpenOrderDetails(){
+  if(currentOrderIndex<0)return;
+  var orders=getOrders();
+  var o=orders[currentOrderIndex];
+  if(!o){closeModal('orderDetailsModal');return;}
+  var now=Date.now();
+  var elapsed=now-o.started;
+  var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
+  var remaining=o.days*DAY_MS-elapsed;
+  var nextPay=o.lastPayout+DAY_MS;
+  var isActive=o.status==='active';
+  var estProfit=o.amount*o.rate/100*o.days;
+  document.getElementById('odSettled').textContent='$'+(o.earned||0).toFixed(2)+' / $'+estProfit.toFixed(2);
+  document.getElementById('odRemaining').textContent=isActive?fmtDur(remaining):'—';
+  document.getElementById('odNext').textContent=isActive?fmtDur(nextPay-now):'—';
+  document.getElementById('odProgressLabel').textContent=isActive?progress.toFixed(1)+'%':'100%';
+  document.getElementById('odProgressBar').style.width=(isActive?progress:100)+'%';
+}
+
 function renderOrders(){
   var orders=getOrders();
   var now=Date.now();
@@ -478,17 +603,20 @@ function renderOrders(){
     var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
     var remaining=o.days*DAY_MS-elapsed;
     var nextPay=o.lastPayout+DAY_MS;
-    html+='<div class="glass-card rounded-xl p-6">';
+    html+='<div class="glass-card rounded-xl p-6" style="cursor:pointer;transition:transform 0.2s,border-color 0.2s;" onclick="showOrderDetails('+i+')" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.borderColor=\'rgba(65,105,225,0.4)\';" onmouseout="this.style.transform=\'\';this.style.borderColor=\'\';">';
     html+='<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">';
     html+='<div class="flex items-center gap-3">';
     html+='<div style="width:40px;height:40px;border-radius:10px;background:rgba(65,105,225,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="cpu" style="width:18px;height:18px;color:var(--accent-blue);"></i></div>';
     html+='<div><div class="font-medium text-sm">'+p.title+'</div><div class="text-xs text-tertiary">'+o.days+'d term · '+o.rate.toFixed(2)+'% daily</div></div>';
     html+='</div>';
+    html+='<div class="flex items-center gap-3">';
     if(o.status==='active'){
       html+='<span class="text-xs font-medium" style="color:var(--accent-orange);">'+fmtDur(remaining)+' left</span>';
     }else{
       html+='<span class="text-xs font-medium" style="color:var(--accent-green);">Completed</span>';
     }
+    html+='<span class="text-xs font-medium flex items-center gap-1" style="color:var(--accent-blue);"><i data-lucide="chevron-right" style="width:14px;height:14px;"></i></span>';
+    html+='</div>';
     html+='</div>';
 
     html+='<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">';
@@ -527,7 +655,7 @@ function showToast(msg,type){
 // ===== INIT =====
 renderOrders();
 settleOrders();
-setInterval(settleOrders,1000);
+setInterval(function(){ settleOrders(); refreshOpenOrderDetails(); },1000);
 
 // ===== SERVER SYNC =====
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
