@@ -384,7 +384,7 @@ DB.pushCollection = function (key) {
       serverPayload = DB._cleanTickets(serverPayload);
       var merged = DB._ticketMerge(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(DB._ok, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
   if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
@@ -396,10 +396,10 @@ DB.pushCollection = function (key) {
       if (!Array.isArray(serverPayload)) serverPayload = [];
       var merged = DB._mergeById(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(DB._ok, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
-  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(DB._ok, DB._ok);
+  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
 };
 
 DB.pullCollection = function (key) {
@@ -437,32 +437,51 @@ DB.pushAll = function () {
   return p;
 };
 
-// ---------------- REALTIME (WebSocket) ----------------
-// Live subscription on the app_collections table. When any device
-// upserts a collection, every subscribed device is notified within
-// ~100ms and pulls the fresh payload. `callback` receives (key).
-// Falls back silently to nothing (caller keeps its polling loop).
-DB._channels = {};
-DB.subscribe = function (key, callback) {
+// ---------------- REALTIME (WebSocket broadcast) ----------------
+// True live pub/sub via the Supabase Realtime service. Works without
+// any SQL/publication setup: when a device upserts a collection it
+// broadcasts on the shared 'bb-realtime' channel; every subscribed
+// device receives the signal in ~100ms and pulls the fresh payload.
+// Falls back silently to the caller's polling loop if unavailable.
+DB._broadcastChannel = null;
+DB._broadcastReady = false;
+DB._broadcastSubscribers = {};
+DB._ensureBroadcast = function () {
   if (!DB.ready) return;
-  if (DB._channels[key]) return; // already subscribed
+  if (DB._broadcastChannel) return;
   try {
-    var channel = DB.client
-      .channel('coll-' + key)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_collections', filter: 'key=eq.' + key }, function () {
-        if (callback) callback(key);
+    DB._broadcastChannel = DB.client.channel('bb-realtime', { config: { broadcast: { self: true } } });
+    DB._broadcastChannel
+      .on('broadcast', { event: 'update' }, function (payload) {
+        var key = (payload && payload.key) || null;
+        if (key && DB._broadcastSubscribers[key]) DB._broadcastSubscribers[key](key);
       })
-      .subscribe();
-    DB._channels[key] = channel;
+      .subscribe(function (status) {
+        DB._broadcastReady = (status === 'SUBSCRIBED');
+      });
   } catch (e) {
-    console.warn('[DB] realtime subscribe failed', key, e);
+    console.warn('[DB] realtime broadcast failed', e);
   }
 };
-DB.unsubscribe = function (key) {
-  if (DB._channels[key]) {
-    try { DB.client.removeChannel(DB._channels[key]); } catch (e) {}
-    delete DB._channels[key];
+DB.broadcastUpdate = function (key) {
+  if (!DB.ready) return;
+  DB._ensureBroadcast();
+  if (!DB._broadcastChannel) return;
+  if (!DB._broadcastReady) {
+    // Channel not connected yet; fall back to the poll loop on this tick.
+    return;
   }
+  try {
+    DB._broadcastChannel.send({ type: 'broadcast', event: 'update', payload: { key: key } });
+  } catch (e) {}
+};
+DB.subscribe = function (key, callback) {
+  if (!DB.ready) return;
+  DB._ensureBroadcast();
+  DB._broadcastSubscribers[key] = callback;
+};
+DB.unsubscribe = function (key) {
+  delete DB._broadcastSubscribers[key];
 };
 
 DB.pullAll = function () {

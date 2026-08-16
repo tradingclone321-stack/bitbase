@@ -1209,7 +1209,7 @@ function startAdminSupportPoll(){
       checkNew();
     });
   }
-  adminSupportPollTimer=setInterval(checkNew,2000);
+  adminSupportPollTimer=setInterval(checkNew,1000);
 }
 function stopAdminSupportPoll(){
   if(adminSupportPollTimer){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;}
