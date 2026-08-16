@@ -8,7 +8,7 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
-DB.VERSION = '2026-08-16-adminfix';
+DB.VERSION = '2026-08-16-deletefix';
 DB._lastPullTime = 0;
 DB._lastSyncError = '';
 
@@ -387,8 +387,19 @@ DB.MERGE_COLLECTIONS = [
   'bb_ai_quants'
 ];
 
+DB._pushChains = {};
 DB.pushCollection = function (key) {
   if (!DB.ready) return Promise.resolve();
+  // Serialize pushes per key. Two overlapping pushCollection calls for the
+  // same collection would otherwise interleave (select -> merge -> upsert)
+  // and the slower one, built from an older snapshot, could revert the
+  // newer one's local write (e.g. a resolution or a deletion tombstone).
+  var prev = DB._pushChains[key] || Promise.resolve();
+  var next = prev.then(function () { return DB._pushCollectionNow(key); }, function () { return DB._pushCollectionNow(key); });
+  DB._pushChains[key] = next;
+  return next;
+};
+DB._pushCollectionNow = function (key) {
   var data = localStorage.getItem(key);
   if (data === null || data === undefined) return Promise.resolve();
   var payload = DB.safeParse(data);
@@ -401,7 +412,12 @@ DB.pushCollection = function (key) {
       var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
       if (!Array.isArray(serverPayload)) serverPayload = [];
       serverPayload = DB._cleanTickets(serverPayload);
-      var merged = DB._ticketMerge(payload, serverPayload);
+      // Re-read local fresh so a pull/write that landed while the server read
+      // was in flight is merged in, not reverted by a stale snapshot.
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      var merged = DB._ticketMerge(localNow, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
       return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
@@ -413,7 +429,10 @@ DB.pushCollection = function (key) {
     return DB.client.from('app_collections').select('payload').eq('key', key).limit(1).single().then(function (res) {
       var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
       if (!Array.isArray(serverPayload)) serverPayload = [];
-      var merged = DB._mergeById(payload, serverPayload);
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      var merged = DB._mergeById(localNow, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
       return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
     }, function () { return DB._ok(null); });

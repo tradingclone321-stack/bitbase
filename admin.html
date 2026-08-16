@@ -806,7 +806,25 @@ function getAllTicketsRaw(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveTickets(tickets){localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));if(typeof DB!=='undefined'){if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);DB.pushCollection('bb_support_tickets');}}
+function saveTickets(tickets){
+  if(!Array.isArray(tickets))tickets=[];
+  // Never let a save drop deletion tombstones. If a caller writes a filtered
+  // list (e.g. resolving a ticket built from getAllTickets), the tombstone
+  // would vanish from storage and the next merge would resurrect the deleted
+  // chat from the server copy.
+  try{
+    var cur=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+    if(Array.isArray(cur)){
+      var have={};
+      for(var i=0;i<tickets.length;i++)have[tickets[i].id]=true;
+      for(var j=0;j<cur.length;j++){
+        if(cur[j]&&cur[j].status==='deleted'&&!have[cur[j].id]){tickets.push(cur[j]);have[cur[j].id]=true;}
+      }
+    }
+  }catch(e){}
+  localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
+  if(typeof DB!=='undefined'){if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);DB.pushCollection('bb_support_tickets');}
+}
 // ---- Unseen/new-message tracking (per admin browser) ----
 // bb_admin_seen = { ticketId: number-of-user-messages-the-admin-has-seen }
 function getTicketSeenCount(id){
@@ -1434,7 +1452,7 @@ function replyToTicket(){
 }
 function resolveTicket(){
   if(!currentTicketId)return;
-  var tickets=getAllTickets();
+  var tickets=getAllTicketsRaw();
   for(var i=0;i<tickets.length;i++){
     if(tickets[i].id===currentTicketId){tickets[i].status='resolved';break;}
   }

@@ -1350,15 +1350,17 @@ function renderSupportThread(scroll){
   return true;
 }
 
-// Small status line showing sync health (db version, DB ready, realtime,
-// last pull). Makes it obvious whether the deployed page is current.
+// Small status line: shows only whether the support chat is connected.
+// No internal details (db version, sync counters, error text) are exposed
+// to the user.
 function updateSupportSyncStatus(){
   var st=document.getElementById('supportSyncStatus');
   if(!st)return;
-  var d={};
-  try{if(typeof DB!=='undefined')d=DB.diagnose?DB.diagnose():{ready:DB.ready};}catch(e){}
-  var color=d.ready?'#16c784':'#f7931a';
-  st.innerHTML='<span style="color:'+color+';">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+(d.lastError?' · err: '+d.lastError:'')+' · tickets '+d.serverTickets;
+  var ok=false;
+  try{if(typeof DB!=='undefined')ok=DB.ready===true;}catch(e){}
+  st.innerHTML=ok
+    ? '<span style="color:#16c784;">●</span> Connected'
+    : '<span style="color:#f7931a;">●</span> Connecting...';
 }
 
 function openSupport(){
@@ -1379,15 +1381,17 @@ function openSupport(){
 }
 // Manual sync: pull latest from server + render. Click the status line.
 function forceSync(role){
-  var st=document.getElementById(role==='admin'?'syncStatus':'supportSyncStatus');
-  if(st)st.innerHTML='<span style="color:#f7931a;">●</span> syncing...';
+  var isUser=role!=='admin';
+  var st=document.getElementById(isUser?'supportSyncStatus':'syncStatus');
+  if(st)st.innerHTML='<span style="color:#f7931a;">●</span> '+(isUser?'Syncing...':'syncing...');
   var doPull=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
   doPull.then(function(){
-    if(role!=='admin')renderSupportThread(true);
+    if(isUser){renderSupportThread(true);updateSupportSyncStatus();return;}
     refreshTickets&&refreshTickets();
     var d=DB.diagnose?DB.diagnose():{};
-    if(st)st.innerHTML='<span style="color:#16c784;">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+' · tickets '+d.serverTickets+' (click to re-sync)';
+    if(st)st.innerHTML='<span style="color:#16c784;">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+' · serverTickets '+d.serverTickets+' (click to re-sync)';
   },function(){
+    if(isUser){if(st)st.innerHTML='<span style="color:#f7931a;">●</span> Offline';return;}
     var d=DB.diagnose?DB.diagnose():{};
     if(st)st.innerHTML='<span style="color:#f7931a;">●</span> sync FAILED'+(d.lastError?': '+d.lastError:'')+' (click to retry)';
   });
