@@ -437,6 +437,34 @@ DB.pushAll = function () {
   return p;
 };
 
+// ---------------- REALTIME (WebSocket) ----------------
+// Live subscription on the app_collections table. When any device
+// upserts a collection, every subscribed device is notified within
+// ~100ms and pulls the fresh payload. `callback` receives (key).
+// Falls back silently to nothing (caller keeps its polling loop).
+DB._channels = {};
+DB.subscribe = function (key, callback) {
+  if (!DB.ready) return;
+  if (DB._channels[key]) return; // already subscribed
+  try {
+    var channel = DB.client
+      .channel('coll-' + key)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_collections', filter: 'key=eq.' + key }, function () {
+        if (callback) callback(key);
+      })
+      .subscribe();
+    DB._channels[key] = channel;
+  } catch (e) {
+    console.warn('[DB] realtime subscribe failed', key, e);
+  }
+};
+DB.unsubscribe = function (key) {
+  if (DB._channels[key]) {
+    try { DB.client.removeChannel(DB._channels[key]); } catch (e) {}
+    delete DB._channels[key];
+  }
+};
+
 DB.pullAll = function () {
   if (!DB.ready) return Promise.resolve();
   var p = DB.pullUsers();

@@ -1386,6 +1386,30 @@ function startSupportPolling(){
       }catch(e){}
     });
   }
+  // Realtime: admin replies arrive instantly via WebSocket (no wait for poll)
+  if(typeof DB!=='undefined'&&DB.ready){
+    DB.subscribe('bb_support_tickets',function(){
+      if(!supportOpen)return;
+      DB.pullCollection('bb_support_tickets').then(function(){
+        try{
+          var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+          for(var i=0;i<tickets.length;i++){
+            if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
+              var msgs=tickets[i].messages;
+              if(msgs.length>lastMsgCount){
+                for(var j=lastMsgCount;j<msgs.length;j++){
+                  var m=msgs[j];
+                  if(m.from==='admin'){addBotMsg(m.text);}
+                }
+                lastMsgCount=msgs.length;
+              }
+              break;
+            }
+          }
+        }catch(e){}
+      });
+    });
+  }
   supportPollTimer=setInterval(poll,2000);
 }
 function closeSupport(){
@@ -1393,6 +1417,7 @@ function closeSupport(){
   document.getElementById('supportTrigger').style.display='flex';
   supportOpen=false;
   if(supportPollTimer){clearInterval(supportPollTimer);supportPollTimer=null;}
+  if(typeof DB!=='undefined'&&DB.unsubscribe){DB.unsubscribe('bb_support_tickets');}
   lucide.createIcons();
 }
 function addBotMsgNoScroll(text,time){

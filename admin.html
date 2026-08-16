@@ -1182,8 +1182,8 @@ function closeChatFullPage(){
 var chatAttachments=[];
 function startAdminSupportPoll(){
   if(adminSupportPollTimer)clearInterval(adminSupportPollTimer);
-  adminSupportPollTimer=setInterval(function(){
-    if(!currentTicketId){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;return;}
+  function checkNew(){
+    if(!currentTicketId){stopAdminSupportPoll();return;}
     var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
     pullPromise.then(function(){
       try{
@@ -1201,10 +1201,19 @@ function startAdminSupportPoll(){
         }
       }catch(e){}
     });
-  },2000);
+  }
+  // Realtime: user messages arrive instantly via WebSocket (no wait for poll)
+  if(typeof DB!=='undefined'&&DB.ready){
+    DB.subscribe('bb_support_tickets',function(){
+      if(!currentTicketId){stopAdminSupportPoll();return;}
+      checkNew();
+    });
+  }
+  adminSupportPollTimer=setInterval(checkNew,2000);
 }
 function stopAdminSupportPoll(){
   if(adminSupportPollTimer){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;}
+  if(typeof DB!=='undefined'&&DB.unsubscribe){DB.unsubscribe('bb_support_tickets');}
 }
 function renderChatMessages(ticket){
   var container=document.getElementById('chatMessages');

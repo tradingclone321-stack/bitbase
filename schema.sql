@@ -204,6 +204,12 @@ create table if not exists public.balance_history (
 );
 
 -- ============================================================
+-- Realtime (WebSocket) - lets admin/users receive chat messages
+-- instantly instead of waiting for the next poll.
+-- ============================================================
+alter publication supabase_realtime add table public.app_collections;
+
+-- ============================================================
 -- RLS (disabled for demo - anon key has full access)
 -- ============================================================
 alter table public.users enable row level security;
