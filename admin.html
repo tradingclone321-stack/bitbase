@@ -1184,21 +1184,24 @@ function startAdminSupportPoll(){
   if(adminSupportPollTimer)clearInterval(adminSupportPollTimer);
   adminSupportPollTimer=setInterval(function(){
     if(!currentTicketId){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;return;}
-    try{
-      var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-      for(var i=0;i<tickets.length;i++){
-        if(tickets[i].id===currentTicketId){
-          var msgs=tickets[i].messages||[];
-          if(msgs.length>adminLastMsgCount){
-            renderChatMessages(tickets[i]);
-            adminLastMsgCount=msgs.length;
-            refreshTickets();
+    var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
+    pullPromise.then(function(){
+      try{
+        var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+        for(var i=0;i<tickets.length;i++){
+          if(tickets[i].id===currentTicketId){
+            var msgs=tickets[i].messages||[];
+            if(msgs.length>adminLastMsgCount){
+              renderChatMessages(tickets[i]);
+              adminLastMsgCount=msgs.length;
+              refreshTickets();
+            }
+            break;
           }
-          break;
         }
-      }
-    }catch(e){}
-  },3000);
+      }catch(e){}
+    });
+  },2000);
 }
 function stopAdminSupportPoll(){
   if(adminSupportPollTimer){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;}
