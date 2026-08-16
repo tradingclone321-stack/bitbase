@@ -1306,6 +1306,47 @@ document.addEventListener('visibilitychange',function(){
 var supportOpen=false;
 var supportFileAttached=false;
 var supportFileData=null;
+var supportPollTimer=null;
+var supportThreadFingerprint='';
+
+// Find the current device's open ticket from localStorage.
+function getMyOpenTicket(){
+  var uid=localStorage.getItem('bb_uid')||'000000';
+  try{
+    var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+    for(var i=0;i<tickets.length;i++){
+      if(tickets[i].userId===uid&&tickets[i].status==='open')return tickets[i];
+    }
+  }catch(e){}
+  return null;
+}
+
+// Full re-render of the whole thread. Uses a fingerprint so repeated
+// pulls that changed nothing do not clear/rescroll the chat. Re-renders
+// everything (instead of appending by index) so admin replies merged at
+// ANY position are always shown, even when a user message was just sent.
+function renderSupportThread(scroll){
+  var msgs=document.getElementById('supportMessages');
+  var ticket=getMyOpenTicket();
+  var fingerprint=ticket?JSON.stringify(ticket.messages||[]):'none';
+  if(supportThreadFingerprint===fingerprint)return false;
+  supportThreadFingerprint=fingerprint;
+  msgs.innerHTML='';
+  if(ticket&&ticket.messages&&ticket.messages.length){
+    for(var i=0;i<ticket.messages.length;i++){
+      var m=ticket.messages[i];
+      if(m.from==='admin'){
+        addBotMsgNoScroll(m.text||'Sent an attachment',m.time);
+      }else{
+        addUserMsgNoScroll(m.text||'Sent an attachment',m.attachment?m.attachment.name:null,m.time);
+      }
+    }
+  }else{
+    addBotMsgNoScroll('Hello! Welcome to BitBase Support. How can I help you today?',null);
+  }
+  if(scroll!==false)msgs.scrollTop=msgs.scrollHeight;
+  return true;
+}
 
 function openSupport(){
   var panel=document.getElementById('supportPanel');
@@ -1316,98 +1357,24 @@ function openSupport(){
   supportOpen=true;
   var msgs=document.getElementById('supportMessages');
   msgs.innerHTML='';
-  var renderLoaded=function(){
-    // Load existing ticket messages from localStorage
-    var uid=localStorage.getItem('bb_uid')||'000000';
-    var loadedExisting=false;
-    try{
-      var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-      for(var i=0;i<tickets.length;i++){
-        if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
-          for(var j=0;j<tickets[i].messages.length;j++){
-            var m=tickets[i].messages[j];
-            if(m.from==='admin'){
-              addBotMsgNoScroll(m.text,m.time);
-            }else{
-              addUserMsgNoScroll(m.text||'Sent an attachment',null,m.time);
-            }
-          }
-          loadedExisting=true;
-          break;
-        }
-      }
-    }catch(e){}
-    if(!loadedExisting){
-      addBotMsg('Hello! Welcome to BitBase Support. How can I help you today?');
-    }
-    msgs.scrollTop=msgs.scrollHeight;
-  };
+  supportThreadFingerprint='';
   var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
-  pullPromise.then(renderLoaded,renderLoaded);
+  pullPromise.then(function(){renderSupportThread(true);},function(){renderSupportThread(true);});
   startSupportPolling();
   lucide.createIcons();
 }
-var supportPollTimer=null;
 function startSupportPolling(){
   if(supportPollTimer)clearInterval(supportPollTimer);
-  var uid=localStorage.getItem('bb_uid')||'000000';
-  var lastMsgCount=0;
-  function captureCount(){
-    try{
-      var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-      for(var i=0;i<tickets.length;i++){
-        if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
-          lastMsgCount=tickets[i].messages.length;break;
-        }
-      }
-    }catch(e){}
-  }
-  captureCount();
   function poll(){
     if(!supportOpen){clearInterval(supportPollTimer);return;}
-    // Pull latest chats from Supabase (merge) so admin replies arrive live
     var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
-    pullPromise.then(function(){
-      try{
-        var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-        for(var i=0;i<tickets.length;i++){
-          if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
-            var msgs=tickets[i].messages;
-            if(msgs.length>lastMsgCount){
-              for(var j=lastMsgCount;j<msgs.length;j++){
-                var m=msgs[j];
-                if(m.from==='admin'){addBotMsg(m.text);}
-              }
-              lastMsgCount=msgs.length;
-            }
-            break;
-          }
-        }
-      }catch(e){}
-    });
+    pullPromise.then(function(){renderSupportThread(true);},function(){});
   }
   // Realtime: admin replies arrive instantly via WebSocket (no wait for poll)
   if(typeof DB!=='undefined'&&DB.ready){
     DB.subscribe('bb_support_tickets',function(){
       if(!supportOpen)return;
-      DB.pullCollection('bb_support_tickets').then(function(){
-        try{
-          var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-          for(var i=0;i<tickets.length;i++){
-            if(tickets[i].userId===uid&&tickets[i].status==='open'&&tickets[i].messages){
-              var msgs=tickets[i].messages;
-              if(msgs.length>lastMsgCount){
-                for(var j=lastMsgCount;j<msgs.length;j++){
-                  var m=msgs[j];
-                  if(m.from==='admin'){addBotMsg(m.text);}
-                }
-                lastMsgCount=msgs.length;
-              }
-              break;
-            }
-          }
-        }catch(e){}
-      });
+      DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
     });
   }
   supportPollTimer=setInterval(poll,1000);
@@ -1433,29 +1400,11 @@ function addUserMsgNoScroll(text,fileName,time){
   var div=document.createElement('div');
   div.className='support-msg user';
   var html=text;
+  if(fileName) html+='<div style="margin-top:6px;padding:6px 10px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:11px;display:flex;align-items:center;gap:6px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'+fileName+'</div>';
   var ts=time?new Date(time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   html+='<div class="msg-time">'+ts+'</div>';
   div.innerHTML=html;
   msgs.appendChild(div);
-}
-function addBotMsg(text){
-  var msgs=document.getElementById('supportMessages');
-  var div=document.createElement('div');
-  div.className='support-msg bot';
-  div.innerHTML=text+'<div class="msg-time">'+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})+'</div>';
-  msgs.appendChild(div);
-  msgs.scrollTop=msgs.scrollHeight;
-}
-function addUserMsg(text,fileName){
-  var msgs=document.getElementById('supportMessages');
-  var div=document.createElement('div');
-  div.className='support-msg user';
-  var html=text;
-  if(fileName) html+='<div style="margin-top:6px;padding:6px 10px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:11px;display:flex;align-items:center;gap:6px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'+fileName+'</div>';
-  html+='<div class="msg-time">'+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})+'</div>';
-  div.innerHTML=html;
-  msgs.appendChild(div);
-  msgs.scrollTop=msgs.scrollHeight;
 }
 function handleSupportFile(input){
   if(input.files&&input.files[0]){
@@ -1482,7 +1431,6 @@ function sendSupportMsg(){
   var text=input.value.trim();
   if(!text&&!supportFileAttached)return;
   var fileName=supportFileAttached?supportFileData?supportFileData.name:'attachment':null;
-  addUserMsg(text||'Sent an attachment',fileName);
   var attachmentData=supportFileData?{name:supportFileData.name,type:supportFileData.type,dataUrl:supportFileData.dataUrl}:null;
   input.value='';
   removeSupportFile();
@@ -1515,6 +1463,7 @@ function sendSupportMsg(){
     });
   }
   localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
+  renderSupportThread(true);
   if(typeof DB!=='undefined'){DB.pushCollection('bb_support_tickets');}
 }
 

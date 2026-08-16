@@ -446,6 +446,7 @@ DB.pushAll = function () {
 DB._broadcastChannel = null;
 DB._broadcastReady = false;
 DB._broadcastSubscribers = {};
+DB._pendingBroadcasts = [];
 DB._ensureBroadcast = function () {
   if (!DB.ready) return;
   if (DB._broadcastChannel) return;
@@ -458,22 +459,30 @@ DB._ensureBroadcast = function () {
       })
       .subscribe(function (status) {
         DB._broadcastReady = (status === 'SUBSCRIBED');
+        if (DB._broadcastReady && DB._pendingBroadcasts.length) {
+          var pend = DB._pendingBroadcasts.splice(0);
+          for (var i = 0; i < pend.length; i++) DB._sendBroadcast(pend[i]);
+        }
       });
   } catch (e) {
     console.warn('[DB] realtime broadcast failed', e);
   }
+};
+DB._sendBroadcast = function (key) {
+  try {
+    DB._broadcastChannel.send({ type: 'broadcast', event: 'update', payload: { key: key } });
+  } catch (e) {}
 };
 DB.broadcastUpdate = function (key) {
   if (!DB.ready) return;
   DB._ensureBroadcast();
   if (!DB._broadcastChannel) return;
   if (!DB._broadcastReady) {
-    // Channel not connected yet; fall back to the poll loop on this tick.
+    // Channel not connected yet: buffer so the update is not lost.
+    if (DB._pendingBroadcasts.indexOf(key) < 0) DB._pendingBroadcasts.push(key);
     return;
   }
-  try {
-    DB._broadcastChannel.send({ type: 'broadcast', event: 'update', payload: { key: key } });
-  } catch (e) {}
+  DB._sendBroadcast(key);
 };
 DB.subscribe = function (key, callback) {
   if (!DB.ready) return;
