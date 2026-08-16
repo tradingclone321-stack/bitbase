@@ -8,7 +8,7 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
-DB.VERSION = '2026-08-16-pollfix';
+DB.VERSION = '2026-08-16-adminfix';
 DB._lastPullTime = 0;
 DB._lastSyncError = '';
 
@@ -283,15 +283,29 @@ DB._ticketMerge = function (local, server) {
   var order = [];
   function upsertTicket(t) {
     if (!t || !t.id) return;
+    // Expired deletion tombstones no longer need to be propagated.
+    if (t.status === 'deleted' && t._deletedAt && (Date.now() - t._deletedAt) > DB.TICKET_TTL) return;
     if (!map[t.id]) {
       map[t.id] = { id: t.id, userId: t.userId, userName: t.userName, userEmail: t.userEmail, status: t.status || 'open', createdAt: t.createdAt || Date.now(), messages: [] };
       order.push(t.id);
     }
     var cur = map[t.id];
-    if (t.status === 'resolved') cur.status = 'resolved';
+    // An admin deletion wins over every other status so it survives the
+    // union merge and propagates to every device (nothing resurrects it).
+    if (t.status === 'deleted' || cur.status === 'deleted') {
+      cur.status = 'deleted';
+      if (t._deletedAt) cur._deletedAt = t._deletedAt;
+    } else if (t.status === 'resolved') {
+      cur.status = 'resolved';
+    }
     if (!cur.userName && t.userName) cur.userName = t.userName;
     if (!cur.userEmail && t.userEmail) cur.userEmail = t.userEmail;
     if (t.lastAdminReply) cur.lastAdminReply = t.lastAdminReply;
+    if (cur.status === 'deleted') {
+      // Tombstones carry no chat history (keeps the payload small).
+      cur.messages = [];
+      return;
+    }
     var seen = {};
     for (var i = 0; i < cur.messages.length; i++) {
       var m = cur.messages[i];
@@ -321,6 +335,8 @@ DB._cleanTickets = function (tickets) {
   for (var i = 0; i < tickets.length; i++) {
     var t = tickets[i];
     if (!t) continue;
+    // Expire deletion tombstones so they don't accumulate forever.
+    if (t.status === 'deleted' && t._deletedAt && (Date.now() - t._deletedAt) > DB.TICKET_TTL) continue;
     t.messages = (t.messages || []).filter(function (m) { return m.time && m.time >= cutoff; });
     out.push(t);
   }
@@ -550,10 +566,11 @@ DB.pullAll = function () {
 DB.diagnose = function () {
   var t = {};
   try { t = JSON.parse(localStorage.getItem('bb_support_tickets') || '[]'); } catch (e) { t = []; }
+  var active = (t || []).filter(function (x) { return x && x.status !== 'deleted'; });
   var myUid = localStorage.getItem('bb_uid') || '(none)';
   var myTicket = null;
-  for (var i = 0; i < (t || []).length; i++) {
-    if (String(t[i].userId) === String(myUid)) { myTicket = t[i]; break; }
+  for (var i = 0; i < active.length; i++) {
+    if (String(active[i].userId) === String(myUid)) { myTicket = active[i]; break; }
   }
   return {
     version: DB.VERSION,
@@ -562,7 +579,7 @@ DB.diagnose = function () {
     client: !!DB.client,
     lastPullAgoSec: DB._lastPullTime ? Math.round((Date.now() - DB._lastPullTime) / 1000) : -1,
     lastError: DB._lastSyncError || '',
-    serverTickets: (t || []).length,
+    serverTickets: active.length,
     myTicket: myTicket ? { id: myTicket.id, msgs: (myTicket.messages || []).length } : null
   };
 };

@@ -794,10 +794,40 @@ function getAllTickets(){
   try{
     var raw=localStorage.getItem('bb_support_tickets');
     if(!raw)return[];
+    var arr=JSON.parse(raw);
+    // Hide deletion tombstones from every consumer (list, open, stats).
+    return arr.filter(function(t){return t && t.status!=='deleted';});
+  }catch(e){return[];}
+}
+function getAllTicketsRaw(){
+  try{
+    var raw=localStorage.getItem('bb_support_tickets');
+    if(!raw)return[];
     return JSON.parse(raw);
   }catch(e){return[];}
 }
 function saveTickets(tickets){localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));if(typeof DB!=='undefined'){if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);DB.pushCollection('bb_support_tickets');}}
+// ---- Unseen/new-message tracking (per admin browser) ----
+// bb_admin_seen = { ticketId: number-of-user-messages-the-admin-has-seen }
+function getTicketSeenCount(id){
+  try{var m=JSON.parse(localStorage.getItem('bb_admin_seen')||'{}');return m[id]||0;}catch(e){return 0;}
+}
+function setTicketSeenCount(id,cnt){
+  try{var m=JSON.parse(localStorage.getItem('bb_admin_seen')||'{}');m[id]=cnt;localStorage.setItem('bb_admin_seen',JSON.stringify(m));}catch(e){}
+}
+function countUserMsgs(t){
+  var n=0;
+  if(t&&t.messages){for(var i=0;i<t.messages.length;i++){if(t.messages[i]&&t.messages[i].from!=='admin')n++;}}
+  return n;
+}
+// Most recent activity = latest of createdAt / lastAdminReply / last message.
+function ticketLastActivity(t){
+  var la=t.createdAt||0;
+  if(t.lastAdminReply&&t.lastAdminReply>la)la=t.lastAdminReply;
+  var msgs=t.messages||[];
+  if(msgs.length){var lt=msgs[msgs.length-1].time||0;if(lt>la)la=lt;}
+  return la;
+}
 function getAllDemoTrades(){
   try{
     var raw=localStorage.getItem('bb_demo_trades_hist');
@@ -1115,7 +1145,8 @@ function refreshTickets(){
   if(currentTicketFilter!=='all'){
     filtered=tickets.filter(function(t){return t.status===currentTicketFilter;});
   }
-  filtered.sort(function(a,b){return(b.createdAt||0)-(a.createdAt||0);});
+  // Sort by most recent activity so a new user message jumps to the top.
+  filtered.sort(function(a,b){return ticketLastActivity(b)-ticketLastActivity(a);});
   var html='';
   for(var i=0;i<filtered.length;i++){
     var t=filtered[i];
@@ -1123,14 +1154,21 @@ function refreshTickets(){
     var lastMsg=t.messages&&t.messages.length?t.messages[t.messages.length-1].text:'No messages';
     if(lastMsg.length>60)lastMsg=lastMsg.substring(0,60)+'...';
     var activeClass=t.id===currentTicketId?'active':'';
-    html+='<div class="ticket-item '+activeClass+'" onclick="openTicket(\''+t.id+'\')">'+
+    // Unseen user messages -> bold row + orange count badge.
+    var unseen=countUserMsgs(t)-getTicketSeenCount(t.id);
+    if(unseen<0)unseen=0;
+    var rowStyle=unseen>0?'background:rgba(247,147,26,0.09);border-left:3px solid #f7931a;':'';
+    var nameStyle=unseen>0?'font-weight:800;color:#fff;':'';
+    var badge=unseen>0?'<span style="background:#f7931a;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;margin-left:6px;">'+unseen+'</span>':'';
+    var prevStyle=unseen>0?'font-weight:700;color:rgba(255,255,255,0.9);':'';
+    html+='<div class="ticket-item '+activeClass+'" style="'+rowStyle+'" onclick="openTicket(\''+t.id+'\')">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
-        '<span class="name">'+t.userName+' ('+t.userId+')</span>'+
+        '<span class="name" style="'+nameStyle+'">'+t.userName+' ('+t.userId+')</span>'+badge+
         '<span class="time">'+fmtTime(t.createdAt)+'</span>'+
       '</div>'+
       '<div style="display:flex;align-items:center;gap:6px;">'+
         '<span style="width:7px;height:7px;border-radius:50%;'+statusDot+'flex-shrink:0;"></span>'+
-        '<span class="preview">'+lastMsg+'</span>'+
+        '<span class="preview" style="'+prevStyle+'">'+lastMsg+'</span>'+
       '</div>'+
     '</div>';
   }
@@ -1165,6 +1203,25 @@ function openTicket(id){
   document.getElementById('chatStatus').innerHTML=statusBadge;
   renderChatMessages(ticket);
   adminLastMsgCount=ticket.messages?ticket.messages.length:0;
+  // Mark the chat as read shortly after it is opened (new messages render
+  // bold until then, so the admin still notices them).
+  (function(ticketId){
+    setTimeout(function(){
+      if(currentTicketId!==ticketId)return;
+      var t0=getAllTicketsRaw();
+      for(var k=0;k<t0.length;k++){
+        if(t0[k].id===ticketId){
+          setTicketSeenCount(ticketId,countUserMsgs(t0[k]));
+          break;
+        }
+      }
+      var t1=getAllTickets();
+      for(var j=0;j<t1.length;j++){
+        if(t1[j].id===ticketId){renderChatMessages(t1[j]);break;}
+      }
+      refreshTickets();
+    },3000);
+  })(ticket.id);
   startAdminSupportPoll();
   refreshTickets();
   // Full-page chat: hide ticket list, show back button
@@ -1202,6 +1259,7 @@ function startAdminSupportPoll(){
             if(msgs.length>adminLastMsgCount){
               renderChatMessages(tickets[i]);
               adminLastMsgCount=msgs.length;
+              setTicketSeenCount(currentTicketId,countUserMsgs(tickets[i]));
               refreshTickets();
             }
             break;
@@ -1268,6 +1326,7 @@ function renderSupportLive(){
           if(msgs.length>adminLastMsgCount){
             renderChatMessages(tickets[i]);
             adminLastMsgCount=msgs.length;
+            setTicketSeenCount(currentTicketId,countUserMsgs(tickets[i]));
           }
           break;
         }
@@ -1290,15 +1349,20 @@ function renderChatMessages(ticket){
   var container=document.getElementById('chatMessages');
   chatAttachments=[];
   var html='';
+  var seenCount=getTicketSeenCount(ticket.id);
+  var uIdx=0;
   if(ticket.messages){
     for(var i=0;i<ticket.messages.length;i++){
       var m=ticket.messages[i];
       var isUser=m.from!=='admin';
+      var isNew=false;
+      if(isUser){isNew=(uIdx>=seenCount);uIdx++;}
       var align=isUser?'align-self:flex-end;':'align-self:flex-start;';
       var bg=isUser?'background:rgba(247,147,26,0.12);border:1px solid rgba(247,147,26,0.2);border-bottom-right-radius:4px;':'background:rgba(65,105,225,0.12);border:1px solid rgba(65,105,225,0.2);border-bottom-left-radius:4px;';
+      if(isNew)bg='background:rgba(247,147,26,0.24);border:2px solid #f7931a;border-bottom-right-radius:4px;';
       html+='<div style="'+align+bg+'max-width:75%;padding:12px 16px;border-radius:12px;font-size:13px;line-height:1.5;">';
-      html+='<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:'+(isUser?'#f7931a':'#4169E1')+';">'+(isUser?(ticket.userName||'User')+' ('+ticket.userId+')':'Admin')+'</div>';
-      if(m.text)html+=m.text;
+      html+='<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:'+(isUser?'#f7931a':'#4169E1')+';">'+(isUser?(ticket.userName||'User')+' ('+ticket.userId+')':'Admin')+(isNew?' <span style="background:#f7931a;color:#fff;border-radius:8px;padding:0 6px;font-size:9px;font-weight:800;">NEW</span>':'')+'</div>';
+      if(m.text)html+='<div style="'+(isNew?'font-weight:800;':'')+'">'+m.text+'</div>';
       if(m.attachment){
         var attIdx=chatAttachments.length;
         chatAttachments.push(m.attachment);
@@ -1307,7 +1371,7 @@ function renderChatMessages(ticket){
         }else{
           html+='<div style="margin-top:8px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;" onclick="openAttModal('+attIdx+')">'+
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'+
-            '<span style="font-size:12px;color:rgba(255,255,255,0.7);">'+m.attachment.name+'</span>'+
+            '<span style="font-size:12px;color:rgba(255,255,255,0.7);'+(isNew?'font-weight:700;':'')+'">'+m.attachment.name+'</span>'+
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16c784" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'+
           '</div>';
         }
@@ -1359,6 +1423,7 @@ function replyToTicket(){
         input.value='';
         renderChatMessages(tickets[i]);
         adminLastMsgCount=tickets[i].messages.length;
+        setTicketSeenCount(currentTicketId,countUserMsgs(tickets[i]));
         refreshTickets();
         showToast('Reply sent','success');
         break;
@@ -1386,9 +1451,18 @@ function resolveTicket(){
 function deleteTicket(){
   if(!currentTicketId)return;
   if(!confirm('Delete this conversation?'))return;
-  var tickets=getAllTickets();
-  tickets=tickets.filter(function(t){return t.id!==currentTicketId;});
-  saveTickets(tickets);
+  // Turn the ticket into a deletion tombstone that wins the merge on every
+  // device, instead of just dropping it locally (which the sync re-adds).
+  var raw=getAllTicketsRaw();
+  for(var i=0;i<raw.length;i++){
+    if(raw[i].id===currentTicketId){
+      raw[i].status='deleted';
+      raw[i]._deletedAt=Date.now();
+      raw[i].messages=[];
+      break;
+    }
+  }
+  saveTickets(raw);
   stopAdminSupportPoll();
   document.getElementById('chatEmpty').style.display='flex';
   document.getElementById('chatActive').style.display='none';
