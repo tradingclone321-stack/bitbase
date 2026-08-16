@@ -1416,7 +1416,7 @@ function startSupportPolling(){
       DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
     });
   }
-  supportPollTimer=setInterval(poll,500);
+  supportPollTimer=setInterval(poll,5000);
 }
 function closeSupport(){
   document.getElementById('supportPanel').style.display='none';

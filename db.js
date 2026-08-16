@@ -8,7 +8,7 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
-DB.VERSION = '2026-08-16-rtfix';
+DB.VERSION = '2026-08-16-pollfix';
 DB._lastPullTime = 0;
 DB._lastSyncError = '';
 
@@ -405,9 +405,21 @@ DB.pushCollection = function (key) {
   return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, DB._ok);
 };
 
+DB._pullInFlight = {};
+DB._pullQueued = {};
 DB.pullCollection = function (key) {
   if (!DB.ready) return Promise.resolve();
-  return DB.client.from('app_collections').select('payload').eq('key', key).single().then(function (res) {
+  if (DB._pullInFlight[key]) {
+    // A pull for this key is already in flight. Never stack another
+    // full-payload download on top of it: the support payload can be
+    // hundreds of KB, so overlapping pulls saturate the connection
+    // pool and starve the push path (sends never reach the server).
+    // Note that a refresh is still wanted and re-run once the current
+    // pull settles, so the newest data is not lost.
+    DB._pullQueued[key] = true;
+    return DB._pullInFlight[key];
+  }
+  var p = DB.client.from('app_collections').select('payload').eq('key', key).single().then(function (res) {
     DB._lastPullTime = Date.now();
     DB._lastSyncError = '';
     if (res && res.data && res.data.payload !== null && res.data.payload !== undefined) {
@@ -433,6 +445,15 @@ DB.pullCollection = function (key) {
       }
     }
   }, function (e) { DB._lastSyncError = (e && e.message) || 'pull failed'; return null; });
+  DB._pullInFlight[key] = p;
+  p.then(function () {
+    DB._pullInFlight[key] = null;
+    if (DB._pullQueued[key]) { DB._pullQueued[key] = false; DB.pullCollection(key); }
+  }, function () {
+    DB._pullInFlight[key] = null;
+    if (DB._pullQueued[key]) { DB._pullQueued[key] = false; DB.pullCollection(key); }
+  });
+  return p;
 };
 
 DB.pushAll = function () {

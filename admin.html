@@ -1210,7 +1210,7 @@ function startAdminSupportPoll(){
       }catch(e){}
     });
   }
-  adminSupportPollTimer=setInterval(checkNew,500);
+  adminSupportPollTimer=setInterval(checkNew,5000);
 }
 function stopAdminSupportPoll(){
   if(adminSupportPollTimer){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;}
@@ -1278,12 +1278,14 @@ function renderSupportLive(){
 if(typeof DB!=='undefined'&&DB.ready){
   DB.subscribe('bb_support_tickets',refreshSupportLive);
 }
-// Poll support tickets every 500ms on ANY tab so user messages arrive even
-// when the admin is not on the Support tab and Realtime is unavailable.
+// Fallback poll on ANY tab so user messages arrive even when the admin is
+// not on the Support tab and Realtime is unavailable. Realtime broadcasts
+// deliver instantly; this 5s fallback stays light (each pull downloads the
+// full payload, so hammering it every 500ms starves the send path).
 setInterval(function(){
   if(document.hidden)return;
   refreshSupportLive();
-},500);
+},5000);
 function renderChatMessages(ticket){
   var container=document.getElementById('chatMessages');
   chatAttachments=[];
