@@ -1370,14 +1370,25 @@ function startSupportPolling(){
     var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
     pullPromise.then(function(){renderSupportThread(true);},function(){});
   }
-  // Realtime: admin replies arrive instantly via WebSocket (no wait for poll)
+  // Realtime: admin replies arrive instantly via WebSocket (no wait for poll).
+  // When the broadcast carries the payload it is applied immediately (no
+  // pull round-trip); the 1s poll reconciles with the server.
   if(typeof DB!=='undefined'&&DB.ready){
-    DB.subscribe('bb_support_tickets',function(){
+    DB.subscribe('bb_support_tickets',function(key,payload){
       if(!supportOpen)return;
+      if(payload && Array.isArray(payload)){
+        try{
+          var local=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+          if(!Array.isArray(local))local=[];
+          localStorage.setItem('bb_support_tickets', JSON.stringify(DB._ticketMerge(local, payload)));
+        }catch(e){}
+        renderSupportThread(true);
+        return;
+      }
       DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
     });
   }
-  supportPollTimer=setInterval(poll,1000);
+  supportPollTimer=setInterval(poll,500);
 }
 function closeSupport(){
   document.getElementById('supportPanel').style.display='none';
@@ -1464,7 +1475,12 @@ function sendSupportMsg(){
   }
   localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
   renderSupportThread(true);
-  if(typeof DB!=='undefined'){DB.pushCollection('bb_support_tickets');}
+  if(typeof DB!=='undefined'){
+    // Optimistic: broadcast local state so the admin's chat renders
+    // instantly, then push to the server in the background.
+    if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);
+    DB.pushCollection('bb_support_tickets');
+  }
 }
 
 // ===== SERVER BALANCE SYNC =====

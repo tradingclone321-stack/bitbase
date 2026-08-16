@@ -384,7 +384,7 @@ DB.pushCollection = function (key) {
       serverPayload = DB._cleanTickets(serverPayload);
       var merged = DB._ticketMerge(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
   if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
@@ -396,10 +396,10 @@ DB.pushCollection = function (key) {
       if (!Array.isArray(serverPayload)) serverPayload = [];
       var merged = DB._mergeById(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
-  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
+  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, DB._ok);
 };
 
 DB.pullCollection = function (key) {
@@ -453,36 +453,51 @@ DB._ensureBroadcast = function () {
   try {
     DB._broadcastChannel = DB.client.channel('bb-realtime', { config: { broadcast: { self: true } } });
     DB._broadcastChannel
-      .on('broadcast', { event: 'update' }, function (payload) {
-        var key = (payload && payload.key) || null;
-        if (key && DB._broadcastSubscribers[key]) DB._broadcastSubscribers[key](key);
+      .on('broadcast', { event: 'update' }, function (data) {
+        var key = (data && data.key) || null;
+        var pld = (data && data.payload !== undefined) ? data.payload : null;
+        if (key && DB._broadcastSubscribers[key]) DB._broadcastSubscribers[key](key, pld);
       })
       .subscribe(function (status) {
         DB._broadcastReady = (status === 'SUBSCRIBED');
         if (DB._broadcastReady && DB._pendingBroadcasts.length) {
           var pend = DB._pendingBroadcasts.splice(0);
-          for (var i = 0; i < pend.length; i++) DB._sendBroadcast(pend[i]);
+          for (var i = 0; i < pend.length; i++) DB._sendBroadcast(pend[i].key, pend[i].payload);
         }
       });
   } catch (e) {
     console.warn('[DB] realtime broadcast failed', e);
   }
 };
-DB._sendBroadcast = function (key) {
+DB._sendBroadcast = function (key, payload) {
   try {
-    DB._broadcastChannel.send({ type: 'broadcast', event: 'update', payload: { key: key } });
+    var msg = { type: 'broadcast', event: 'update', payload: { key: key } };
+    // Include the data so receivers update instantly without a pull round-trip.
+    if (payload !== undefined && payload !== null) {
+      var s;
+      try { s = JSON.stringify(payload); } catch (e) { s = null; }
+      if (!s || s.length < 400000) msg.payload.payload = payload;
+    }
+    DB._broadcastChannel.send(msg);
   } catch (e) {}
 };
-DB.broadcastUpdate = function (key) {
+DB.broadcastUpdate = function (key, payload) {
   if (!DB.ready) return;
   DB._ensureBroadcast();
   if (!DB._broadcastChannel) return;
   if (!DB._broadcastReady) {
     // Channel not connected yet: buffer so the update is not lost.
-    if (DB._pendingBroadcasts.indexOf(key) < 0) DB._pendingBroadcasts.push(key);
+    // Keep only the latest payload per key to avoid stale replay.
+    for (var i = 0; i < DB._pendingBroadcasts.length; i++) {
+      if (DB._pendingBroadcasts[i].key === key) {
+        DB._pendingBroadcasts[i].payload = payload;
+        return;
+      }
+    }
+    DB._pendingBroadcasts.push({ key: key, payload: payload });
     return;
   }
-  DB._sendBroadcast(key);
+  DB._sendBroadcast(key, payload);
 };
 DB.subscribe = function (key, callback) {
   if (!DB.ready) return;
