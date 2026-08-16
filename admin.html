@@ -797,7 +797,7 @@ function getAllTickets(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveTickets(tickets){localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));if(typeof DB!=='undefined')DB.pushCollection('bb_support_tickets');}
+function saveTickets(tickets){localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));if(typeof DB!=='undefined'){if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);DB.pushCollection('bb_support_tickets');}}
 function getAllDemoTrades(){
   try{
     var raw=localStorage.getItem('bb_demo_trades_hist');
@@ -1210,7 +1210,7 @@ function startAdminSupportPoll(){
       }catch(e){}
     });
   }
-  adminSupportPollTimer=setInterval(checkNew,1000);
+  adminSupportPollTimer=setInterval(checkNew,500);
 }
 function stopAdminSupportPoll(){
   if(adminSupportPollTimer){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;}
@@ -1242,35 +1242,48 @@ function forceSync(role){
 }
 // Live support updates: refresh the ticket list + open chat instantly on
 // any change, no matter which tab is active or whether a chat is open.
-function refreshSupportLive(){
+// When a broadcast arrives WITH the payload it is applied immediately
+// (no pull round-trip); otherwise it falls back to a pull.
+function refreshSupportLive(key, payload){
   if(typeof DB==='undefined'||!DB.ready)return;
-  DB.pullCollection('bb_support_tickets').then(function(){    try{
-      refreshTickets();
-      if(currentTicketId){
-        var tickets=getAllTickets();
-        for(var i=0;i<tickets.length;i++){
-          if(tickets[i].id===currentTicketId){
-            var msgs=tickets[i].messages||[];
-            if(msgs.length>adminLastMsgCount){
-              renderChatMessages(tickets[i]);
-              adminLastMsgCount=msgs.length;
-            }
-            break;
+  if(payload && Array.isArray(payload)){
+    try{
+      var local=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+      if(!Array.isArray(local))local=[];
+      localStorage.setItem('bb_support_tickets', JSON.stringify(DB._ticketMerge(local, payload)));
+    }catch(e){}
+    renderSupportLive();
+    return;
+  }
+  DB.pullCollection('bb_support_tickets').then(function(){renderSupportLive();},function(){});
+}
+function renderSupportLive(){
+  try{
+    refreshTickets();
+    if(currentTicketId){
+      var tickets=getAllTickets();
+      for(var i=0;i<tickets.length;i++){
+        if(tickets[i].id===currentTicketId){
+          var msgs=tickets[i].messages||[];
+          if(msgs.length>adminLastMsgCount){
+            renderChatMessages(tickets[i]);
+            adminLastMsgCount=msgs.length;
           }
+          break;
         }
       }
-    }catch(e){}
-  });
+    }
+  }catch(e){}
 }
 if(typeof DB!=='undefined'&&DB.ready){
   DB.subscribe('bb_support_tickets',refreshSupportLive);
 }
-// Poll support tickets every 2s on ANY tab so user messages arrive even
+// Poll support tickets every 500ms on ANY tab so user messages arrive even
 // when the admin is not on the Support tab and Realtime is unavailable.
 setInterval(function(){
   if(document.hidden)return;
   refreshSupportLive();
-},2000);
+},500);
 function renderChatMessages(ticket){
   var container=document.getElementById('chatMessages');
   chatAttachments=[];

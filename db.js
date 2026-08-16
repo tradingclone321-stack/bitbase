@@ -387,7 +387,7 @@ DB.pushCollection = function (key) {
       serverPayload = DB._cleanTickets(serverPayload);
       var merged = DB._ticketMerge(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
   if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
@@ -399,10 +399,10 @@ DB.pushCollection = function (key) {
       if (!Array.isArray(serverPayload)) serverPayload = [];
       var merged = DB._mergeById(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
-  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
+  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, DB._ok);
 };
 
 DB.pullCollection = function (key) {
