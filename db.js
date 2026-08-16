@@ -8,7 +8,7 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
-DB.VERSION = '2026-08-16-syncfix';
+DB.VERSION = '2026-08-16-rtfix';
 DB._lastPullTime = 0;
 DB._lastSyncError = '';
 
@@ -459,8 +459,19 @@ DB._ensureBroadcast = function () {
     DB._broadcastChannel = DB.client.channel('bb-realtime', { config: { broadcast: { self: true } } });
     DB._broadcastChannel
       .on('broadcast', { event: 'update' }, function (data) {
-        var key = (data && data.key) || null;
-        var pld = (data && data.payload !== undefined) ? data.payload : null;
+        // supabase-js delivers the full message:
+        //   { type:'broadcast', event:'update', payload:{ key, payload } }
+        // Older builds deliver just { key, payload }. Handle both.
+        var key = null, pld = null;
+        if (data) {
+          if (data.payload && typeof data.payload === 'object' && data.payload.key !== undefined) {
+            key = data.payload.key;
+            pld = (data.payload.payload !== undefined) ? data.payload.payload : null;
+          } else if (data.key !== undefined) {
+            key = data.key;
+            pld = (data.payload !== undefined) ? data.payload : null;
+          }
+        }
         if (key && DB._broadcastSubscribers[key]) DB._broadcastSubscribers[key](key, pld);
       })
       .subscribe(function (status) {
