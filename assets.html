@@ -1259,6 +1259,7 @@ document.addEventListener('visibilitychange',function(){
     </button>
   </div>
 
+  <div id="supportSyncStatus" onclick="forceSync('user')" title="Click to force sync" style="padding:6px 20px;font-size:11px;color:rgba(255,255,255,0.4);background:rgba(0,0,0,0.2);flex-shrink:0;cursor:pointer;"></div>
   <!-- Chat Messages -->
   <div id="supportMessages" style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px;"></div>
 
@@ -1345,7 +1346,19 @@ function renderSupportThread(scroll){
     addBotMsgNoScroll('Hello! Welcome to BitBase Support. How can I help you today?',null);
   }
   if(scroll!==false)msgs.scrollTop=msgs.scrollHeight;
+  updateSupportSyncStatus();
   return true;
+}
+
+// Small status line showing sync health (db version, DB ready, realtime,
+// last pull). Makes it obvious whether the deployed page is current.
+function updateSupportSyncStatus(){
+  var st=document.getElementById('supportSyncStatus');
+  if(!st)return;
+  var d={};
+  try{if(typeof DB!=='undefined')d=DB.diagnose?DB.diagnose():{ready:DB.ready};}catch(e){}
+  var color=d.ready?'#16c784':'#f7931a';
+  st.innerHTML='<span style="color:'+color+';">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+(d.lastError?' · err: '+d.lastError:'')+' · tickets '+d.serverTickets;
 }
 
 function openSupport(){
@@ -1358,10 +1371,26 @@ function openSupport(){
   var msgs=document.getElementById('supportMessages');
   msgs.innerHTML='';
   supportThreadFingerprint='';
+  updateSupportSyncStatus();
   var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
   pullPromise.then(function(){renderSupportThread(true);},function(){renderSupportThread(true);});
   startSupportPolling();
   lucide.createIcons();
+}
+// Manual sync: pull latest from server + render. Click the status line.
+function forceSync(role){
+  var st=document.getElementById(role==='admin'?'syncStatus':'supportSyncStatus');
+  if(st)st.innerHTML='<span style="color:#f7931a;">●</span> syncing...';
+  var doPull=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
+  doPull.then(function(){
+    if(role!=='admin')renderSupportThread(true);
+    refreshTickets&&refreshTickets();
+    var d=DB.diagnose?DB.diagnose():{};
+    if(st)st.innerHTML='<span style="color:#16c784;">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+' · tickets '+d.serverTickets+' (click to re-sync)';
+  },function(){
+    var d=DB.diagnose?DB.diagnose():{};
+    if(st)st.innerHTML='<span style="color:#f7931a;">●</span> sync FAILED'+(d.lastError?': '+d.lastError:'')+' (click to retry)';
+  });
 }
 function startSupportPolling(){
   if(supportPollTimer)clearInterval(supportPollTimer);
@@ -1370,25 +1399,14 @@ function startSupportPolling(){
     var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
     pullPromise.then(function(){renderSupportThread(true);},function(){});
   }
-  // Realtime: admin replies arrive instantly via WebSocket (no wait for poll).
-  // When the broadcast carries the payload it is applied immediately (no
-  // pull round-trip); the 1s poll reconciles with the server.
+  // Realtime: admin replies arrive instantly via WebSocket (no wait for poll)
   if(typeof DB!=='undefined'&&DB.ready){
-    DB.subscribe('bb_support_tickets',function(key,payload){
+    DB.subscribe('bb_support_tickets',function(){
       if(!supportOpen)return;
-      if(payload && Array.isArray(payload)){
-        try{
-          var local=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-          if(!Array.isArray(local))local=[];
-          localStorage.setItem('bb_support_tickets', JSON.stringify(DB._ticketMerge(local, payload)));
-        }catch(e){}
-        renderSupportThread(true);
-        return;
-      }
       DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
     });
   }
-  supportPollTimer=setInterval(poll,500);
+  supportPollTimer=setInterval(poll,1000);
 }
 function closeSupport(){
   document.getElementById('supportPanel').style.display='none';
@@ -1475,12 +1493,7 @@ function sendSupportMsg(){
   }
   localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
   renderSupportThread(true);
-  if(typeof DB!=='undefined'){
-    // Optimistic: broadcast local state so the admin's chat renders
-    // instantly, then push to the server in the background.
-    if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);
-    DB.pushCollection('bb_support_tickets');
-  }
+  if(typeof DB!=='undefined'){DB.pushCollection('bb_support_tickets');}
 }
 
 // ===== SERVER BALANCE SYNC =====

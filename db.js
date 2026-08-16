@@ -8,6 +8,9 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
+DB.VERSION = '2026-08-16-syncfix';
+DB._lastPullTime = 0;
+DB._lastSyncError = '';
 
 DB.init = function () {
   try {
@@ -384,7 +387,7 @@ DB.pushCollection = function (key) {
       serverPayload = DB._cleanTickets(serverPayload);
       var merged = DB._ticketMerge(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
   if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
@@ -396,15 +399,17 @@ DB.pushCollection = function (key) {
       if (!Array.isArray(serverPayload)) serverPayload = [];
       var merged = DB._mergeById(payload, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
     }, function () { return DB._ok(null); });
   }
-  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, DB._ok);
+  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key); return r; }, DB._ok);
 };
 
 DB.pullCollection = function (key) {
   if (!DB.ready) return Promise.resolve();
   return DB.client.from('app_collections').select('payload').eq('key', key).single().then(function (res) {
+    DB._lastPullTime = Date.now();
+    DB._lastSyncError = '';
     if (res && res.data && res.data.payload !== null && res.data.payload !== undefined) {
       var serverPayload = res.data.payload;
       if (key === 'bb_support_tickets') {
@@ -427,7 +432,7 @@ DB.pullCollection = function (key) {
         localStorage.setItem(key, JSON.stringify(res.data.payload));
       }
     }
-  }, function () { return null; });
+  }, function (e) { DB._lastSyncError = (e && e.message) || 'pull failed'; return null; });
 };
 
 DB.pushAll = function () {
@@ -487,14 +492,7 @@ DB.broadcastUpdate = function (key, payload) {
   if (!DB._broadcastChannel) return;
   if (!DB._broadcastReady) {
     // Channel not connected yet: buffer so the update is not lost.
-    // Keep only the latest payload per key to avoid stale replay.
-    for (var i = 0; i < DB._pendingBroadcasts.length; i++) {
-      if (DB._pendingBroadcasts[i].key === key) {
-        DB._pendingBroadcasts[i].payload = payload;
-        return;
-      }
-    }
-    DB._pendingBroadcasts.push({ key: key, payload: payload });
+    if (DB._pendingBroadcasts.indexOf(key) < 0) DB._pendingBroadcasts.push({ key: key, payload: payload });
     return;
   }
   DB._sendBroadcast(key, payload);
@@ -510,9 +508,31 @@ DB.unsubscribe = function (key) {
 
 DB.pullAll = function () {
   if (!DB.ready) return Promise.resolve();
-  var p = DB.pullUsers();
+  var p = DB.pushUsers();
   for (var i = 0; i < DB.COLLECTIONS.length; i++) p = p.then(DB.pullCollection.bind(null, DB.COLLECTIONS[i]));
   return p;
+};
+
+// Diagnostic helper: returns a snapshot of the sync layer state so the
+// admin page can show exactly what is (or is not) working.
+DB.diagnose = function () {
+  var t = {};
+  try { t = JSON.parse(localStorage.getItem('bb_support_tickets') || '[]'); } catch (e) { t = []; }
+  var myUid = localStorage.getItem('bb_uid') || '(none)';
+  var myTicket = null;
+  for (var i = 0; i < (t || []).length; i++) {
+    if (String(t[i].userId) === String(myUid)) { myTicket = t[i]; break; }
+  }
+  return {
+    version: DB.VERSION,
+    ready: !!DB.ready,
+    realtime: !!DB._broadcastReady,
+    client: !!DB.client,
+    lastPullAgoSec: DB._lastPullTime ? Math.round((Date.now() - DB._lastPullTime) / 1000) : -1,
+    lastError: DB._lastSyncError || '',
+    serverTickets: (t || []).length,
+    myTicket: myTicket ? { id: myTicket.id, msgs: (myTicket.messages || []).length } : null
+  };
 };
 
 DB.init();

@@ -295,6 +295,7 @@
             </div>
           </div>
           <div id="ticketsList" style="flex:1;overflow-y:auto;"></div>
+          <div id="syncStatus" onclick="forceSync('admin')" title="Click to force sync" style="padding:8px 16px;font-size:11px;color:rgba(255,255,255,0.4);border-top:1px solid rgba(255,255,255,0.06);cursor:pointer;"></div>
         </div>
         <!-- Chat Panel (Right) -->
         <div style="flex:1;display:flex;flex-direction:column;background:#0f0f0f;" id="chatPanel">
@@ -796,15 +797,7 @@ function getAllTickets(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function saveTickets(tickets){
-  localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
-  if(typeof DB!=='undefined'){
-    // Optimistic: broadcast the local state right away so every open chat
-    // renders instantly, then push to the server in the background.
-    if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);
-    DB.pushCollection('bb_support_tickets');
-  }
-}
+function saveTickets(tickets){localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));if(typeof DB!=='undefined')DB.pushCollection('bb_support_tickets');}
 function getAllDemoTrades(){
   try{
     var raw=localStorage.getItem('bb_demo_trades_hist');
@@ -1142,6 +1135,13 @@ function refreshTickets(){
     '</div>';
   }
   container.innerHTML=html;
+  // Sync status footer: confirms which db.js version is running + sync health.
+  var st=document.getElementById('syncStatus');
+  if(st){
+    var d={}; try{if(typeof DB!=='undefined')d=DB.diagnose?DB.diagnose():{ready:DB.ready};}catch(e){}
+    var color=d.ready?'#16c784':(d.ready===false?'#f7931a':'#555');
+    st.innerHTML='<span style="color:'+color+';">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+(d.lastError?' · err: '+d.lastError:'')+' · serverTickets '+d.serverTickets;
+  }
 }
 function filterTickets(f){
   currentTicketFilter=f;
@@ -1210,57 +1210,67 @@ function startAdminSupportPoll(){
       }catch(e){}
     });
   }
-  adminSupportPollTimer=setInterval(checkNew,500);
+  adminSupportPollTimer=setInterval(checkNew,1000);
 }
 function stopAdminSupportPoll(){
   if(adminSupportPollTimer){clearInterval(adminSupportPollTimer);adminSupportPollTimer=null;}
 }
 // Live support updates: refresh the ticket list + open chat instantly on
 // any change, no matter which tab is active or whether a chat is open.
-// When the broadcast carries the payload it is applied immediately (no
-// pull round-trip); the 1s poll reconciles with the server.
-function refreshSupportLive(key, payload){
-  if(typeof DB==='undefined'||!DB.ready)return;
-  if(payload && Array.isArray(payload)){
+// Manual sync: pull latest from server + refresh UI. Click the status line.
+function forceSync(role){
+  var st=document.getElementById(role==='admin'?'syncStatus':'supportSyncStatus');
+  if(st)st.innerHTML='<span style="color:#f7931a;">●</span> syncing...';
+  var doPull=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
+  doPull.then(function(){
     try{
-      var local=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-      if(!Array.isArray(local))local=[];
-      localStorage.setItem('bb_support_tickets', JSON.stringify(DB._ticketMerge(local, payload)));
-    }catch(e){}
-    renderSupportLive();
-    return;
-  }
-  DB.pullCollection('bb_support_tickets').then(function(){
-    renderSupportLive();
-  }, function(){});
-}
-function renderSupportLive(){
-  try{
-    refreshTickets();
-    if(currentTicketId){
-      var tickets=getAllTickets();
-      for(var i=0;i<tickets.length;i++){
-        if(tickets[i].id===currentTicketId){
-          var msgs=tickets[i].messages||[];
-          if(msgs.length>adminLastMsgCount){
-            renderChatMessages(tickets[i]);
-            adminLastMsgCount=msgs.length;
-          }
-          break;
+      refreshTickets();
+      if(role==='admin'&&currentTicketId){
+        var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+        for(var i=0;i<tickets.length;i++){
+          if(tickets[i].id===currentTicketId){renderChatMessages(tickets[i]);adminLastMsgCount=(tickets[i].messages||[]).length;break;}
         }
       }
-    }
-  }catch(e){}
+    }catch(e){}
+    refreshTickets();
+    var d=DB.diagnose?DB.diagnose():{};
+    if(st)st.innerHTML='<span style="color:#16c784;">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+' · serverTickets '+d.serverTickets+' (click to re-sync)';
+  },function(){
+    var d=DB.diagnose?DB.diagnose():{};
+    if(st)st.innerHTML='<span style="color:#f7931a;">●</span> sync FAILED'+(d.lastError?': '+d.lastError:'')+' (click to retry)';
+  });
+}
+// Live support updates: refresh the ticket list + open chat instantly on
+// any change, no matter which tab is active or whether a chat is open.
+function refreshSupportLive(){
+  if(typeof DB==='undefined'||!DB.ready)return;
+  DB.pullCollection('bb_support_tickets').then(function(){    try{
+      refreshTickets();
+      if(currentTicketId){
+        var tickets=getAllTickets();
+        for(var i=0;i<tickets.length;i++){
+          if(tickets[i].id===currentTicketId){
+            var msgs=tickets[i].messages||[];
+            if(msgs.length>adminLastMsgCount){
+              renderChatMessages(tickets[i]);
+              adminLastMsgCount=msgs.length;
+            }
+            break;
+          }
+        }
+      }
+    }catch(e){}
+  });
 }
 if(typeof DB!=='undefined'&&DB.ready){
   DB.subscribe('bb_support_tickets',refreshSupportLive);
 }
-// Poll support tickets every 500ms on ANY tab so user messages arrive even
+// Poll support tickets every 2s on ANY tab so user messages arrive even
 // when the admin is not on the Support tab and Realtime is unavailable.
 setInterval(function(){
   if(document.hidden)return;
   refreshSupportLive();
-},500);
+},2000);
 function renderChatMessages(ticket){
   var container=document.getElementById('chatMessages');
   chatAttachments=[];
