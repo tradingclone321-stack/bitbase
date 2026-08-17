@@ -436,9 +436,19 @@ function updateCalc(){
   else{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}
 }
 function setMax(){
-  var avail=getUsdtBalance();
-  document.getElementById('quantAmount').value=Math.floor(avail*100)/100;
-  updateCalc();
+  if(typeof DB!=='undefined'&&DB.ready&&localStorage.getItem('bb_uid')){
+    DB.pullLocalUser().then(function(){
+      var avail=getUsdtBalance();
+      document.getElementById('quantAmount').value=Math.floor(avail*100)/100;
+      document.getElementById('availHint').textContent='Available: '+avail.toFixed(2)+' USDT';
+      updateCalc();
+    });
+  }else{
+    var avail=getUsdtBalance();
+    document.getElementById('quantAmount').value=Math.floor(avail*100)/100;
+    document.getElementById('availHint').textContent='Available: '+avail.toFixed(2)+' USDT';
+    updateCalc();
+  }
 }
 function submitPlan(){
   var p=getPlan(selectedKey);
@@ -635,6 +645,7 @@ setInterval(function(){ settleOrders(); refreshOpenOrderDetails(); },1000);
 
 // ===== SERVER SYNC =====
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  DB.pullLocalUser().then(function(){ renderOrders(); refreshOpenOrderDetails(); });
   DB.startLocalPolling(10000);
   DB.pullCollection('bb_ai_quants').then(function(){ renderOrders(); });
 }
