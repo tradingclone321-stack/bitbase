@@ -1206,7 +1206,7 @@ function refreshTickets(){
   if(st){
     var d={}; try{if(typeof DB!=='undefined')d=DB.diagnose?DB.diagnose():{ready:DB.ready};}catch(e){}
     var color=d.ready?'#16c784':(d.ready===false?'#f7931a':'#555');
-    st.innerHTML='<span style="color:'+color+';">●</span> v'+(d.version||'?')+' · DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+(d.lastError?' · err: '+d.lastError:'')+' · serverTickets '+d.serverTickets;
+    st.innerHTML='<span style="color:'+color+';">●</span> DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+(d.lastError?' · err: '+d.lastError:'')+' · tickets '+d.serverTickets;
   }
 }
 function filterTickets(f){
@@ -1388,7 +1388,7 @@ function renderChatMessages(ticket){
       var align=isUser?'align-self:flex-start;':'align-self:flex-end;';
       var bg=isUser?'background:rgba(247,147,26,0.12);border:1px solid rgba(247,147,26,0.2);border-bottom-left-radius:4px;':'background:rgba(65,105,225,0.12);border:1px solid rgba(65,105,225,0.2);border-bottom-right-radius:4px;';
       if(isNew)bg='background:rgba(247,147,26,0.24);border:2px solid #f7931a;border-bottom-left-radius:4px;';
-      html+='<div style="'+align+bg+'max-width:75%;padding:12px 16px;border-radius:12px;font-size:13px;line-height:1.5;">';
+      html+='<div style="'+align+bg+(isUser?'width:100%;':'max-width:75%;')+'padding:12px 16px;border-radius:12px;font-size:13px;line-height:1.5;">';
       html+='<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:'+(isUser?'#f7931a':'#4169E1')+';">'+(isUser?(ticket.userName||'User')+' ('+ticket.userId+')':'Admin')+(isNew?' <span style="background:#f7931a;color:#fff;border-radius:8px;padding:0 6px;font-size:9px;font-weight:800;">NEW</span>':'')+'</div>';
       if(m.text)html+='<div style="'+(isNew?'font-weight:800;':'')+'">'+m.text+'</div>';
       if(m.attachment){
