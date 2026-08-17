@@ -774,13 +774,13 @@ function updateAssetsValues(){
     if(Array.isArray(trades)){
       for(var i=0;i<trades.length;i++){
         var t=trades[i];if(!t)continue;
-        if(t.uid && String(t.uid)!==String(myUid))continue;
+        if(myUid){
+          if(!t.uid)continue;
+          if(String(t.uid)!==String(myUid))continue;
+        }
         if(t.status==='Won')pnlTotal+=(t.profit||0);
         else if(t.status==='Lost')pnlTotal-=(t.profit||0);
       }
-    }
-    if(pnlTotal===0 && trades.length>0 && trades[0] && !trades[0].uid){
-      pnlTotal=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
     }
   }catch(e){}
   var pnlChange=totalVal>0?(pnlTotal/totalVal)*100:0;

@@ -383,22 +383,21 @@ function getStakingEarningsUsd(){
 function getTradePnL(){
   var myUid=localStorage.getItem('bb_uid')||'';
   var pnl=0;
-  var trades=[];
   try{
-    trades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
+    var trades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
     if(Array.isArray(trades)){
       for(var i=0;i<trades.length;i++){
         var t=trades[i];
         if(!t)continue;
-        if(t.uid && String(t.uid)!==String(myUid))continue;
+        if(myUid){
+          if(!t.uid)continue;
+          if(String(t.uid)!==String(myUid))continue;
+        }
         if(t.status==='Won')pnl+=(t.profit||0);
         else if(t.status==='Lost')pnl-=(t.profit||0);
       }
     }
   }catch(e){}
-  if(pnl===0 && trades.length>0 && trades[0] && !trades[0].uid){
-    pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
-  }
   return pnl;
 }
 
