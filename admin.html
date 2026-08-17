@@ -297,7 +297,6 @@
             </div>
           </div>
           <div id="ticketsList" style="flex:1;overflow-y:auto;"></div>
-          <div id="syncStatus" onclick="forceSync('admin')" title="Click to force sync" style="padding:8px 16px;font-size:11px;color:rgba(255,255,255,0.4);border-top:1px solid rgba(255,255,255,0.06);cursor:pointer;"></div>
         </div>
         <!-- Chat Panel (Right) -->
         <div style="flex:1;display:flex;flex-direction:column;background:#0f0f0f;" id="chatPanel">
@@ -1201,13 +1200,6 @@ function refreshTickets(){
     '</div>';
   }
   container.innerHTML=html;
-  // Sync status footer: confirms which db.js version is running + sync health.
-  var st=document.getElementById('syncStatus');
-  if(st){
-    var d={}; try{if(typeof DB!=='undefined')d=DB.diagnose?DB.diagnose():{ready:DB.ready};}catch(e){}
-    var color=d.ready?'#16c784':(d.ready===false?'#f7931a':'#555');
-    st.innerHTML='<span style="color:'+color+';">●</span> DB '+(d.ready?'OK':'OFF')+' · RT '+(d.realtime?'on':'off')+' · sync '+(d.lastPullAgoSec>=0?(d.lastPullAgoSec+'s ago'):'never')+(d.lastError?' · err: '+d.lastError:'')+' · tickets '+d.serverTickets;
-  }
 }
 function filterTickets(f){
   currentTicketFilter=f;
