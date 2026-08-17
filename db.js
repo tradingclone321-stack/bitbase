@@ -575,7 +575,7 @@ DB.unsubscribe = function (key) {
 
 DB.pullAll = function () {
   if (!DB.ready) return Promise.resolve();
-  var p = DB.pushUsers();
+  var p = DB.pullUsers();
   for (var i = 0; i < DB.COLLECTIONS.length; i++) p = p.then(DB.pullCollection.bind(null, DB.COLLECTIONS[i]));
   return p;
 };
