@@ -1252,12 +1252,21 @@ function openTicket(id){
   })(ticket.id);
   startAdminSupportPoll();
   refreshTickets();
-  // On mobile, keep ticket list visible so admin can switch conversations
+  // Full-page chat: hide ticket list, show back button
+  var ticketList=document.getElementById('supportTicketList');
   var backBtn=document.getElementById('chatBackBtn');
-  backBtn.style.display='none';
+  if(window.innerWidth<=767){
+    ticketList.style.display='none';
+    backBtn.style.display='flex';
+    document.getElementById('chatPanel').style.flex='1';
+  } else {
+    backBtn.style.display='none';
+  }
   lucide.createIcons();
 }
 function closeChatFullPage(){
+  document.getElementById('supportTicketList').style.display='flex';
+  document.getElementById('chatBackBtn').style.display='none';
   document.getElementById('chatEmpty').style.display='none';
   document.getElementById('chatActive').style.display='none';
   currentTicketId=null;
