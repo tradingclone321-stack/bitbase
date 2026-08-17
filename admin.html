@@ -98,7 +98,7 @@
       .admin-mobile-hamburger{display:flex!important;}
       .admin-sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;}
       .admin-sidebar-overlay.open{display:block;}
-      .admin-support-layout{flex-direction:column!important;height:calc(100vh - 80px)!important;}
+      .admin-support-layout{flex-direction:column!important;height:calc(100vh - 80px)!important;overflow:hidden!important;}
       .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);max-height:40vh;overflow-y:auto;flex-shrink:0;}
       #supportTicketList{width:100%!important;}
       #chatPanel{width:100%!important;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
@@ -1252,22 +1252,13 @@ function openTicket(id){
   })(ticket.id);
   startAdminSupportPoll();
   refreshTickets();
-  // Full-page chat: hide ticket list, show back button
-  var ticketList=document.getElementById('supportTicketList');
+  // On mobile, keep ticket list visible so admin can switch conversations
   var backBtn=document.getElementById('chatBackBtn');
-  if(window.innerWidth<=767){
-    ticketList.style.display='none';
-    backBtn.style.display='flex';
-    document.getElementById('chatPanel').style.flex='1';
-  } else {
-    backBtn.style.display='none';
-  }
+  backBtn.style.display='none';
   lucide.createIcons();
 }
 function closeChatFullPage(){
-  document.getElementById('supportTicketList').style.display='flex';
-  document.getElementById('chatBackBtn').style.display='none';
-  document.getElementById('chatEmpty').style.display='flex';
+  document.getElementById('chatEmpty').style.display='none';
   document.getElementById('chatActive').style.display='none';
   currentTicketId=null;
   stopAdminSupportPoll();
