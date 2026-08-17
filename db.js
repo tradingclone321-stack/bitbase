@@ -582,6 +582,28 @@ DB.pullAll = function () {
 
 // Diagnostic helper: returns a snapshot of the sync layer state so the
 // admin page can show exactly what is (or is not) working.
+// ===== ADMIN PASSWORD (Supabase-backed) =====
+DB._remoteAdminPass = null;
+DB.getAdminPassword = function () {
+  if (!DB.ready) return Promise.resolve(null);
+  return DB.client.from('app_collections').select('payload').eq('key', 'bb_admin_config').limit(1).single().then(function (r) {
+    var pw = (r.data && r.data.payload && r.data.payload.adminPassword) || null;
+    DB._remoteAdminPass = pw;
+    return pw;
+  }).catch(function () { return null; });
+};
+DB.saveAdminPassword = function (pw) {
+  DB._remoteAdminPass = pw;
+  if (!DB.ready) return Promise.resolve();
+  return DB.client.from('app_collections').select('payload').eq('key', 'bb_admin_config').limit(1).single().then(function (r) {
+    var existing = (r.data && r.data.payload) || {};
+    existing.adminPassword = pw;
+    return DB.client.from('app_collections').upsert({ key: 'bb_admin_config', payload: existing }, { onConflict: 'key' });
+  }).catch(function () {
+    return DB.client.from('app_collections').upsert({ key: 'bb_admin_config', payload: { adminPassword: pw } }, { onConflict: 'key' });
+  });
+};
+
 DB.diagnose = function () {
   var t = {};
   try { t = JSON.parse(localStorage.getItem('bb_support_tickets') || '[]'); } catch (e) { t = []; }

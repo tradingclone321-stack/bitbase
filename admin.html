@@ -669,7 +669,10 @@ var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
 
-function getAdminPass(){return localStorage.getItem(ADMIN_PASS_KEY)||'admin123';}
+function getAdminPass(){
+  if(typeof DB!=='undefined'&&DB._remoteAdminPass!==null)return DB._remoteAdminPass;
+  return localStorage.getItem(ADMIN_PASS_KEY)||'admin123';
+}
 function isLoggedIn(){return localStorage.getItem(ADMIN_KEY)==='1';}
 function currentUserHasAdminAccess(){
   var uid=localStorage.getItem('bb_uid');
@@ -680,6 +683,15 @@ function currentUserHasAdminAccess(){
 
 function adminLogin(){
   var pw=document.getElementById('adminPassword').value;
+  if(typeof DB!=='undefined'&&DB.ready){
+    DB.getAdminPassword().then(function(){
+      doAdminLogin(pw);
+    });
+  }else{
+    doAdminLogin(pw);
+  }
+}
+function doAdminLogin(pw){
   if(pw===getAdminPass()){
     localStorage.setItem(ADMIN_KEY,'1');
     showAdminPanel();
@@ -707,6 +719,7 @@ function changeAdminPassword(){
   if(newPass.length<6){showToast('New password must be at least 6 characters','error');return;}
   if(newPass!==confirm){showToast('New passwords do not match','error');return;}
   localStorage.setItem(ADMIN_PASS_KEY,newPass);
+  if(typeof DB!=='undefined'&&DB.ready){DB.saveAdminPassword(newPass);}
   document.getElementById('adminCurrentPass').value='';
   document.getElementById('adminNewPass').value='';
   document.getElementById('adminConfirmPass').value='';
@@ -2690,10 +2703,15 @@ function syncFromServer(cb){
   });
 }
 if(isLoggedIn()){
-  showAdminPanel();
-  syncFromServer();
+  if(typeof DB!=='undefined'&&DB.ready){
+    DB.getAdminPassword().then(function(){showAdminPanel();syncFromServer();});
+  }else{
+    showAdminPanel();
+    syncFromServer();
+  }
 }else{
   lucide.createIcons();
+  if(typeof DB!=='undefined'&&DB.ready){DB.getAdminPassword();}
   if(currentUserHasAdminAccess()){
     var note=document.getElementById('adminAccessNote');
     if(note)note.style.display='block';
