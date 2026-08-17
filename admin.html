@@ -101,8 +101,8 @@
       .admin-support-layout{flex-direction:column!important;height:auto!important;}
       .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);max-height:250px;}
       #supportTicketList{width:100%!important;}
-      #chatPanel{width:100%!important;}
-      .ticket-thread{max-height:55vh;min-height:300px;}
+      #chatPanel{width:100%!important;display:flex;flex-direction:column;height:calc(100vh - 60px);overflow:hidden;}
+      .ticket-thread{flex:1;max-height:none;min-height:0;overflow-y:auto;}
       .chat-header-actions .btn-sm{font-size:10px!important;padding:4px 8px!important;}
       .stat-card .value{font-size:16px!important;}
       .admin-stat-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important;}
