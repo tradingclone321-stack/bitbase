@@ -98,10 +98,11 @@
       .admin-mobile-hamburger{display:flex!important;}
       .admin-sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;}
       .admin-sidebar-overlay.open{display:block;}
-      .admin-support-layout{flex-direction:column!important;height:auto!important;}
-      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);max-height:250px;}
+      .admin-support-layout{flex-direction:column!important;height:calc(100vh - 80px)!important;}
+      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);max-height:40vh;overflow-y:auto;flex-shrink:0;}
       #supportTicketList{width:100%!important;}
-      #chatPanel{width:100%!important;display:flex;flex-direction:column;height:calc(100vh - 60px);overflow:hidden;}
+      #chatPanel{width:100%!important;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+      #chatMessages{flex:1;min-height:0;overflow-y:auto;}
       .ticket-thread{flex:1;max-height:none;min-height:0;overflow-y:auto;}
       .chat-header-actions .btn-sm{font-size:10px!important;padding:4px 8px!important;}
       .stat-card .value{font-size:16px!important;}
