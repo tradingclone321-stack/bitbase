@@ -355,6 +355,16 @@ document.addEventListener('keydown',function(e){ if(e.key==='Escape') document.q
 
 // ===== POSITIONS STORAGE =====
 function getPositions(){ try{ return JSON.parse(localStorage.getItem('bb_earn_positions'))||[]; }catch(e){return [];} }
+function getMyPositions(){
+  var myUid=localStorage.getItem('bb_uid')||'';
+  var all=getPositions();
+  var mine=[];
+  for(var i=0;i<all.length;i++){
+    if(all[i].uid && String(all[i].uid)===String(myUid))mine.push(all[i]);
+    else if(!all[i].uid && !myUid)mine.push(all[i]);
+  }
+  return mine;
+}
 function savePositions(arr){ localStorage.setItem('bb_earn_positions',JSON.stringify(arr)); if(typeof DB!=='undefined')DB.pushCollection('bb_earn_positions'); }
 
 function isCrypto(coin){ return coin==='BTC'||coin==='ETH'||coin==='SOL'||coin==='BNB'||coin==='DAI'; }
@@ -365,7 +375,7 @@ function formatEarned(amount,coin){
 }
 
 function renderPositions(){
-  var positions=getPositions();
+  var positions=getMyPositions();
   var container=document.getElementById('positionsContainer');
   if(!positions.length){
     container.innerHTML='<div id="emptyPositions" class="glass-card rounded-xl p-8 text-center"><div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><i data-lucide="wallet" style="width:22px;height:22px;color:var(--text-tertiary);"></i></div><p class="text-sm text-secondary">No active positions yet</p><p class="text-xs text-tertiary mt-1">Start earning by choosing a product above</p></div>';
@@ -438,13 +448,17 @@ function updateSummary(positions){
 }
 
 function removePosition(index){
-  var positions=getPositions();
+  var positions=getMyPositions();
   var p=positions[index];
   if(p.type==='locked'){showToast('Locked staking cannot be unstaked before maturity','error');return;}
   if(!confirm('Unstake '+p.amount+' '+p.coin+' from '+p.type+'?')) return;
   returnBalance(p.coin,p.amount);
-  positions.splice(index,1);
-  savePositions(positions);
+  // Remove from full array by matching the position
+  var all=getPositions();
+  for(var i=0;i<all.length;i++){
+    if(all[i]===p){all.splice(i,1);break;}
+  }
+  savePositions(all);
   renderPositions();
   showToast(p.amount+' '+p.coin+' unstaked successfully!','success');
 }

@@ -365,11 +365,14 @@ fetchLiveData();
 setInterval(fetchLiveData,30000);
 function getStakingEarningsUsd(){
   var total=0;
+  var myUid=localStorage.getItem('bb_uid')||'';
   try{
     var positions=JSON.parse(localStorage.getItem('bb_earn_positions')||'[]');
     var now=Date.now();
     for(var i=0;i<positions.length;i++){
       var p=positions[i];
+      if(p.uid && String(p.uid)!==String(myUid))continue;
+      if(!p.uid && myUid)continue;
       var price=COIN_PRICES_DASH[p.coin]||0;
       var elapsed=(now-new Date(p.started).getTime())/(1000*86400*365);
       total+=p.amount*p.apy/100*elapsed*price;
@@ -486,12 +489,15 @@ function renderRecentActivity(){
   var list=document.getElementById('recentActivityList');
   var cutoff=Date.now()-7*24*60*60*1000;
   var items=[];
+  var myUid=localStorage.getItem('bb_uid')||'';
 
   // Trades
   try{
     var trades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
     for(var i=0;i<trades.length;i++){
       var t=trades[i];
+      if(t.uid && String(t.uid)!==String(myUid))continue;
+      if(!t.uid && myUid)continue;
       if(t.time<cutoff)continue;
       var color=t.status==='Won'?'var(--accent-green)':'var(--accent-red)';
       var bg=t.status==='Won'?'rgba(22,199,132,0.1)':'rgba(234,57,67,0.1)';
@@ -508,6 +514,8 @@ function renderRecentActivity(){
     var deposits=JSON.parse(localStorage.getItem('bb_deposit_requests')||'[]');
     for(var i=0;i<deposits.length;i++){
       var d=deposits[i];
+      if(d.userId && String(d.userId)!==String(myUid))continue;
+      if(!d.userId && myUid)continue;
       if(d.time<cutoff)continue;
       var amt=d.amount||0;
       items.push({time:d.time,label:'Deposited '+formatUSD(amt),icon:'arrow-down-left',color:'var(--accent-blue)',bg:'rgba(65,105,225,0.1)',amount:'+'+formatUSD(amt)});
@@ -519,6 +527,8 @@ function renderRecentActivity(){
     var withdrawals=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');
     for(var i=0;i<withdrawals.length;i++){
       var w=withdrawals[i];
+      if(w.userId && String(w.userId)!==String(myUid))continue;
+      if(!w.userId && myUid)continue;
       if(w.time<cutoff)continue;
       var amt=w.amount||0;
       var coin=w.coin||'USDT';

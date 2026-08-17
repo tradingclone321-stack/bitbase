@@ -555,7 +555,7 @@ function showOrderDetails(idx){
 }
 function refreshOpenOrderDetails(){
   if(currentOrderIndex<0)return;
-  var orders=getOrders();
+  var orders=getMyOrders();
   var o=orders[currentOrderIndex];
   if(!o){closeModal('orderDetailsModal');return;}
   var now=Date.now();
