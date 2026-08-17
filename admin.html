@@ -98,10 +98,11 @@
       .admin-mobile-hamburger{display:flex!important;}
       .admin-sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;}
       .admin-sidebar-overlay.open{display:block;}
-      .admin-support-layout{flex-direction:column!important;height:calc(100vh - 80px)!important;overflow:hidden!important;}
-      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);max-height:40vh;overflow-y:auto;flex-shrink:0;}
+      .admin-support-layout{flex-direction:column!important;height:100vh!important;overflow:hidden!important;border-radius:0!important;border:none!important;position:fixed;top:0;left:0;right:0;bottom:0;z-index:50;}
+      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);max-height:35vh;overflow-y:auto;flex-shrink:0;}
       #supportTicketList{width:100%!important;}
-      #chatPanel{width:100%!important;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+      #chatPanel{width:100%!important;display:flex;flex-direction:column;flex:1;min-height:0;}
+      #chatActive{display:none;flex-direction:column;flex:1;min-height:0;}
       #chatMessages{flex:1;min-height:0;overflow-y:auto;}
       .ticket-thread{flex:1;max-height:none;min-height:0;overflow-y:auto;}
       .chat-header-actions .btn-sm{font-size:10px!important;padding:4px 8px!important;}
@@ -284,7 +285,7 @@
     </div>
 
     <!-- ===== SUPPORT TAB ===== -->
-    <div id="tab-support" class="tab-content" style="display:none;height:calc(100vh - 60px);">
+    <div id="tab-support" class="tab-content" style="display:none;height:100%;">
       <div class="admin-support-layout" style="display:flex;height:100%;gap:0;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
         <!-- Ticket List (Left) -->
         <div class="admin-support-sidebar" id="supportTicketList" style="width:340px;background:#141414;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;flex-shrink:0;">
