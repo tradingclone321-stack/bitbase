@@ -99,8 +99,8 @@
       .admin-sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;}
       .admin-sidebar-overlay.open{display:block;}
       .admin-support-layout{flex-direction:column!important;height:100vh!important;overflow:hidden!important;border-radius:0!important;border:none!important;position:fixed;top:0;left:0;right:0;bottom:0;z-index:50;}
-      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);max-height:35vh;overflow-y:auto;flex-shrink:0;}
-      #supportTicketList{width:100%!important;}
+      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;max-height:45vh;display:flex;flex-direction:column;}
+      #supportTicketList{width:100%!important;flex:1;overflow-y:auto;}
       #chatPanel{width:100%!important;display:flex;flex-direction:column;flex:1;min-height:0;}
       #chatActive{display:none;flex-direction:column;flex:1;min-height:0;}
       #chatMessages{flex:1;min-height:0;overflow-y:auto;}
