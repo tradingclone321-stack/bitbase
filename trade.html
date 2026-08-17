@@ -834,7 +834,7 @@ function placeTrade(dir){
   localStorage.setItem('bb_trade_id_counter', tradeIdCounter);
   const pos={id,pair:currentPair.sym,dir,amt,dur:dur.seconds,profit,entryPrice:currentPrice,exitPrice:0,startTime:Date.now(),status:'Active'};
   positions.push(pos);
-  saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'real'});
+    saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'real',uid:localStorage.getItem('bb_uid')||''});
   renderPositions();
   showTradePanel(pos);
   showToast(`${dir} trade placed: ${fmtD(amt)} on ${currentPair.sym}`,'var(--green)');
@@ -850,7 +850,7 @@ function placeTrade(dir){
     pos.exitPrice=currentPrice*(1+(Math.random()*0.004-0.002));
     balance+=won?amt+profit:amt-profit;
     localStorage.setItem('bb_cash_balance',balance);
-    saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:won?'Won':'Lost',profit:profit,source:'real'});
+    saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:won?'Won':'Lost',profit:profit,source:'real',uid:localStorage.getItem('bb_uid')||''});
     if(typeof DB!=='undefined'){DB.syncLocalUser();}
     var pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
     pnl+=won?profit:-profit;
@@ -896,7 +896,7 @@ function closePos(id){
   localStorage.setItem('bb_cash_balance',balance);
   if(typeof DB!=='undefined'){DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
-  saveTradeRecord({id:id,pair:pos.pair,side:pos.dir==='UP'?'Buy':'Sell',amount:pos.amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:'Closed',profit:pos.profit,refund:refund,source:'real'});
+  saveTradeRecord({id:id,pair:pos.pair,side:pos.dir==='UP'?'Buy':'Sell',amount:pos.amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:'Closed',profit:pos.profit,refund:refund,source:'real',uid:localStorage.getItem('bb_uid')||''});
   renderPositions();
   if(activeTradePanel&&activeTradePanel.id===id)removeTradePanel();
   showToast(`Position ${id} closed. Refunded ${fmtD(refund)}`,'var(--accent)');

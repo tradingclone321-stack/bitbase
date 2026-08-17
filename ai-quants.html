@@ -327,6 +327,15 @@ document.addEventListener('keydown',function(e){ if(e.key==='Escape') document.q
 
 // ===== ORDERS STORAGE =====
 function getOrders(){ try{ return JSON.parse(localStorage.getItem('bb_ai_quants'))||[]; }catch(e){return [];} }
+function getMyOrders(){
+  var myUid=localStorage.getItem('bb_uid')||'';
+  var all=getOrders();
+  var mine=[];
+  for(var i=0;i<all.length;i++){
+    if(String(all[i].uid)===String(myUid))mine.push(all[i]);
+  }
+  return mine;
+}
 function saveOrders(arr){ localStorage.setItem('bb_ai_quants',JSON.stringify(arr)); if(typeof DB!=='undefined')DB.pushCollection('bb_ai_quants'); }
 function getPlan(key){ for(var i=0;i<PLANS.length;i++) if(PLANS[i].key===key) return PLANS[i]; return null; }
 
@@ -505,7 +514,7 @@ function fmtDur(ms){
 // ===== ORDER DETAILS POPUP =====
 var currentOrderIndex=-1;
 function showOrderDetails(idx){
-  var orders=getOrders();
+  var orders=getMyOrders();
   var o=orders[idx];
   if(!o)return;
   currentOrderIndex=idx;
@@ -564,7 +573,7 @@ function refreshOpenOrderDetails(){
 }
 
 function renderOrders(){
-  var orders=getOrders();
+  var orders=getMyOrders();
   var now=Date.now();
   var invested=0,settled=0,active=0;
   for(var i=0;i<orders.length;i++){

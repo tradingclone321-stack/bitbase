@@ -767,7 +767,22 @@ function updateAssetsValues(){
   var holdingsVal=getHoldingsValue();
   var totalVal=holdingsVal+CASH_BALANCE;
   document.getElementById('assetsTotalValue').textContent='$'+totalVal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  var pnlTotal=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
+  var pnlTotal=0;
+  try{
+    var myUid=localStorage.getItem('bb_uid')||'';
+    var trades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
+    if(Array.isArray(trades)){
+      for(var i=0;i<trades.length;i++){
+        var t=trades[i];if(!t)continue;
+        if(t.uid && String(t.uid)!==String(myUid))continue;
+        if(t.status==='Won')pnlTotal+=(t.profit||0);
+        else if(t.status==='Lost')pnlTotal-=(t.profit||0);
+      }
+    }
+    if(pnlTotal===0 && trades.length>0 && trades[0] && !trades[0].uid){
+      pnlTotal=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
+    }
+  }catch(e){}
   var pnlChange=totalVal>0?(pnlTotal/totalVal)*100:0;
   var sign=pnlChange>=0?'+':'';
   document.getElementById('assetsChangeBadge').textContent=sign+pnlChange.toFixed(1)+'% today';

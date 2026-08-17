@@ -774,7 +774,7 @@ function placeTrade(dir){
   demoHistory.unshift({id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit});
   saveDemoHistory(demoHistory);
   var sharedTrades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
-  sharedTrades.unshift({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'demo'});
+  sharedTrades.unshift({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'demo',uid:localStorage.getItem('bb_uid')||''});
   localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades));
   if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
   renderPositions();
