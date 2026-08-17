@@ -22,7 +22,7 @@
     .admin-login-box input:focus{border-color:rgba(247,147,26,0.5);}
     .admin-login-box button{width:100%;padding:12px;background:linear-gradient(135deg,#16c784,#0e8a5e);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;}
     .admin-login-box button:hover{opacity:0.9;}
-    .admin-layout{display:flex;min-height:100vh;}
+    .admin-layout{display:flex;height:100vh;overflow:hidden;}
     .admin-sidebar{width:240px;background:#141414;border-right:1px solid rgba(255,255,255,0.06);padding:20px 0;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;overflow-y:auto;z-index:100;}
     .admin-sidebar-logo{padding:0 20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:8px;}
     .admin-sidebar-logo span{font-size:20px;font-weight:700;letter-spacing:-0.02em;}
@@ -77,6 +77,8 @@
     .ticket-item .preview{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .ticket-item .time{font-size:10px;color:rgba(255,255,255,0.25);}
     .chat-attachment{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;margin-top:6px;cursor:pointer;text-decoration:none;color:rgba(255,255,255,0.7);font-size:12px;transition:background 0.15s;}
+    #tab-support.tab-content{height:calc(100vh - 48px)!important;overflow:hidden;}
+    #tab-support.tab-content .admin-support-layout{height:100%;}
     .chat-attachment:hover{background:rgba(255,255,255,0.1);color:#fff;}
     .chat-attachment img{max-width:240px;max-height:180px;border-radius:8px;margin-top:8px;display:block;}
     @media(max-width:768px){
@@ -94,14 +96,16 @@
       .admin-sidebar{position:fixed;top:0;left:0;bottom:0;width:240px!important;overflow-y:auto;z-index:200;transform:translateX(-100%);transition:transform .3s ease;}
       .admin-sidebar.open{transform:translateX(0);}
       .admin-sidebar-logo span,.admin-sidebar-logo .badge,.nav-item span{display:inline!important;}
-      .admin-main{margin-left:0!important;padding:8px!important;}
-      .admin-mobile-hamburger{display:flex!important;margin-bottom:8px;}
+      .admin-main{margin-left:0!important;padding:0!important;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+      .admin-mobile-hamburger{display:flex!important;padding:8px;}
       .admin-sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;}
       .admin-sidebar-overlay.open{display:block;}
-      .admin-support-layout{flex-direction:column!important;height:calc(100vh - 56px)!important;overflow:hidden!important;border-radius:8px!important;}
-      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);min-height:0;overflow-y:auto;}
+      #tab-support.tab-content{height:auto!important;flex:1;overflow:hidden;}
+      .admin-support-layout{flex-direction:column!important;height:100%!important;overflow:hidden!important;border-radius:0!important;}
+      .admin-support-sidebar{width:100%!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.06);flex:1;min-height:0;overflow-y:auto;}
       #supportTicketList{width:100%!important;overflow-y:auto;}
-      #chatPanel{width:100%!important;display:flex;flex-direction:column;min-height:0;}
+      #chatPanel{width:100%!important;display:none!important;flex-direction:column;min-height:0;position:absolute;top:0;left:0;right:0;bottom:0;z-index:10;background:#0f0f0f;}
+      #chatPanel.mobile-open{display:flex!important;}
       #chatActive{display:none;flex-direction:column;flex:1;min-height:0;}
       #chatMessages{flex:1;min-height:0;overflow-y:auto;}
       .ticket-thread{flex:1;max-height:none;min-height:0;overflow-y:auto;}
@@ -285,7 +289,7 @@
     </div>
 
     <!-- ===== SUPPORT TAB ===== -->
-    <div id="tab-support" class="tab-content" style="display:none;height:100%;">
+    <div id="tab-support" class="tab-content" style="display:none;">
       <div class="admin-support-layout" style="display:flex;height:100%;gap:0;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
         <!-- Ticket List (Left) -->
         <div class="admin-support-sidebar" id="supportTicketList" style="width:340px;background:#141414;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;flex-shrink:0;">
@@ -1248,20 +1252,22 @@ function openTicket(id){
   // Full-page chat: hide ticket list, show back button
   var ticketList=document.getElementById('supportTicketList');
   var backBtn=document.getElementById('chatBackBtn');
+  var chatPanel=document.getElementById('chatPanel');
   if(window.innerWidth<=767){
     ticketList.style.display='none';
     backBtn.style.display='flex';
-    document.getElementById('chatPanel').style.flex='1';
+    chatPanel.classList.add('mobile-open');
   } else {
     backBtn.style.display='none';
   }
   lucide.createIcons();
 }
 function closeChatFullPage(){
-  document.getElementById('supportTicketList').style.display='flex';
+  document.getElementById('supportTicketList').style.display='';
   document.getElementById('chatBackBtn').style.display='none';
   document.getElementById('chatEmpty').style.display='none';
   document.getElementById('chatActive').style.display='none';
+  document.getElementById('chatPanel').classList.remove('mobile-open');
   currentTicketId=null;
   stopAdminSupportPoll();
 }
