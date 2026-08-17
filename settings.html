@@ -888,6 +888,8 @@ function updatePassword() {
     return;
   }
   localStorage.setItem('bb_password', newPw);
+  // Persist to Supabase so pullLocalUser doesn't overwrite it
+  if(typeof DB!=='undefined'&&DB.ready){DB.updateUser(localStorage.getItem('bb_uid'),{password:newPw});}
   pwFields[0].value = '';
   pwFields[1].value = '';
   pwFields[2].value = '';
