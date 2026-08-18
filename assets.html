@@ -899,12 +899,12 @@ function handleDepositProof(input){
     if(file.type&&file.type.indexOf('image')===0){
       var img=new Image();
       img.onload=function(){
-        var maxW=800,maxH=800,w=img.width,h=img.height;
+        var maxW=400,maxH=400,w=img.width,h=img.height;
         if(w>maxW){h=h*maxW/w;w=maxW;}
         if(h>maxH){w=w*maxH/h;h=maxH;}
         var c=document.createElement('canvas');c.width=w;c.height=h;
         c.getContext('2d').drawImage(img,0,0,w,h);
-        depositProofData={name:file.name,type:'image/jpeg',dataUrl:c.toDataURL('image/jpeg',0.6)};
+        depositProofData={name:file.name,type:'image/jpeg',dataUrl:c.toDataURL('image/jpeg',0.3)};
         document.getElementById('depositProofName').textContent=file.name;
         document.getElementById('depositProofPreview').style.display='flex';
         lucide.createIcons();
@@ -952,6 +952,11 @@ function submitDepositRequest(){
       proof:depositProofData,
       status:'pending',createdAt:Date.now(),resolvedAt:0
     });
+    for(var i=0;i<requests.length;i++){
+      if(requests[i].userId!==uid&&requests[i].proof&&requests[i].proof.dataUrl){
+        requests[i].proof={name:requests[i].proof.name,type:requests[i].proof.type,dataUrl:''};
+      }
+    }
     localStorage.setItem('bb_deposit_requests',JSON.stringify(requests));
     if(typeof DB!=='undefined'){DB.pushCollection('bb_deposit_requests');}
     document.getElementById('depositAmount').value='';
@@ -959,7 +964,7 @@ function submitDepositRequest(){
     closeModal('depositModal');
     showToast('Deposit of '+amount+' '+coin+' submitted! Awaiting admin approval.','success');
   }catch(e){
-    showToast('Submission failed. Try a smaller proof image.','error');
+    showToast('Submission failed. Please try again.','error');
   }finally{
     btn.disabled=false;spinner.style.display='none';
   }
@@ -1223,6 +1228,11 @@ function submitLoan(){
         status:'pending',
         time:Date.now()
       });
+      for(var i=0;i<loans.length;i++){
+        if(loans[i].userId!==uid&&loans[i].proofDataUrl){
+          loans[i].proofDataUrl='';
+        }
+      }
       localStorage.setItem('bb_loans',JSON.stringify(loans));
       if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
       document.getElementById('loanBorrowAmt').value='';
@@ -1233,7 +1243,7 @@ function submitLoan(){
       updateAssetsValues();
       showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
     }catch(e){
-      showToast('Submission failed. Try a smaller proof image.','error');
+      showToast('Submission failed. Please try again.','error');
     }finally{
       btn.disabled=false;spinner.style.display='none';
     }
@@ -1241,12 +1251,12 @@ function submitLoan(){
   if(loanProofFile.type&&loanProofFile.type.indexOf('image')===0){
     var img=new Image();
     img.onload=function(){
-      var maxW=800,maxH=800,w=img.width,h=img.height;
+      var maxW=400,maxH=400,w=img.width,h=img.height;
       if(w>maxW){h=h*maxW/w;w=maxW;}
       if(h>maxH){w=w*maxH/h;h=maxH;}
       var c=document.createElement('canvas');c.width=w;c.height=h;
       c.getContext('2d').drawImage(img,0,0,w,h);
-      saveLoan(c.toDataURL('image/jpeg',0.6));
+      saveLoan(c.toDataURL('image/jpeg',0.3));
     };
     img.onerror=function(){
       btn.disabled=false;spinner.style.display='none';
