@@ -855,6 +855,13 @@ function getDepositAddresses(){
   }catch(e){return ADDRESSES;}
 }
 function updateDepositInfo() {
+  var pull=Promise.resolve();
+  if(typeof DB!=='undefined'&&DB.ready){pull=DB.pullCollection('bb_deposit_addresses');}
+  pull.then(function(){
+    _renderDepositInfo();
+  },function(){_renderDepositInfo();});
+}
+function _renderDepositInfo() {
   const coin = document.getElementById('depositCoinSelect').value;
   const data = COINS[coin];
   var addrs=getDepositAddresses();
