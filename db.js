@@ -394,7 +394,7 @@ DB._stripResolvedProofs = function (arr) {
     var item = arr[i];
     if (!item) { out.push(item); continue; }
     var st = (item.status || '').toLowerCase();
-    if (st && st !== 'pending' && st !== 'deleted') {
+    if (st && st !== 'pending') {
       var clone = null;
       if (item.proof && item.proof.dataUrl) {
         clone = clone || Object.assign({}, item);
@@ -418,6 +418,30 @@ DB._stripResolvedProofs = function (arr) {
     }
   }
   return out;
+};
+
+// Remove deleted tombstones older than 2 days from MERGE_COLLECTIONS arrays
+// so the payload doesn't grow unbounded with stale proofs.
+DB.COLLECTION_TTL = 2 * 24 * 60 * 60 * 1000;
+DB._purgeDeleted = function (arr) {
+  if (!Array.isArray(arr)) return arr;
+  var now = Date.now();
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var item = arr[i];
+    if (!item) continue;
+    if (item.status === 'deleted' && item._deletedAt && (now - item._deletedAt) > DB.COLLECTION_TTL) continue;
+    out.push(item);
+  }
+  return out;
+};
+
+// Clean merged arrays: purge old tombstones, strip proofs from non-pending.
+DB._cleanMergeArray = function (arr) {
+  if (!Array.isArray(arr)) return arr;
+  arr = DB._purgeDeleted(arr);
+  arr = DB._stripResolvedProofs(arr);
+  return arr;
 };
 
 // Collections that hold shared id-keyed request/position arrays where
@@ -479,14 +503,15 @@ DB._pushCollectionNow = function (key) {
       try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
       if (!Array.isArray(localNow)) localNow = [];
       var merged = DB._mergeById(localNow, serverPayload);
-      localStorage.setItem(key, JSON.stringify(merged));
-      var upsertData = DB._stripResolvedProofs(merged);
+      var cleaned = DB._cleanMergeArray(merged);
+      localStorage.setItem(key, JSON.stringify(cleaned));
+      var upsertData = cleaned;
       var sizeKB = Math.round(JSON.stringify(upsertData).length / 1024);
-      console.log('[DB] PUSH ' + key + ': merged=' + merged.length + ', upsert payload=' + sizeKB + 'KB');
+      console.log('[DB] PUSH ' + key + ': merged=' + merged.length + ', cleaned=' + cleaned.length + ', upsert payload=' + sizeKB + 'KB');
       return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) {
         if (r && r.error) { console.warn('[DB] PUSH ' + key + ' UPSERT ERROR:', r.error.message || r.error); }
-        else { console.log('[DB] PUSH ' + key + ': upsert OK, items=' + merged.length); }
-        DB.broadcastUpdate(key, merged);
+        else { console.log('[DB] PUSH ' + key + ': upsert OK, items=' + cleaned.length); }
+        DB.broadcastUpdate(key, cleaned);
         return r;
       }, function (e) { console.warn('[DB] PUSH ' + key + ' NETWORK ERROR:', e && (e.message || e)); });
     }, function (e) {
@@ -494,7 +519,7 @@ DB._pushCollectionNow = function (key) {
       var localNow = [];
       try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e2) { localNow = []; }
       if (!Array.isArray(localNow)) localNow = [];
-      var upsertData = DB._stripResolvedProofs(localNow);
+      var upsertData = DB._cleanMergeArray(localNow);
       return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) {
         if (r && r.error) { console.warn('[DB] PUSH ' + key + ' UPSERT ERROR:', r.error.message || r.error); }
         else { console.log('[DB] PUSH ' + key + ': upsert OK (new row), items=' + localNow.length); }
@@ -541,7 +566,9 @@ DB.pullCollection = function (key) {
         var localArr = [];
         try { localArr = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localArr = []; }
         if (!Array.isArray(localArr)) localArr = [];
-        localStorage.setItem(key, JSON.stringify(DB._mergeById(localArr, serverPayload)));
+        var mergedPull = DB._mergeById(localArr, serverPayload);
+        var cleanedPull = DB._cleanMergeArray(mergedPull);
+        localStorage.setItem(key, JSON.stringify(cleanedPull));
       } else {
         localStorage.setItem(key, JSON.stringify(res.data.payload));
       }
