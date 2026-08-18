@@ -994,6 +994,17 @@ function submitWithdraw() {
   if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
   if (amount < data.min) { showToast('Minimum withdrawal is ' + data.min + ' ' + coin, 'error'); return; }
   if (amount > data.balance) { showToast('Insufficient balance', 'error'); return; }
+  var myUid=localStorage.getItem('bb_uid')||'';
+  try{
+    var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
+    for(var i=0;i<loans.length;i++){
+      if(loans[i].userId===myUid&&loans[i].status==='active'){
+        var total=loans[i].borrowAmt+(loans[i].borrowAmt*(loans[i].interestRate||5)/100);
+        showToast('You have an outstanding loan of $'+Number(loans[i].borrowAmt).toFixed(2)+' (total $'+total.toFixed(2)+'). Please repay your loan before withdrawing.','error');
+        return;
+      }
+    }
+  }catch(e){}
   const btn = document.getElementById('withdrawSubmitBtn');
   const spinner = document.getElementById('withdrawSpinner');
   btn.disabled = true; spinner.style.display = 'inline-block';
