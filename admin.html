@@ -1361,6 +1361,49 @@ function renderSupportLive(){
 }
 if(typeof DB!=='undefined'&&DB.ready){
   DB.subscribe('bb_support_tickets',refreshSupportLive);
+  DB.subscribe('bb_deposit_requests',function(){
+    var tab=document.querySelector('.nav-item.active');
+    if(tab&&tab.getAttribute('data-tab')==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
+  });
+  DB.subscribe('bb_withdrawal_requests',function(){
+    var tab=document.querySelector('.nav-item.active');
+    if(tab&&tab.getAttribute('data-tab')==='withdrawals')refreshWithdrawals();
+  });
+  DB.subscribe('bb_loans',function(){
+    var tab=document.querySelector('.nav-item.active');
+    if(tab&&tab.getAttribute('data-tab')==='loans')refreshLoans();
+  });
+  DB.subscribe('bb_kyc_submissions',function(){
+    var tab=document.querySelector('.nav-item.active');
+    if(tab&&tab.getAttribute('data-tab')==='kyc')refreshKYC();
+  });
+  DB.subscribe('bb_trades_history',function(){
+    var tab=document.querySelector('.nav-item.active');
+    if(tab&&tab.getAttribute('data-tab')==='trades')refreshTrades();
+  });
+  // Supabase Realtime: listen for changes on the app_collections table
+  // so cross-device updates arrive instantly instead of waiting for the poll.
+  try{
+    DB.client.channel('admin-realtime').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_collections'},function(payload){
+      var key=payload&&payload.new&&payload.new.key;
+      if(!key)return;
+      // Re-pull just the changed collection from Supabase into localStorage
+      DB.pullCollection(key).then(function(){
+        var active=document.querySelector('.nav-item.active');
+        var tab=active?active.getAttribute('data-tab'):'';
+        if(key==='bb_deposit_requests'&&tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
+        if(key==='bb_withdrawal_requests'&&tab==='withdrawals')refreshWithdrawals();
+        if(key==='bb_loans'&&tab==='loans')refreshLoans();
+        if(key==='bb_kyc_submissions'&&tab==='kyc')refreshKYC();
+        if(key==='bb_trades_history'&&tab==='trades')refreshTrades();
+        if(key==='bb_support_tickets')refreshSupportLive();
+        if(key==='bb_earn_positions'&&tab==='earn')refreshEarn();
+        if(key==='bb_ai_quants'&&tab==='aiquants')refreshAiQuants();
+        if(key==='bb_users'&&tab==='users')refreshUsers();
+        if(key==='bb_profit_modules')refreshDashboard();
+      });
+    }).subscribe();
+  }catch(e){}
 }
 // Fallback poll on ANY tab so user messages arrive even when the admin is
 // not on the Support tab and Realtime is unavailable. Realtime broadcasts
@@ -2735,10 +2778,8 @@ window.addEventListener('storage',function(e){
 });
 setInterval(function(){
   if(document.hidden) return;
-  var tab=document.querySelector('.nav-item.active');
-  if(tab&&tab.getAttribute('data-tab')==='trades')refreshTrades();
   syncFromServer();
-},10000);
+},5000);
 
 function refreshAll(){
   refreshDashboard();
