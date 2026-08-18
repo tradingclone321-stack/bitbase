@@ -2770,7 +2770,7 @@ setInterval(function(){
   var active=document.querySelector('.nav-item.active');
   var tab=active?active.getAttribute('data-tab'):'dashboard';
   // Always pull these critical collections (user submissions).
-  var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_support_tickets'];
+  var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions'];
   // Add active tab's collections.
   var tabKeys=DB.TAB_MAP[tab]||[];
   var allKeys=always.slice();
