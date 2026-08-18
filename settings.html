@@ -731,15 +731,31 @@ function kycPrevStep() {
 
 var kycFrontData=null;
 var kycBackData=null;
+function compressKycDoc(file,cb){
+  if(!file.type||file.type.indexOf('image')!==0){
+    var reader=new FileReader();
+    reader.onload=function(e){cb({name:file.name,type:file.type,dataUrl:e.target.result});};
+    reader.readAsDataURL(file);
+    return;
+  }
+  var img=new Image();
+  img.onload=function(){
+    var maxW=800,maxH=800,w=img.width,h=img.height;
+    if(w>maxW){h=h*maxW/w;w=maxW;}
+    if(h>maxH){w=w*maxH/h;h=maxH;}
+    var c=document.createElement('canvas');c.width=w;c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);
+    cb({name:file.name,type:'image/jpeg',dataUrl:c.toDataURL('image/jpeg',0.6)});
+  };
+  img.src=URL.createObjectURL(file);
+}
 function handleDocUpload(side, input) {
   if (input.files && input.files[0]) {
     const file = input.files[0];
-    var reader=new FileReader();
-    reader.onload=function(e){
-      if(side==='front')kycFrontData={name:file.name,type:file.type,dataUrl:e.target.result};
-      else kycBackData={name:file.name,type:file.type,dataUrl:e.target.result};
-    };
-    reader.readAsDataURL(file);
+    compressKycDoc(file,function(compressed){
+      if(side==='front')kycFrontData=compressed;
+      else kycBackData=compressed;
+    });
     document.getElementById('kyc' + side.charAt(0).toUpperCase() + side.slice(1) + 'Placeholder').style.display = 'none';
     document.getElementById('kyc' + side.charAt(0).toUpperCase() + side.slice(1) + 'Preview').style.display = '';
     document.getElementById('kyc' + side.charAt(0).toUpperCase() + side.slice(1) + 'Name').textContent = file.name;
