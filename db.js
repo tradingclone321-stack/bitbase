@@ -8,7 +8,7 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
-DB.VERSION = '2026-08-16-deletefix';
+DB.VERSION = '2026-08-16-pushfix';
 DB._lastPullTime = 0;
 DB._lastSyncError = '';
 
@@ -382,6 +382,32 @@ DB._mergeById = function (local, server, idKey) {
   return out;
 };
 
+// Strip proof data (base64 images) from resolved entries before upserting
+// to Supabase.  Without this the payload grows unboundedly as every user
+// appends proofs; eventually the JSONB column exceeds the REST body limit
+// and the upsert silently fails (the request returns an error that _ok only
+// logs).  Resolved entries have already been reviewed by admin so their
+// proof images are no longer critical; keeping them only for pending items.
+DB._stripResolvedProofs = function (arr) {
+  if (!Array.isArray(arr)) return arr;
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var item = arr[i];
+    if (!item) { out.push(item); continue; }
+    var st = (item.status || '').toLowerCase();
+    if (st && st !== 'pending' && st !== 'deleted') {
+      if (item.proof && item.proof.dataUrl) {
+        item = Object.assign({}, item, { proof: { name: item.proof.name, type: item.proof.type, dataUrl: '' } });
+      }
+      if (item.proofDataUrl) {
+        item = Object.assign({}, item, { proofDataUrl: '' });
+      }
+    }
+    out.push(item);
+  }
+  return out;
+};
+
 // Collections that hold shared id-keyed request/position arrays where
 // one device's push must not wipe another device's admin resolutions.
 DB.MERGE_COLLECTIONS = [
@@ -446,13 +472,15 @@ DB._pushCollectionNow = function (key) {
       if (!Array.isArray(localNow)) localNow = [];
       var merged = DB._mergeById(localNow, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
+      var upsertPayload = DB._stripResolvedProofs(merged);
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertPayload }, { onConflict: 'key' }).then(function (r) { if (r && r.error) console.warn('[DB] upsert failed:', key, r.error.message); DB.broadcastUpdate(key, merged); return r; }, function (e) { console.warn('[DB] upsert error:', key, e && e.message); });
     }, function () {
       // Row doesn't exist yet — upsert local data directly (no merge needed).
       var localNow = [];
       try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
       if (!Array.isArray(localNow)) localNow = [];
-      return DB.client.from('app_collections').upsert({ key: key, payload: localNow }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, localNow); return r; }, DB._ok);
+      var upsertPayload = DB._stripResolvedProofs(localNow);
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertPayload }, { onConflict: 'key' }).then(function (r) { if (r && r.error) console.warn('[DB] upsert failed:', key, r.error.message); DB.broadcastUpdate(key, localNow); return r; }, function (e) { console.warn('[DB] upsert error:', key, e && e.message); });
     });
   }
   return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, DB._ok);
