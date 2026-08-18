@@ -958,27 +958,15 @@ function submitDepositRequest(){
       }
     }
     localStorage.setItem('bb_deposit_requests',JSON.stringify(requests));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_deposit_requests');}
     document.getElementById('depositAmount').value='';
     removeDepositProof();
-    var pushDone=function(){
-      btn.disabled=false;spinner.style.display='none';
-      closeModal('depositModal');
-      showToast('Deposit of '+amount+' '+coin+' submitted! Awaiting admin approval.','success');
-    };
-    var pushFail=function(err){
-      btn.disabled=false;spinner.style.display='none';
-      closeModal('depositModal');
-      showToast('Saved locally. Sync issue — will retry automatically.','success');
-      console.warn('[Deposit] push failed:',err);
-    };
-    if(typeof DB!=='undefined'&&DB.ready){
-      DB.pushCollection('bb_deposit_requests').then(pushDone,pushFail);
-    }else{
-      pushDone();
-    }
+    closeModal('depositModal');
+    showToast('Deposit of '+amount+' '+coin+' submitted! Awaiting admin approval.','success');
   }catch(e){
-    btn.disabled=false;spinner.style.display='none';
     showToast('Submission failed. Please try again.','error');
+  }finally{
+    btn.disabled=false;spinner.style.display='none';
   }
 }
 updateDepositInfo();
@@ -1022,28 +1010,16 @@ function submitWithdraw() {
       status:'pending',createdAt:Date.now(),resolvedAt:0
     });
     localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_withdrawal_requests');}
     document.getElementById('withdrawAddress').value = '';
     document.getElementById('withdrawAmount').value = '';
     updateWithdrawInfo();
-    var pushDone=function(){
-      btn.disabled=false;spinner.style.display='none';
-      closeModal('withdrawModal');
-      showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
-    };
-    var pushFail=function(err){
-      btn.disabled=false;spinner.style.display='none';
-      closeModal('withdrawModal');
-      showToast('Saved locally. Sync issue — will retry automatically.','success');
-      console.warn('[Withdraw] push failed:',err);
-    };
-    if(typeof DB!=='undefined'&&DB.ready){
-      DB.pushCollection('bb_withdrawal_requests').then(pushDone,pushFail);
-    }else{
-      pushDone();
-    }
+    closeModal('withdrawModal');
+    showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
   }catch(e){
-    btn.disabled=false;spinner.style.display='none';
     showToast('Submission failed. Please try again.','error');
+  }finally{
+    btn.disabled = false; spinner.style.display = 'none';
   }
 }
 
@@ -1258,30 +1234,18 @@ function submitLoan(){
         }
       }
       localStorage.setItem('bb_loans',JSON.stringify(loans));
+      if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
       document.getElementById('loanBorrowAmt').value='';
       document.getElementById('loanInterestSection').style.display='none';
       document.getElementById('loanAgreeCheck').checked=false;
       removeLoanProof();
+      closeModal('loanModal');
       updateAssetsValues();
-      var pushDone=function(){
-        btn.disabled=false;spinner.style.display='none';
-        closeModal('loanModal');
-        showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
-      };
-      var pushFail=function(err){
-        btn.disabled=false;spinner.style.display='none';
-        closeModal('loanModal');
-        showToast('Saved locally. Sync issue — will retry automatically.','success');
-        console.warn('[Loan] push failed:',err);
-      };
-      if(typeof DB!=='undefined'&&DB.ready){
-        DB.pushCollection('bb_loans').then(pushDone,pushFail);
-      }else{
-        pushDone();
-      }
+      showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
     }catch(e){
-      btn.disabled=false;spinner.style.display='none';
       showToast('Submission failed. Please try again.','error');
+    }finally{
+      btn.disabled=false;spinner.style.display='none';
     }
   }
   if(loanProofFile.type&&loanProofFile.type.indexOf('image')===0){
