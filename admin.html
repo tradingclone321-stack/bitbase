@@ -1864,6 +1864,8 @@ function markLoanPaid(id){
       if(loans[i].status!=='active'){showToast('Loan is not active','error');return;}
       loans[i].status='paid';
       loans[i].paidAt=Date.now();
+      loans[i].resolvedAt=Date.now();
+      loans[i].updatedAt=Date.now();
       saveLoans(loans);
       refreshLoans();
       showToast('Loan marked as paid','success');
