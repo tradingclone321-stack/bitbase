@@ -1744,12 +1744,13 @@ function refreshLoans(){
     else statusBadge='<span class="badge-red">Rejected</span>';
     var actions='';
     if(l.status==='pending'){
-      actions='<button class="btn-sm btn-success" onclick="approveLoan(\''+l.id+'\')" style="margin-right:4px;">Approve</button><button class="btn-sm btn-danger" onclick="rejectLoan(\''+l.id+'\')">Reject</button>';
+      actions='<button class="btn-sm btn-success" onclick="approveLoan(\''+l.id+'\')" style="margin-right:4px;">Approve</button><button class="btn-sm btn-danger" onclick="rejectLoan(\''+l.id+'\')" style="margin-right:4px;">Reject</button>';
     }else if(l.status==='active'){
-      actions='<button class="btn-sm" style="background:rgba(65,105,225,0.2);color:#4169E1;" onclick="markLoanPaid(\''+l.id+'\')">Mark Paid</button>';
+      actions='<button class="btn-sm" style="background:rgba(65,105,225,0.2);color:#4169E1;margin-right:4px;" onclick="markLoanPaid(\''+l.id+'\')">Mark Paid</button>';
     }else{
-      actions='—';
+      actions='';
     }
+    actions+='<button class="btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;" onclick="deleteLoan(\''+l.id+'\')">Delete</button>';
     var proofBtn=l.proofDataUrl?'<button class="btn-sm" style="background:rgba(139,92,246,0.12);color:#8b5cf6;" onclick="viewLoanProof(\''+l.id+'\')">View</button>':(l.proofName?'<span style="color:rgba(255,255,255,0.4);font-size:11px;">'+l.proofName+'</span>':'<span style="color:rgba(255,255,255,0.3);">—</span>');
     html+='<tr>'+
       '<td style="font-family:monospace;">'+l.id+'</td>'+
@@ -1852,6 +1853,17 @@ function markLoanPaid(id){
       break;
     }
   }
+}
+function deleteLoan(id){
+  if(!confirm('Delete this loan record?'))return;
+  var loans=getAllLoans();
+  var filtered=[];
+  for(var i=0;i<loans.length;i++){
+    if(loans[i].id!==id)filtered.push(loans[i]);
+  }
+  saveLoans(filtered);
+  refreshLoans();
+  showToast('Loan deleted','success');
 }
 
 // ===== KYC =====
@@ -2286,10 +2298,9 @@ function refreshDepositRequests(){
     var proofBtn=r.proof?'<button class="btn-sm" style="background:rgba(65,105,225,0.12);color:#4169E1;" onclick="viewDepProof(\''+r.id+'\')">View</button>':'<span style="color:rgba(255,255,255,0.3);">—</span>';
     var actions='';
     if(r.status==='pending'){
-      actions='<button class="btn-sm btn-success" onclick="approveDeposit(\''+r.id+'\')" style="margin-right:4px;">Approve</button><button class="btn-sm btn-danger" onclick="rejectDeposit(\''+r.id+'\')">Reject</button>';
-    }else{
-      actions='—';
+      actions='<button class="btn-sm btn-success" onclick="approveDeposit(\''+r.id+'\')" style="margin-right:4px;">Approve</button><button class="btn-sm btn-danger" onclick="rejectDeposit(\''+r.id+'\')" style="margin-right:4px;">Reject</button>';
     }
+    actions+='<button class="btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;" onclick="deleteDepositRequest(\''+r.id+'\')">Delete</button>';
     html+='<tr>'+
       '<td style="font-family:monospace;">'+r.id+'</td>'+
       '<td>'+(r.userName||'User')+' ('+r.userId+')</td>'+
@@ -2380,6 +2391,17 @@ function rejectDeposit(id){
       break;
     }
   }
+}
+function deleteDepositRequest(id){
+  if(!confirm('Delete this deposit record?'))return;
+  var requests=getAllDepositRequests();
+  var filtered=[];
+  for(var i=0;i<requests.length;i++){
+    if(requests[i].id!==id)filtered.push(requests[i]);
+  }
+  saveDepositRequests(filtered);
+  refreshDepositRequests();
+  showToast('Deposit record deleted','success');
 }
 function viewDepProof(id){
   var requests=getAllDepositRequests();

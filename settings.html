@@ -993,8 +993,11 @@ loadPreferences();
 })();
 
 // ===== SERVER BALANCE SYNC =====
+// Settings page only needs profit-module polling; balance changes don't
+// require a page reload here (avoids infinite refresh from float comparison).
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
-  DB.startLocalPolling(10000);
+  DB.pullProfitModules();
+  if(!DB._profitPollTimer) DB._profitPollTimer = setInterval(DB.pullProfitModules, 5000);
 }
 </script>
 <div class="mobile-bottom-bar">

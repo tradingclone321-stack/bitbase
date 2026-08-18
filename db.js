@@ -172,13 +172,15 @@ DB.pullLocalUser = function () {
     if (res && res.data) {
       var r = res.data;
       var changed = false;
-      var oldCash = localStorage.getItem('bb_cash_balance');
-      localStorage.setItem('bb_cash_balance', String(r.cash_balance != null ? r.cash_balance : 0));
-      if (oldCash !== localStorage.getItem('bb_cash_balance')) changed = true;
+      var oldCash = parseFloat(localStorage.getItem('bb_cash_balance')) || 0;
+      var newCash = parseFloat(r.cash_balance) || 0;
+      localStorage.setItem('bb_cash_balance', String(newCash));
+      if (Math.abs(oldCash - newCash) > 0.01) changed = true;
       try {
         var oldAb = localStorage.getItem('bb_asset_balances');
-        localStorage.setItem('bb_asset_balances', JSON.stringify(r.asset_balances || {}));
-        if (oldAb !== localStorage.getItem('bb_asset_balances')) changed = true;
+        var newAb = JSON.stringify(r.asset_balances || {});
+        localStorage.setItem('bb_asset_balances', newAb);
+        if (oldAb !== newAb) changed = true;
       } catch (e) {}
       if (r.name && r.name !== localStorage.getItem('bb_name')) { localStorage.setItem('bb_name', r.name); changed = true; }
       if (r.email && r.email !== localStorage.getItem('bb_email')) { localStorage.setItem('bb_email', r.email); changed = true; }
