@@ -895,6 +895,7 @@ var depositProofData=null;
 function handleDepositProof(input){
   if(input.files&&input.files[0]){
     var file=input.files[0];
+    if(file.size>5*1024*1024){showToast('File too large. Max 5MB.','error');return;}
     if(file.type&&file.type.indexOf('image')===0){
       var img=new Image();
       img.onload=function(){
