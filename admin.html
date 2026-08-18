@@ -388,14 +388,18 @@
     <div id="tab-loans" class="tab-content" style="display:none;">
       <div class="admin-header">
         <h1>Loan Requests</h1>
-        <div class="filter-row" style="display:flex;gap:8px;">
-          <button class="btn-sm btn-primary" onclick="filterLoans('all')" id="loanAll">All</button>
-          <button class="btn-sm" style="background:rgba(247,147,26,0.12);color:#f7931a;" onclick="filterLoans('pending')" id="loanPending">Pending</button>
-          <button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="filterLoans('active')" id="loanActive">Active</button>
-          <button class="btn-sm" style="background:rgba(65,105,225,0.12);color:#4169E1;" onclick="filterLoans('paid')" id="loanPaid">Paid</button>
-          <button class="btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;" onclick="filterLoans('rejected')" id="loanRejected">Rejected</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-sm" style="background:rgba(65,105,225,0.12);color:#4169E1;" onclick="debugLoanFlow()">Debug Flow</button>
+          <div class="filter-row" style="display:flex;gap:8px;">
+            <button class="btn-sm btn-primary" onclick="filterLoans('all')" id="loanAll">All</button>
+            <button class="btn-sm" style="background:rgba(247,147,26,0.12);color:#f7931a;" onclick="filterLoans('pending')" id="loanPending">Pending</button>
+            <button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="filterLoans('active')" id="loanActive">Active</button>
+            <button class="btn-sm" style="background:rgba(65,105,225,0.12);color:#4169E1;" onclick="filterLoans('paid')" id="loanPaid">Paid</button>
+            <button class="btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;" onclick="filterLoans('rejected')" id="loanRejected">Rejected</button>
+          </div>
         </div>
       </div>
+      <div id="loanDebugPanel" style="display:none;background:#0d1117;border:1px solid rgba(65,105,225,0.3);border-radius:8px;padding:12px;margin-bottom:16px;font-family:monospace;font-size:11px;color:rgba(255,255,255,0.7);max-height:300px;overflow:auto;"></div>
       <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
         <table class="data-table">
           <thead><tr><th>ID</th><th>User</th><th>Borrow</th><th>Duration</th><th>Rate</th><th>Interest</th><th>Total Owed</th><th>Proof</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
@@ -503,7 +507,11 @@
         </div>
       </div>
       <div style="margin-top:24px;">
-        <div class="section-title" style="margin-bottom:12px;">Deposit Requests</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="section-title" style="margin-bottom:0;">Deposit Requests</div>
+          <button class="btn-sm" style="background:rgba(65,105,225,0.12);color:#4169E1;" onclick="debugDepositFlow()">Debug Flow</button>
+        </div>
+        <div id="depDebugPanel" style="display:none;background:#0d1117;border:1px solid rgba(65,105,225,0.3);border-radius:8px;padding:12px;margin-bottom:16px;font-family:monospace;font-size:11px;color:rgba(255,255,255,0.7);max-height:300px;overflow:auto;"></div>
         <div class="filter-row" style="display:flex;gap:8px;margin-bottom:16px;">
           <button class="btn-sm btn-primary" onclick="filterDepRequests('all')" id="depReqAll">All</button>
           <button class="btn-sm" style="background:rgba(247,147,26,0.12);color:#f7931a;" onclick="filterDepRequests('pending')" id="depReqPending">Pending</button>
