@@ -1447,7 +1447,7 @@ function startSupportPolling(){
     // Supabase Realtime: cross-device instant delivery (admin replies from
     // another browser/device arrive via postgres_changes without waiting for poll).
     try{
-      DB.client.channel('user-support-pg').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_collections',filter:'key=eq.bb_support_tickets'},function(){
+      DB.client.channel('user-support-pg').on('postgres_changes',{event:['INSERT','UPDATE'],schema:'public',table:'app_collections',filter:'key=eq.bb_support_tickets'},function(){
         if(!supportOpen)return;
         DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
       }).subscribe();

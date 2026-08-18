@@ -420,7 +420,13 @@ DB._pushCollectionNow = function (key) {
       var merged = DB._ticketMerge(localNow, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
       return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
-    }, function () { return DB._ok(null); });
+    }, function () {
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      localNow = DB._cleanTickets(localNow);
+      return DB.client.from('app_collections').upsert({ key: key, payload: localNow }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, localNow); return r; }, DB._ok);
+    });
   }
   if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
     if (!Array.isArray(payload)) payload = [];
@@ -435,7 +441,13 @@ DB._pushCollectionNow = function (key) {
       var merged = DB._mergeById(localNow, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
       return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
-    }, function () { return DB._ok(null); });
+    }, function () {
+      // Row doesn't exist yet — upsert local data directly (no merge needed).
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      return DB.client.from('app_collections').upsert({ key: key, payload: localNow }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, localNow); return r; }, DB._ok);
+    });
   }
   return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, DB._ok);
 };

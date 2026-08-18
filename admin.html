@@ -1370,7 +1370,7 @@ if(typeof DB!=='undefined'&&DB.ready){
   // Supabase Realtime: listen for row changes on app_collections for
   // cross-device instant updates (BroadcastChannel only covers same browser).
   try{
-    DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_collections'},function(payload){
+    DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:['INSERT','UPDATE'],schema:'public',table:'app_collections'},function(payload){
       var key=payload&&payload.new&&payload.new.key;
       if(!key)return;
       // Skip pull if BroadcastChannel already applied fresh data.
@@ -2761,28 +2761,39 @@ window.addEventListener('storage',function(e){
     refreshTrades();
   }
 });
-// Fast targeted poll: only pull the active tab's collections (5s).
+// Fast targeted poll: always pull request collections (deposits, withdrawals,
+// loans, KYC, support) regardless of active tab, plus the active tab's own
+// collections. This ensures admin sees new user requests without switching tabs.
 setInterval(function(){
   if(document.hidden) return;
+  if(typeof DB==='undefined'||!DB.ready) return;
   var active=document.querySelector('.nav-item.active');
   var tab=active?active.getAttribute('data-tab'):'dashboard';
-  if(tab==='trades')refreshTrades();
-  if(typeof DB!=='undefined'&&DB.ready){
-    DB.pullTab(tab).then(function(){
-      if(tab==='users')refreshUsers();
-      if(tab==='support')refreshTickets();
-      if(tab==='trades')refreshTrades();
-      if(tab==='withdrawals')refreshWithdrawals();
-      if(tab==='loans')refreshLoans();
-      if(tab==='kyc')refreshKYC();
-      if(tab==='balances')refreshBalances();
-      if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
-      if(tab==='analytics')refreshAnalytics();
-      if(tab==='earn')refreshEarn();
-      if(tab==='aiquants')refreshAiQuants();
-      if(tab==='dashboard')refreshDashboard();
-    });
+  // Always pull these critical collections (user submissions).
+  var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_support_tickets'];
+  // Add active tab's collections.
+  var tabKeys=DB.TAB_MAP[tab]||[];
+  var allKeys=always.slice();
+  for(var i=0;i<tabKeys.length;i++){
+    if(allKeys.indexOf(tabKeys[i])<0)allKeys.push(tabKeys[i]);
   }
+  var tasks=[];
+  for(var j=0;j<allKeys.length;j++)tasks.push(DB.pullCollection(allKeys[j]));
+  Promise.all(tasks).then(function(){
+    // Refresh the active tab's UI.
+    if(tab==='users')refreshUsers();
+    if(tab==='support')refreshTickets();
+    if(tab==='trades')refreshTrades();
+    if(tab==='withdrawals')refreshWithdrawals();
+    if(tab==='loans')refreshLoans();
+    if(tab==='kyc')refreshKYC();
+    if(tab==='balances')refreshBalances();
+    if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
+    if(tab==='analytics')refreshAnalytics();
+    if(tab==='earn')refreshEarn();
+    if(tab==='aiquants')refreshAiQuants();
+    if(tab==='dashboard')refreshDashboard();
+  });
 },5000);
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
 setInterval(function(){
