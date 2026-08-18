@@ -1193,27 +1193,33 @@ function submitLoan(){
     var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
     var uid=localStorage.getItem('bb_uid')||'';
     var uname=localStorage.getItem('bb_name')||'User';
-    loans.push({
-      id:'LOAN-'+Date.now(),
-      userId:uid,
-      userName:uname,
-      borrowAmt:borrowAmt,
-      durationDays:loanDurationDays,
-      interestRate:LOAN_RATES[loanDurationDays]||5,
-      proofName:loanProofFile.name,
-      status:'pending',
-      time:Date.now()
-    });
-    localStorage.setItem('bb_loans',JSON.stringify(loans));
-    if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
-    btn.disabled=false;spinner.style.display='none';
-    document.getElementById('loanBorrowAmt').value='';
-    document.getElementById('loanInterestSection').style.display='none';
-    document.getElementById('loanAgreeCheck').checked=false;
-    removeLoanProof();
-    closeModal('loanModal');
-    updateAssetsValues();
-    showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      loans.push({
+        id:'LOAN-'+Date.now(),
+        userId:uid,
+        userName:uname,
+        borrowAmt:borrowAmt,
+        durationDays:loanDurationDays,
+        interestRate:LOAN_RATES[loanDurationDays]||5,
+        proofName:loanProofFile.name,
+        proofType:loanProofFile.type,
+        proofDataUrl:ev.target.result,
+        status:'pending',
+        time:Date.now()
+      });
+      localStorage.setItem('bb_loans',JSON.stringify(loans));
+      if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
+      btn.disabled=false;spinner.style.display='none';
+      document.getElementById('loanBorrowAmt').value='';
+      document.getElementById('loanInterestSection').style.display='none';
+      document.getElementById('loanAgreeCheck').checked=false;
+      removeLoanProof();
+      closeModal('loanModal');
+      updateAssetsValues();
+      showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
+    };
+    reader.readAsDataURL(loanProofFile);
   },2000);
 }
 

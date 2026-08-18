@@ -1723,7 +1723,7 @@ function refreshLoans(){
     }else{
       actions='—';
     }
-    var proofBtn=l.proofName?'<button class="btn-sm" style="background:rgba(139,92,246,0.12);color:#8b5cf6;" onclick="showToast(\'Proof: '+l.proofName+'\')">View</button>':'<span style="color:rgba(255,255,255,0.3);">—</span>';
+    var proofBtn=l.proofDataUrl?'<button class="btn-sm" style="background:rgba(139,92,246,0.12);color:#8b5cf6;" onclick="viewLoanProof(\''+l.id+'\')">View</button>':(l.proofName?'<span style="color:rgba(255,255,255,0.4);font-size:11px;">'+l.proofName+'</span>':'<span style="color:rgba(255,255,255,0.3);">—</span>');
     html+='<tr>'+
       '<td style="font-family:monospace;">'+l.id+'</td>'+
       '<td>'+(l.userName||'User')+' '+(l.userId?'('+l.userId+')':'')+'</td>'+
@@ -1740,6 +1740,21 @@ function refreshLoans(){
   }
   body.innerHTML=html;
   lucide.createIcons();
+}
+function viewLoanProof(id){
+  var loans=getAllLoans();
+  var loan=null;
+  for(var i=0;i<loans.length;i++){if(loans[i].id===id){loan=loans[i];break;}}
+  if(!loan||!loan.proofDataUrl)return;
+  var html='<div style="text-align:center;">';
+  if(loan.proofType&&loan.proofType.indexOf('image')===0){
+    html+='<img src="'+loan.proofDataUrl+'" style="max-width:100%;max-height:400px;border-radius:8px;display:block;margin:0 auto;">';
+  }else{
+    html+='<a href="'+loan.proofDataUrl+'" download="'+loan.proofName+'" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-radius:10px;color:#fff;font-weight:600;text-decoration:none;">Download '+loan.proofName+'</a>';
+  }
+  html+='<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:12px;">'+loan.proofName+'</div>';
+  html+='</div>';
+  openModal('Loan Proof','<div style="padding:20px;">'+html+'</div>');
 }
 function filterLoans(f){
   currentLoanFilter=f;
