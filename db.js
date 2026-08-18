@@ -575,9 +575,35 @@ DB.unsubscribe = function (key) {
 
 DB.pullAll = function () {
   if (!DB.ready) return Promise.resolve();
-  var p = DB.pullUsers();
-  for (var i = 0; i < DB.COLLECTIONS.length; i++) p = p.then(DB.pullCollection.bind(null, DB.COLLECTIONS[i]));
-  return p;
+  var tasks = [DB.pullUsers()];
+  for (var i = 0; i < DB.COLLECTIONS.length; i++) tasks.push(DB.pullCollection(DB.COLLECTIONS[i]));
+  return Promise.all(tasks);
+};
+
+// Map admin tab names to the collections they display.
+DB.TAB_MAP = {
+  deposits: ['bb_deposit_requests','bb_deposit_addresses'],
+  withdrawals: ['bb_withdrawal_requests'],
+  loans: ['bb_loans'],
+  kyc: ['bb_kyc_submissions'],
+  trades: ['bb_trades_history'],
+  earn: ['bb_earn_positions'],
+  aiquants: ['bb_ai_quants'],
+  support: ['bb_support_tickets'],
+  users: [],
+  balances: [],
+  analytics: ['bb_trades_history','bb_earn_positions','bb_ai_quants'],
+  dashboard: ['bb_profit_modules']
+};
+
+// Pull only the collections needed for the given tab (fast).
+DB.pullTab = function (tab) {
+  if (!DB.ready) return Promise.resolve();
+  var keys = DB.TAB_MAP[tab] || [];
+  if (!keys.length) return Promise.resolve();
+  var tasks = [];
+  for (var i = 0; i < keys.length; i++) tasks.push(DB.pullCollection(keys[i]));
+  return Promise.all(tasks);
 };
 
 // Diagnostic helper: returns a snapshot of the sync layer state so the

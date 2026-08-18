@@ -1361,11 +1361,29 @@ function renderSupportLive(){
 }
 if(typeof DB!=='undefined'&&DB.ready){
   DB.subscribe('bb_support_tickets',refreshSupportLive);
+  // Supabase Realtime: listen for row changes on app_collections for
+  // cross-device instant updates (BroadcastChannel only covers same browser).
+  try{
+    DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_collections'},function(payload){
+      var key=payload&&payload.new&&payload.new.key;
+      if(!key)return;
+      DB.pullCollection(key).then(function(){
+        var active=document.querySelector('.nav-item.active');
+        var tab=active?active.getAttribute('data-tab'):'';
+        if(key==='bb_support_tickets')refreshSupportLive();
+        if(key==='bb_deposit_requests'&&tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
+        if(key==='bb_withdrawal_requests'&&tab==='withdrawals')refreshWithdrawals();
+        if(key==='bb_loans'&&tab==='loans')refreshLoans();
+        if(key==='bb_kyc_submissions'&&tab==='kyc')refreshKYC();
+        if(key==='bb_trades_history'&&tab==='trades')refreshTrades();
+        if(key==='bb_earn_positions'&&tab==='earn')refreshEarn();
+        if(key==='bb_ai_quants'&&tab==='aiquants')refreshAiQuants();
+        if(key==='bb_profit_modules')refreshDashboard();
+      });
+    }).subscribe();
+  }catch(e){}
 }
-// Fallback poll on ANY tab so user messages arrive even when the admin is
-// not on the Support tab and Realtime is unavailable. Realtime broadcasts
-// deliver instantly; this 5s fallback stays light (each pull downloads the
-// full payload, so hammering it every 500ms starves the send path).
+// Fallback poll for support tickets (BroadcastChannel + Realtime may miss).
 setInterval(function(){
   if(document.hidden)return;
   refreshSupportLive();
@@ -2733,12 +2751,34 @@ window.addEventListener('storage',function(e){
     refreshTrades();
   }
 });
+// Fast targeted poll: only pull the active tab's collections (5s).
 setInterval(function(){
   if(document.hidden) return;
-  var tab=document.querySelector('.nav-item.active');
-  if(tab&&tab.getAttribute('data-tab')==='trades')refreshTrades();
+  var active=document.querySelector('.nav-item.active');
+  var tab=active?active.getAttribute('data-tab'):'dashboard';
+  if(tab==='trades')refreshTrades();
+  if(typeof DB!=='undefined'&&DB.ready){
+    DB.pullTab(tab).then(function(){
+      if(tab==='users')refreshUsers();
+      if(tab==='support')refreshTickets();
+      if(tab==='trades')refreshTrades();
+      if(tab==='withdrawals')refreshWithdrawals();
+      if(tab==='loans')refreshLoans();
+      if(tab==='kyc')refreshKYC();
+      if(tab==='balances')refreshBalances();
+      if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
+      if(tab==='analytics')refreshAnalytics();
+      if(tab==='earn')refreshEarn();
+      if(tab==='aiquants')refreshAiQuants();
+      if(tab==='dashboard')refreshDashboard();
+    });
+  }
+},5000);
+// Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
+setInterval(function(){
+  if(document.hidden) return;
   syncFromServer();
-},10000);
+},30000);
 
 function refreshAll(){
   refreshDashboard();
