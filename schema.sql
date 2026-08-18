@@ -208,6 +208,7 @@ create table if not exists public.balance_history (
 -- instantly instead of waiting for the next poll.
 -- ============================================================
 alter publication supabase_realtime add table public.app_collections;
+alter publication supabase_realtime add table public.users;
 
 -- ============================================================
 -- RLS (disabled for demo - anon key has full access)

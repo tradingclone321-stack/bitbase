@@ -746,3 +746,53 @@ DB.diagnose = function () {
 };
 
 DB.init();
+
+// ========== USER STATUS WATCHER ==========
+// Polls Supabase every 10 s for the current user's is_deactivated / existence
+// and subscribes to Realtime for instant push when available.  Redirects to
+// login.html the moment an admin deactivates or deletes the account.
+DB._statusWatcherStarted = false;
+DB._startUserStatusWatcher = function () {
+  if (DB._statusWatcherStarted) return;
+  if (!DB.ready) return;
+  var uid = localStorage.getItem('bb_uid');
+  if (!uid) return;
+  DB._statusWatcherStarted = true;
+  function kick(reason) {
+    try {
+      localStorage.removeItem('bb_login_time');
+      localStorage.removeItem('bb_password');
+    } catch (e) {}
+    window.location.href = 'login.html';
+  }
+  function checkStatus() {
+    if (!DB.ready || !DB.client) return;
+    var curUid = localStorage.getItem('bb_uid');
+    if (!curUid) return;
+    DB.client.from('users').select('is_deactivated').eq('uid', Number(curUid)).limit(1).single().then(function (res) {
+      if (!res || res.error || !res.data) { kick('deleted'); return; }
+      if (res.data.is_deactivated) { kick('deactivated'); return; }
+    }, function () {});
+  }
+  // Supabase Realtime on users table for instant push.
+  try {
+    DB.client.channel('user-status-watch').on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'users',
+      filter: 'uid=eq.' + uid
+    }, function (payload) {
+      var row = payload && payload.new;
+      if (row && row.is_deactivated) kick('deactivated');
+    }).on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'users',
+      filter: 'uid=eq.' + uid
+    }, function () { kick('deleted'); }).subscribe();
+  } catch (e) {}
+  // Fallback poll every 10 s.
+  setInterval(checkStatus, 10000);
+};
+// Auto-start once DB is ready and a uid exists.
+setTimeout(function () { DB._startUserStatusWatcher(); }, 2000);
