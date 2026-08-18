@@ -360,6 +360,7 @@ function getMyPositions(){
   var all=getPositions();
   var mine=[];
   for(var i=0;i<all.length;i++){
+    if(all[i].status==='deleted')continue;
     if(all[i].uid && String(all[i].uid)===String(myUid))mine.push(all[i]);
     else if(!all[i].uid && !myUid)mine.push(all[i]);
   }
@@ -453,10 +454,9 @@ function removePosition(index){
   if(p.type==='locked'){showToast('Locked staking cannot be unstaked before maturity','error');return;}
   if(!confirm('Unstake '+p.amount+' '+p.coin+' from '+p.type+'?')) return;
   returnBalance(p.coin,p.amount);
-  // Remove from full array by matching the position
   var all=getPositions();
   for(var i=0;i<all.length;i++){
-    if(all[i]===p){all.splice(i,1);break;}
+    if(all[i]===p){all[i]=Object.assign({},p,{status:'deleted',_deletedAt:Date.now()});break;}
   }
   savePositions(all);
   renderPositions();
@@ -546,7 +546,7 @@ function submitFlexible(){
     var userUid=localStorage.getItem('bb_uid')||'';
     var userName=localStorage.getItem('bb_name')||'User';
     var userEmail=localStorage.getItem('bb_email')||'';
-    positions.push({type:'flexible',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),uid:userUid,userName:userName,userEmail:userEmail});
+    positions.push({id:'EP'+Date.now()+'_'+Math.random().toString(36).slice(2,6),type:'flexible',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),uid:userUid,userName:userName,userEmail:userEmail});
     savePositions(positions);
     renderPositions();
     closeModal('flexibleModal');
@@ -614,7 +614,7 @@ function submitLocked(){
     deductBalance(coin,amount);
     var endDate=new Date(Date.now()+selectedLockedDays*86400000).toISOString();
     var positions=getPositions();
-    positions.push({type:'locked',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),endDate:endDate,days:selectedLockedDays,uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
+    positions.push({id:'EP'+Date.now()+'_'+Math.random().toString(36).slice(2,6),type:'locked',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),endDate:endDate,days:selectedLockedDays,uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
     savePositions(positions);
     renderPositions();
     closeModal('lockedModal');
@@ -686,7 +686,7 @@ function submitDefi(){
   setTimeout(function(){
     deductBalance(coin,amount);
     var positions=getPositions();
-    positions.push({type:'defi',coin:coin,amount:amount,apy:data.apy,protocol:data.protocol,started:new Date().toISOString(),uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
+    positions.push({id:'EP'+Date.now()+'_'+Math.random().toString(36).slice(2,6),type:'defi',coin:coin,amount:amount,apy:data.apy,protocol:data.protocol,started:new Date().toISOString(),uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
     savePositions(positions);
     renderPositions();
     closeModal('defiModal');

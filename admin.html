@@ -2549,7 +2549,7 @@ function filterEarn(f){
   refreshEarn();
 }
 function refreshEarn(){
-  var positions=getEarnPositions();
+  var positions=getEarnPositions().filter(function(p){return p.status!=='deleted';});
   var filtered=positions;
   if(currentEarnFilter!=='all')filtered=positions.filter(function(p){return p.type===currentEarnFilter;});
   filtered=filtered.slice().sort(function(a,b){return new Date(b.started)-new Date(a.started);});
@@ -2613,7 +2613,7 @@ function deleteEarnPosition(idx){
   var pos=allFiltered[idx];
   if(!pos||!confirm('Delete this '+pos.type+' position of '+pos.amount+' '+pos.coin+'?'))return;
   var realIdx=positions.indexOf(pos);
-  if(realIdx>=0){positions.splice(realIdx,1);saveEarnPositions(positions);}
+  if(realIdx>=0){positions[realIdx]=Object.assign({},pos,{status:'deleted',_deletedAt:Date.now()});saveEarnPositions(positions);}
   refreshEarn();
   showToast('Position deleted','success');
 }
