@@ -2714,9 +2714,11 @@ function settleAiQuantsDay(realIdx){
   o.settledDays=settledDays+1;
   o.earned=(o.earned||0)+dayProfit;
   o.lastPayout=(o.lastPayout||o.started)+DAY_MS;
+  o.updatedAt=Date.now();
   if(isLastDay){
     o.status='completed';
     o.completedAt=Date.now();
+    o.updatedAt=Date.now();
   }
   orders[realIdx]=o;
   saveAiQuants(orders);
@@ -2746,6 +2748,7 @@ function completeAiQuantsOrder(realIdx){
   }catch(e){}
   o.status='completed';
   o.completedAt=Date.now();
+  o.updatedAt=Date.now();
   o.earned=fullProfit;
   orders[realIdx]=o;
   saveAiQuants(orders);
