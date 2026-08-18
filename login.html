@@ -312,6 +312,34 @@
                     return;
                 }
 
+                // Local credentials match — but still check Supabase for
+                // deactivation / deletion from another device before proceeding.
+                var localUid = localStorage.getItem('bb_uid');
+                if (localUid && typeof DB !== 'undefined' && DB.ready) {
+                    DB.client.from('users').select('is_deactivated').eq('uid', Number(localUid)).limit(1).single().then(function(res){
+                        if (!res || res.error || !res.data) {
+                            // User was deleted from central table
+                            showError('loginError');
+                            document.getElementById('loginError').textContent = 'Account not found. It may have been deleted. Please contact support.';
+                            document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                            document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                            document.getElementById('loginError').style.color = '#ea3943';
+                            return;
+                        }
+                        if (res.data.is_deactivated) {
+                            showError('loginError');
+                            document.getElementById('loginError').textContent = 'Your account has been deactivated. Contact support for assistance.';
+                            document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                            document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                            document.getElementById('loginError').style.color = '#ea3943';
+                            return;
+                        }
+                        completeLogin(null);
+                    }, function(){
+                        completeLogin(null);
+                    });
+                    return;
+                }
                 completeLogin(null);
 
                 function completeLogin(centralUser){
