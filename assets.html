@@ -1193,8 +1193,7 @@ function submitLoan(){
     var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
     var uid=localStorage.getItem('bb_uid')||'';
     var uname=localStorage.getItem('bb_name')||'User';
-    var reader=new FileReader();
-    reader.onload=function(ev){
+    function saveLoan(dataUrl){
       loans.push({
         id:'LOAN-'+Date.now(),
         userId:uid,
@@ -1204,7 +1203,7 @@ function submitLoan(){
         interestRate:LOAN_RATES[loanDurationDays]||5,
         proofName:loanProofFile.name,
         proofType:loanProofFile.type,
-        proofDataUrl:ev.target.result,
+        proofDataUrl:dataUrl,
         status:'pending',
         time:Date.now()
       });
@@ -1218,8 +1217,23 @@ function submitLoan(){
       closeModal('loanModal');
       updateAssetsValues();
       showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
-    };
-    reader.readAsDataURL(loanProofFile);
+    }
+    if(loanProofFile.type&&loanProofFile.type.indexOf('image')===0){
+      var img=new Image();
+      img.onload=function(){
+        var maxW=800,maxH=800,w=img.width,h=img.height;
+        if(w>maxW){h=h*maxW/w;w=maxW;}
+        if(h>maxH){w=w*maxH/h;h=maxH;}
+        var c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        saveLoan(c.toDataURL('image/jpeg',0.6));
+      };
+      img.src=URL.createObjectURL(loanProofFile);
+    }else{
+      var reader=new FileReader();
+      reader.onload=function(ev){saveLoan(ev.target.result);};
+      reader.readAsDataURL(loanProofFile);
+    }
   },2000);
 }
 

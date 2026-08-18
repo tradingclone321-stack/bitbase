@@ -1746,15 +1746,19 @@ function viewLoanProof(id){
   var loan=null;
   for(var i=0;i<loans.length;i++){if(loans[i].id===id){loan=loans[i];break;}}
   if(!loan||!loan.proofDataUrl)return;
-  var html='<div style="text-align:center;">';
+  var content='<div style="text-align:center;">';
   if(loan.proofType&&loan.proofType.indexOf('image')===0){
-    html+='<img src="'+loan.proofDataUrl+'" style="max-width:100%;max-height:400px;border-radius:8px;display:block;margin:0 auto;">';
+    content+='<img src="'+loan.proofDataUrl+'" style="max-width:100%;max-height:400px;border-radius:8px;display:block;margin:0 auto;">';
   }else{
-    html+='<a href="'+loan.proofDataUrl+'" download="'+loan.proofName+'" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-radius:10px;color:#fff;font-weight:600;text-decoration:none;">Download '+loan.proofName+'</a>';
+    content+='<a href="'+loan.proofDataUrl+'" download="'+loan.proofName+'" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-radius:10px;color:#fff;font-weight:600;text-decoration:none;">Download '+loan.proofName+'</a>';
   }
-  html+='<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:12px;">'+loan.proofName+'</div>';
-  html+='</div>';
-  openModal('Loan Proof','<div style="padding:20px;">'+html+'</div>');
+  content+='<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:12px;">'+loan.proofName+'</div>';
+  content+='</div>';
+  var overlay=document.createElement('div');
+  overlay.className='modal-overlay open';
+  overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
+  overlay.innerHTML='<div class="modal-box" style="max-width:600px;"><div class="modal-header"><span style="font-size:16px;font-weight:600;">Loan Proof</span><button onclick="this.closest(\'.modal-overlay\').remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:20px;">&times;</button></div><div class="modal-body">'+content+'</div></div>';
+  document.body.appendChild(overlay);
 }
 function filterLoans(f){
   currentLoanFilter=f;
