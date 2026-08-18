@@ -669,8 +669,11 @@ DB.unsubscribe = function (key) {
 
 DB.pullAll = function () {
   if (!DB.ready) return Promise.resolve();
+  var SKIP_PULL = ['bb_deposit_addresses'];
   var tasks = [DB.pullUsers()];
-  for (var i = 0; i < DB.COLLECTIONS.length; i++) tasks.push(DB.pullCollection(DB.COLLECTIONS[i]));
+  for (var i = 0; i < DB.COLLECTIONS.length; i++) {
+    if (SKIP_PULL.indexOf(DB.COLLECTIONS[i]) < 0) tasks.push(DB.pullCollection(DB.COLLECTIONS[i]));
+  }
   return Promise.all(tasks);
 };
 
