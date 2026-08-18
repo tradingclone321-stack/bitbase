@@ -569,18 +569,6 @@ DB.pullCollection = function (key) {
         var mergedPull = DB._mergeById(localArr, serverPayload);
         var cleanedPull = DB._cleanMergeArray(mergedPull);
         localStorage.setItem(key, JSON.stringify(cleanedPull));
-      } else if (key === 'bb_deposit_addresses') {
-        // Config object — shallow merge: server keys win, but local-only keys survive.
-        if (serverPayload && typeof serverPayload === 'object' && !Array.isArray(serverPayload)) {
-          var localObj = {};
-          try { localObj = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
-          if (localObj && typeof localObj === 'object' && !Array.isArray(localObj)) {
-            for (var k in serverPayload) localObj[k] = serverPayload[k];
-            localStorage.setItem(key, JSON.stringify(localObj));
-          } else {
-            localStorage.setItem(key, JSON.stringify(serverPayload));
-          }
-        }
       } else {
         localStorage.setItem(key, JSON.stringify(res.data.payload));
       }
