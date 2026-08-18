@@ -110,7 +110,8 @@
       .admin-sidebar{position:fixed;top:0;left:0;bottom:0;width:240px!important;overflow-y:auto;z-index:200;transform:translateX(-100%);transition:transform .3s ease;}
       .admin-sidebar.open{transform:translateX(0);}
       .admin-sidebar-logo span,.admin-sidebar-logo .badge,.nav-item span{display:inline!important;}
-      .admin-main{margin-left:0!important;padding:0!important;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+      .admin-main{margin-left:0!important;padding:0!important;min-height:100vh;overflow-y:auto;}
+      .admin-main.support-active{overflow:hidden;height:100vh;}
       .admin-mobile-hamburger{display:flex!important;padding:8px;}
       .admin-sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;}
       .admin-sidebar-overlay.open{display:block;}
@@ -220,7 +221,7 @@
   </aside>
 
   <!-- Main Content -->
-  <main class="admin-main">
+  <main class="admin-main" id="adminMain">
     <!-- Mobile hamburger -->
     <div class="admin-mobile-hamburger" style="display:none;margin-bottom:16px;">
       <button onclick="toggleAdminSidebar()" style="padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:13px;display:flex;align-items:center;gap:8px;">
@@ -753,6 +754,7 @@ function switchTab(tab){
   document.querySelectorAll('.nav-item').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+tab).style.display='block';
   document.querySelector('.nav-item[data-tab="'+tab+'"]').classList.add('active');
+  if(window.innerWidth<=767)document.getElementById('adminMain').classList.toggle('support-active',tab==='support');
   lucide.createIcons();
   if(tab!=='support')stopAdminSupportPoll();
   if(tab==='dashboard')refreshDashboard();
