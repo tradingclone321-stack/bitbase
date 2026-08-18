@@ -8,7 +8,7 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
-DB.VERSION = '2026-08-16-deletefix';
+DB.VERSION = '2026-08-18-pushfix';
 DB._lastPullTime = 0;
 DB._lastSyncError = '';
 
@@ -382,6 +382,44 @@ DB._mergeById = function (local, server, idKey) {
   return out;
 };
 
+// Strip base64 proof images from resolved (non-pending, non-deleted) entries
+// before upserting to Supabase.  Without this, every user's proof accumulates
+// in the JSONB payload; the array eventually exceeds the REST body limit and
+// the upsert silently fails — deposits/loans never reach admin.
+// Pending entries keep their proofs so the admin can review them.
+DB._stripResolvedProofs = function (arr) {
+  if (!Array.isArray(arr)) return arr;
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var item = arr[i];
+    if (!item) { out.push(item); continue; }
+    var st = (item.status || '').toLowerCase();
+    if (st && st !== 'pending' && st !== 'deleted') {
+      var clone = null;
+      if (item.proof && item.proof.dataUrl) {
+        clone = clone || Object.assign({}, item);
+        clone.proof = { name: item.proof.name, type: item.proof.type, dataUrl: '' };
+      }
+      if (item.proofDataUrl) {
+        clone = clone || Object.assign({}, item);
+        clone.proofDataUrl = '';
+      }
+      if (item.frontDoc) {
+        clone = clone || Object.assign({}, item);
+        clone.frontDoc = '';
+      }
+      if (item.backDoc) {
+        clone = clone || Object.assign({}, item);
+        clone.backDoc = '';
+      }
+      out.push(clone || item);
+    } else {
+      out.push(item);
+    }
+  }
+  return out;
+};
+
 // Collections that hold shared id-keyed request/position arrays where
 // one device's push must not wipe another device's admin resolutions.
 DB.MERGE_COLLECTIONS = [
@@ -436,8 +474,6 @@ DB._pushCollectionNow = function (key) {
   }
   if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
     if (!Array.isArray(payload)) payload = [];
-    // Merge with the current server payload so a user's new deposit
-    // doesn't overwrite the admin's earlier approvals/rejections.
     return DB.client.from('app_collections').select('payload').eq('key', key).limit(1).single().then(function (res) {
       var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
       if (!Array.isArray(serverPayload)) serverPayload = [];
@@ -446,16 +482,17 @@ DB._pushCollectionNow = function (key) {
       if (!Array.isArray(localNow)) localNow = [];
       var merged = DB._mergeById(localNow, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
-      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
+      var upsertData = DB._stripResolvedProofs(merged);
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, function (e) { console.warn('[DB] upsert error (' + key + '):', e && (e.message || e)); });
     }, function () {
-      // Row doesn't exist yet — upsert local data directly (no merge needed).
       var localNow = [];
       try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
       if (!Array.isArray(localNow)) localNow = [];
-      return DB.client.from('app_collections').upsert({ key: key, payload: localNow }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, localNow); return r; }, DB._ok);
+      var upsertData = DB._stripResolvedProofs(localNow);
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, localNow); return r; }, function (e) { console.warn('[DB] upsert error (' + key + '):', e && (e.message || e)); });
     });
   }
-  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, DB._ok);
+  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, function (e) { console.warn('[DB] upsert error (' + key + '):', e && (e.message || e)); });
 };
 
 DB._pullInFlight = {};
