@@ -1710,12 +1710,21 @@ function rejectWithdrawal(id){
 // ===== LOANS =====
 var currentLoanFilter='all';
 var LOAN_RATES_ADMIN={7:5,30:7,90:9,180:12,365:15};
-function getAllLoans(){
+function getAllLoansRaw(){
   try{
     var raw=localStorage.getItem('bb_loans');
     if(!raw)return[];
     return JSON.parse(raw);
   }catch(e){return[];}
+}
+function getAllLoans(){
+  var all=getAllLoansRaw();
+  var out=[];
+  for(var i=0;i<all.length;i++){
+    if(all[i].status==='deleted')continue;
+    out.push(all[i]);
+  }
+  return out;
 }
 function saveLoans(arr){localStorage.setItem('bb_loans',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_loans');}
 function getLoanDurationLabel(days){
@@ -1799,7 +1808,7 @@ function filterLoans(f){
   refreshLoans();
 }
 function approveLoan(id){
-  var loans=getAllLoans();
+  var loans=getAllLoansRaw();
   for(var i=0;i<loans.length;i++){
     if(loans[i].id===id){
       if(loans[i].status!=='pending'){showToast('Loan already processed','error');return;}
@@ -1827,7 +1836,7 @@ function approveLoan(id){
   }
 }
 function rejectLoan(id){
-  var loans=getAllLoans();
+  var loans=getAllLoansRaw();
   for(var i=0;i<loans.length;i++){
     if(loans[i].id===id){
       if(loans[i].status!=='pending'){showToast('Loan already processed','error');return;}
@@ -1841,7 +1850,7 @@ function rejectLoan(id){
   }
 }
 function markLoanPaid(id){
-  var loans=getAllLoans();
+  var loans=getAllLoansRaw();
   for(var i=0;i<loans.length;i++){
     if(loans[i].id===id){
       if(loans[i].status!=='active'){showToast('Loan is not active','error');return;}
@@ -1856,12 +1865,15 @@ function markLoanPaid(id){
 }
 function deleteLoan(id){
   if(!confirm('Delete this loan record?'))return;
-  var loans=getAllLoans();
-  var filtered=[];
+  var loans=getAllLoansRaw();
   for(var i=0;i<loans.length;i++){
-    if(loans[i].id!==id)filtered.push(loans[i]);
+    if(loans[i].id===id){
+      loans[i].status='deleted';
+      loans[i]._deletedAt=Date.now();
+      break;
+    }
   }
-  saveLoans(filtered);
+  saveLoans(loans);
   refreshLoans();
   showToast('Loan deleted','success');
 }
@@ -2273,12 +2285,21 @@ function refreshDepositList(){
 
 // ===== DEPOSIT REQUESTS =====
 var currentDepReqFilter='all';
-function getAllDepositRequests(){
+function getAllDepositRequestsRaw(){
   try{
     var raw=localStorage.getItem('bb_deposit_requests');
     if(!raw)return[];
     return JSON.parse(raw);
   }catch(e){return[];}
+}
+function getAllDepositRequests(){
+  var all=getAllDepositRequestsRaw();
+  var out=[];
+  for(var i=0;i<all.length;i++){
+    if(all[i].status==='deleted')continue;
+    out.push(all[i]);
+  }
+  return out;
 }
 function saveDepositRequests(arr){localStorage.setItem('bb_deposit_requests',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_deposit_requests');}
 function refreshDepositRequests(){
@@ -2348,7 +2369,7 @@ function setUserCashInList(uid,newBal,userName,userEmail){
   if(uid&&typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:newBal});}
 }
 function approveDeposit(id){
-  var requests=getAllDepositRequests();
+  var requests=getAllDepositRequestsRaw();
   for(var i=0;i<requests.length;i++){
     if(requests[i].id===id){
       if(requests[i].status!=='pending'){showToast('Already processed','error');return;}
@@ -2379,7 +2400,7 @@ function approveDeposit(id){
   }
 }
 function rejectDeposit(id){
-  var requests=getAllDepositRequests();
+  var requests=getAllDepositRequestsRaw();
   for(var i=0;i<requests.length;i++){
     if(requests[i].id===id){
       if(requests[i].status!=='pending'){showToast('Already processed','error');return;}
@@ -2394,12 +2415,15 @@ function rejectDeposit(id){
 }
 function deleteDepositRequest(id){
   if(!confirm('Delete this deposit record?'))return;
-  var requests=getAllDepositRequests();
-  var filtered=[];
+  var requests=getAllDepositRequestsRaw();
   for(var i=0;i<requests.length;i++){
-    if(requests[i].id!==id)filtered.push(requests[i]);
+    if(requests[i].id===id){
+      requests[i].status='deleted';
+      requests[i]._deletedAt=Date.now();
+      break;
+    }
   }
-  saveDepositRequests(filtered);
+  saveDepositRequests(requests);
   refreshDepositRequests();
   showToast('Deposit record deleted','success');
 }

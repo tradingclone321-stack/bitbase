@@ -355,16 +355,20 @@ DB._mergeById = function (local, server, idKey) {
   var order = [];
   var RESOLVED = ['approved', 'active', 'rejected', 'paid', 'completed', 'resolved'];
   function isResolved(v) { return RESOLVED.indexOf((v.status || '').toLowerCase()) >= 0; }
-  function newer(a, b) { return (b.resolvedAt || b.createdAt || 0) > (a.resolvedAt || a.createdAt || 0); }
+  function newer(a, b) { return (a.resolvedAt || a.updatedAt || a.createdAt || 0) > (b.resolvedAt || b.updatedAt || b.createdAt || 0); }
   function add(item) {
     if (!item || item[idKey] == null) return;
     var key = String(item[idKey]);
+    // Deletion tombstones win unconditionally.
+    if (item.status === 'deleted') { map[key] = item; if (order.indexOf(key) < 0) order.push(key); return; }
     if (map[key] === undefined) {
       map[key] = item;
       order.push(key);
       return;
     }
     var cur = map[key];
+    // An existing tombstone is never resurrected by a non-deleted item.
+    if (cur.status === 'deleted') { return; }
     // A resolved status beats a pending one, regardless of side.
     if (isResolved(item) && !isResolved(cur)) { map[key] = item; return; }
     if (isResolved(cur) && !isResolved(item)) { return; }
