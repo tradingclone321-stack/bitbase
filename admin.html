@@ -1804,6 +1804,7 @@ function approveLoan(id){
       if(loans[i].status!=='pending'){showToast('Loan already processed','error');return;}
       loans[i].status='active';
       loans[i].approvedAt=Date.now();
+      loans[i].resolvedAt=Date.now();
       // Credit USDT to the TARGET user
       var uid=loans[i].userId;
       try{

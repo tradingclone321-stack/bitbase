@@ -351,7 +351,7 @@ DB._mergeById = function (local, server, idKey) {
   idKey = idKey || 'id';
   var map = {};
   var order = [];
-  var RESOLVED = ['approved', 'rejected', 'paid', 'completed', 'resolved'];
+  var RESOLVED = ['approved', 'active', 'rejected', 'paid', 'completed', 'resolved'];
   function isResolved(v) { return RESOLVED.indexOf((v.status || '').toLowerCase()) >= 0; }
   function newer(a, b) { return (b.resolvedAt || b.createdAt || 0) > (a.resolvedAt || a.createdAt || 0); }
   function add(item) {

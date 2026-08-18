@@ -969,14 +969,6 @@ function submitWithdraw() {
   if (amount > data.balance) { showToast('Insufficient balance', 'error'); return; }
   const btn = document.getElementById('withdrawSubmitBtn');
   const spinner = document.getElementById('withdrawSpinner');
-  // Check active loan
-  var loans=[];try{loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');}catch(e){}
-  var uid=localStorage.getItem('bb_uid')||'';
-  var activeLoan=false;
-  for(var li=0;li<loans.length;li++){
-    if(loans[li].userId===uid&&loans[li].status==='active'){activeLoan=true;break;}
-  }
-  if(activeLoan){showToast('You have an outstanding loan. Please repay before withdrawing.','error');btn.disabled=false;spinner.style.display='none';return;}
   btn.disabled = true; spinner.style.display = 'inline-block';
   var userName=localStorage.getItem('bb_name')||'User';
   var userEmail=localStorage.getItem('bb_email')||'user@email.com';
