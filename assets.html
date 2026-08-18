@@ -1427,17 +1427,21 @@ function forceSync(role){
 }
 function startSupportPolling(){
   if(supportPollTimer)clearInterval(supportPollTimer);
+  // Track whether BroadcastChannel already applied fresh data so we can
+  // skip the expensive pullCollection round-trip when it did.
+  var bcApplied=false;
   function poll(){
     if(!supportOpen){clearInterval(supportPollTimer);return;}
+    if(bcApplied){bcApplied=false;return;}
     var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
     pullPromise.then(function(){renderSupportThread(true);},function(){});
   }
-  // Realtime: admin replies arrive instantly via WebSocket (no wait for poll)
+  // BroadcastChannel: same-browser instant delivery.
   if(typeof DB!=='undefined'&&DB.ready){
     DB.subscribe('bb_support_tickets',function(key,payload){
       if(!supportOpen)return;
-      // Broadcast carried the full payload: apply instantly, no pull needed.
       if(payload && Array.isArray(payload)){
+        bcApplied=true;
         try{
           var local=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
           if(!Array.isArray(local))local=[];
@@ -1448,8 +1452,16 @@ function startSupportPolling(){
       }
       DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
     });
+    // Supabase Realtime: cross-device instant delivery (admin replies from
+    // another browser/device arrive via postgres_changes without waiting for poll).
+    try{
+      DB.client.channel('user-support-pg').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_collections',filter:'key=eq.bb_support_tickets'},function(){
+        if(!supportOpen)return;
+        DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
+      }).subscribe();
+    }catch(e){}
   }
-  supportPollTimer=setInterval(poll,5000);
+  supportPollTimer=setInterval(poll,3000);
 }
 function closeSupport(){
   document.getElementById('supportPanel').style.display='none';

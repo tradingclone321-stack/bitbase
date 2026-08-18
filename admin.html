@@ -1359,14 +1359,22 @@ function renderSupportLive(){
     }
   }catch(e){}
 }
+var _supportBcApplied=false;
 if(typeof DB!=='undefined'&&DB.ready){
-  DB.subscribe('bb_support_tickets',refreshSupportLive);
+  DB.subscribe('bb_support_tickets',function(key,payload){
+    if(payload && Array.isArray(payload)){
+      _supportBcApplied=true;
+    }
+    refreshSupportLive(key,payload);
+  });
   // Supabase Realtime: listen for row changes on app_collections for
   // cross-device instant updates (BroadcastChannel only covers same browser).
   try{
     DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_collections'},function(payload){
       var key=payload&&payload.new&&payload.new.key;
       if(!key)return;
+      // Skip pull if BroadcastChannel already applied fresh data.
+      if(key==='bb_support_tickets'&&_supportBcApplied){_supportBcApplied=false;refreshSupportLive();return;}
       DB.pullCollection(key).then(function(){
         var active=document.querySelector('.nav-item.active');
         var tab=active?active.getAttribute('data-tab'):'';
@@ -1386,8 +1394,9 @@ if(typeof DB!=='undefined'&&DB.ready){
 // Fallback poll for support tickets (BroadcastChannel + Realtime may miss).
 setInterval(function(){
   if(document.hidden)return;
+  if(_supportBcApplied){_supportBcApplied=false;refreshSupportLive();return;}
   refreshSupportLive();
-},5000);
+},3000);
 function renderChatMessages(ticket){
   var container=document.getElementById('chatMessages');
   chatAttachments=[];
