@@ -985,52 +985,64 @@ function setMaxWithdraw() {
   document.getElementById('withdrawAmount').value = COINS[coin].balance;
 }
 function submitWithdraw() {
-  const coin = document.getElementById('withdrawCoinSelect').value;
-  const addr = document.getElementById('withdrawAddress').value.trim();
-  const amount = parseFloat(document.getElementById('withdrawAmount').value);
-  const network = document.getElementById('withdrawNetworkSelect').value;
-  const data = COINS[coin];
+  var coin = document.getElementById('withdrawCoinSelect').value;
+  var addr = document.getElementById('withdrawAddress').value.trim();
+  var amount = parseFloat(document.getElementById('withdrawAmount').value);
+  var network = document.getElementById('withdrawNetworkSelect').value;
+  var data = COINS[coin];
   if (!addr) { showToast('Please enter a recipient address', 'error'); return; }
   if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
   if (amount < data.min) { showToast('Minimum withdrawal is ' + data.min + ' ' + coin, 'error'); return; }
   if (amount > data.balance) { showToast('Insufficient balance', 'error'); return; }
   var myUid=localStorage.getItem('bb_uid')||'';
-  try{
-    var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
-    for(var i=0;i<loans.length;i++){
-      if(loans[i].userId===myUid&&loans[i].status==='active'){
-        var total=loans[i].borrowAmt+(loans[i].borrowAmt*(loans[i].interestRate||5)/100);
-        showToast('You have an outstanding loan of $'+Number(loans[i].borrowAmt).toFixed(2)+' (total $'+total.toFixed(2)+'). Please repay your loan before withdrawing.','error');
-        return;
+  var checkLoan=function(){
+    try{
+      var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
+      for(var i=0;i<loans.length;i++){
+        if(String(loans[i].userId)===String(myUid)&&loans[i].status==='active'){
+          var total=loans[i].borrowAmt+(loans[i].borrowAmt*(loans[i].interestRate||5)/100);
+          showToast('You have an outstanding loan of $'+Number(loans[i].borrowAmt).toFixed(2)+' (total $'+total.toFixed(2)+'). Please repay your loan before withdrawing.','error');
+          return false;
+        }
       }
+    }catch(e){}
+    return true;
+  };
+  var doSubmit=function(){
+    var btn = document.getElementById('withdrawSubmitBtn');
+    var spinner = document.getElementById('withdrawSpinner');
+    btn.disabled = true; spinner.style.display = 'inline-block';
+    try{
+      var userName=localStorage.getItem('bb_name')||'User';
+      var userEmail=localStorage.getItem('bb_email')||'user@email.com';
+      var uid=localStorage.getItem('bb_uid')||'000000';
+      var reqId='WD-'+uid+'-'+Date.now();
+      var requests=[];
+      try{requests=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');}catch(e){}
+      requests.push({
+        id:reqId,userId:uid,userName:userName,userEmail:userEmail,
+        coin:coin,amount:amount,fee:data.fee,network:network,address:addr,
+        status:'pending',createdAt:Date.now(),resolvedAt:0
+      });
+      localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
+      if(typeof DB!=='undefined'){DB.pushCollection('bb_withdrawal_requests');}
+      document.getElementById('withdrawAddress').value = '';
+      document.getElementById('withdrawAmount').value = '';
+      updateWithdrawInfo();
+      closeModal('withdrawModal');
+      showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
+    }catch(e){
+      showToast('Submission failed. Please try again.','error');
+    }finally{
+      btn.disabled = false; spinner.style.display = 'none';
     }
-  }catch(e){}
-  const btn = document.getElementById('withdrawSubmitBtn');
-  const spinner = document.getElementById('withdrawSpinner');
-  btn.disabled = true; spinner.style.display = 'inline-block';
-  try{
-    var userName=localStorage.getItem('bb_name')||'User';
-    var userEmail=localStorage.getItem('bb_email')||'user@email.com';
-    var uid=localStorage.getItem('bb_uid')||'000000';
-    var reqId='WD-'+uid+'-'+Date.now();
-    var requests=[];
-    try{requests=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');}catch(e){}
-    requests.push({
-      id:reqId,userId:uid,userName:userName,userEmail:userEmail,
-      coin:coin,amount:amount,fee:data.fee,network:network,address:addr,
-      status:'pending',createdAt:Date.now(),resolvedAt:0
-    });
-    localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
-    if(typeof DB!=='undefined'){DB.pushCollection('bb_withdrawal_requests');}
-    document.getElementById('withdrawAddress').value = '';
-    document.getElementById('withdrawAmount').value = '';
-    updateWithdrawInfo();
-    closeModal('withdrawModal');
-    showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
-  }catch(e){
-    showToast('Submission failed. Please try again.','error');
-  }finally{
-    btn.disabled = false; spinner.style.display = 'none';
+  };
+  if(typeof DB!=='undefined'&&DB.ready){
+    DB.pullCollection('bb_loans').then(function(){
+      if(checkLoan())doSubmit();
+    },function(){if(checkLoan())doSubmit();});
+  }else{
+    if(checkLoan())doSubmit();
   }
 }
 
