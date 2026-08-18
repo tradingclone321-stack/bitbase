@@ -433,11 +433,7 @@ DB.MERGE_COLLECTIONS = [
 
 DB._pushChains = {};
 DB.pushCollection = function (key) {
-  if (!DB.ready) return Promise.resolve();
-  // Serialize pushes per key. Two overlapping pushCollection calls for the
-  // same collection would otherwise interleave (select -> merge -> upsert)
-  // and the slower one, built from an older snapshot, could revert the
-  // newer one's local write (e.g. a resolution or a deletion tombstone).
+  if (!DB.ready) { console.warn('[DB] pushCollection(' + key + ') skipped — DB.ready=false'); return Promise.resolve(); }
   var prev = DB._pushChains[key] || Promise.resolve();
   var next = prev.then(function () { return DB._pushCollectionNow(key); }, function () { return DB._pushCollectionNow(key); });
   DB._pushChains[key] = next;
@@ -474,22 +470,37 @@ DB._pushCollectionNow = function (key) {
   }
   if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
     if (!Array.isArray(payload)) payload = [];
+    console.log('[DB] PUSH ' + key + ': local items=' + payload.length + ', trying server...');
     return DB.client.from('app_collections').select('payload').eq('key', key).limit(1).single().then(function (res) {
       var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
       if (!Array.isArray(serverPayload)) serverPayload = [];
+      console.log('[DB] PUSH ' + key + ': server items=' + serverPayload.length);
       var localNow = [];
       try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
       if (!Array.isArray(localNow)) localNow = [];
       var merged = DB._mergeById(localNow, serverPayload);
       localStorage.setItem(key, JSON.stringify(merged));
       var upsertData = DB._stripResolvedProofs(merged);
-      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, function (e) { console.warn('[DB] upsert error (' + key + '):', e && (e.message || e)); });
-    }, function () {
+      var sizeKB = Math.round(JSON.stringify(upsertData).length / 1024);
+      console.log('[DB] PUSH ' + key + ': merged=' + merged.length + ', upsert payload=' + sizeKB + 'KB');
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) {
+        if (r && r.error) { console.warn('[DB] PUSH ' + key + ' UPSERT ERROR:', r.error.message || r.error); }
+        else { console.log('[DB] PUSH ' + key + ': upsert OK, items=' + merged.length); }
+        DB.broadcastUpdate(key, merged);
+        return r;
+      }, function (e) { console.warn('[DB] PUSH ' + key + ' NETWORK ERROR:', e && (e.message || e)); });
+    }, function (e) {
+      console.log('[DB] PUSH ' + key + ': no server row yet, upserting local directly');
       var localNow = [];
-      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e2) { localNow = []; }
       if (!Array.isArray(localNow)) localNow = [];
       var upsertData = DB._stripResolvedProofs(localNow);
-      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, localNow); return r; }, function (e) { console.warn('[DB] upsert error (' + key + '):', e && (e.message || e)); });
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) {
+        if (r && r.error) { console.warn('[DB] PUSH ' + key + ' UPSERT ERROR:', r.error.message || r.error); }
+        else { console.log('[DB] PUSH ' + key + ': upsert OK (new row), items=' + localNow.length); }
+        DB.broadcastUpdate(key, localNow);
+        return r;
+      }, function (err) { console.warn('[DB] PUSH ' + key + ' NETWORK ERROR:', err && (err.message || err)); });
     });
   }
   return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, function (e) { console.warn('[DB] upsert error (' + key + '):', e && (e.message || e)); });
@@ -512,6 +523,7 @@ DB.pullCollection = function (key) {
   var p = DB.client.from('app_collections').select('payload').eq('key', key).single().then(function (res) {
     DB._lastPullTime = Date.now();
     DB._lastSyncError = '';
+    if (res && res.error) { console.warn('[DB] PULL ' + key + ': Supabase error:', res.error.message || res.error); }
     if (res && res.data && res.data.payload !== null && res.data.payload !== undefined) {
       var serverPayload = res.data.payload;
       if (key === 'bb_support_tickets') {

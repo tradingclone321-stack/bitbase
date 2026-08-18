@@ -2768,24 +2768,14 @@ function showToast(msg,type){
 // ===== INIT =====
 function syncFromServer(cb){
   if(typeof DB==='undefined'||!DB.ready){ if(cb)cb(); return; }
-  DB.pullAll().then(function(){
-    // refresh all tabs after central data is merged into localStorage
-    refreshAll();
-    var active=document.querySelector('.nav-item.active');
-    var tab=active?active.getAttribute('data-tab'):'dashboard';
-    if(tab==='users')refreshUsers();
-    if(tab==='support')refreshTickets();
-    if(tab==='trades')refreshTrades();
-    if(tab==='withdrawals')refreshWithdrawals();
-    if(tab==='loans')refreshLoans();
-    if(tab==='kyc')refreshKYC();
-    if(tab==='balances')refreshBalances();
-    if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
-    if(tab==='analytics')refreshAnalytics();
-    if(tab==='earn')refreshEarn();
-    if(tab==='aiquants')refreshAiQuants();
+  // Fire all pulls in the background — never block UI on Promise.all.
+  DB.pullAll();
+  // Refresh the active tab after a short delay so localStorage has data from
+  // the previous sync cycle (or from whatever completed so far).
+  setTimeout(function(){
+    _adminRefreshTab();
     if(cb)cb();
-  });
+  }, 1500);
 }
 if(isLoggedIn()){
   if(typeof DB!=='undefined'&&DB.ready){
@@ -2810,36 +2800,43 @@ window.addEventListener('storage',function(e){
 // Fast targeted poll: always pull request collections (deposits, withdrawals,
 // loans, KYC, support) regardless of active tab, plus the active tab's own
 // collections. This ensures admin sees new user requests without switching tabs.
+// IMPORTANT: UI refresh is decoupled from Promise.all so that a single stalled
+// pull never blocks ALL rendering. We fire pulls in the background, then refresh
+// the active tab UI after a short delay with whatever data is in localStorage.
+function _adminRefreshTab(){
+  var active=document.querySelector('.nav-item.active');
+  var tab=active?active.getAttribute('data-tab'):'dashboard';
+  if(tab==='users')refreshUsers();
+  if(tab==='support')refreshTickets();
+  if(tab==='trades')refreshTrades();
+  if(tab==='withdrawals')refreshWithdrawals();
+  if(tab==='loans')refreshLoans();
+  if(tab==='kyc')refreshKYC();
+  if(tab==='balances')refreshBalances();
+  if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
+  if(tab==='analytics')refreshAnalytics();
+  if(tab==='earn')refreshEarn();
+  if(tab==='aiquants')refreshAiQuants();
+  if(tab==='dashboard')refreshDashboard();
+}
 setInterval(function(){
   if(document.hidden) return;
   if(typeof DB==='undefined'||!DB.ready) return;
-  var active=document.querySelector('.nav-item.active');
-  var tab=active?active.getAttribute('data-tab'):'dashboard';
   // Always pull these critical collections (user submissions).
   var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions'];
+  var active=document.querySelector('.nav-item.active');
+  var tab=active?active.getAttribute('data-tab'):'dashboard';
   // Add active tab's collections.
   var tabKeys=DB.TAB_MAP[tab]||[];
   var allKeys=always.slice();
   for(var i=0;i<tabKeys.length;i++){
     if(allKeys.indexOf(tabKeys[i])<0)allKeys.push(tabKeys[i]);
   }
-  var tasks=[];
-  for(var j=0;j<allKeys.length;j++)tasks.push(DB.pullCollection(allKeys[j]));
-  Promise.all(tasks).then(function(){
-    // Refresh the active tab's UI.
-    if(tab==='users')refreshUsers();
-    if(tab==='support')refreshTickets();
-    if(tab==='trades')refreshTrades();
-    if(tab==='withdrawals')refreshWithdrawals();
-    if(tab==='loans')refreshLoans();
-    if(tab==='kyc')refreshKYC();
-    if(tab==='balances')refreshBalances();
-    if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
-    if(tab==='analytics')refreshAnalytics();
-    if(tab==='earn')refreshEarn();
-    if(tab==='aiquants')refreshAiQuants();
-    if(tab==='dashboard')refreshDashboard();
-  });
+  // Fire all pulls in the background — never block on Promise.all.
+  for(var j=0;j<allKeys.length;j++) DB.pullCollection(allKeys[j]);
+  // Refresh the UI after 1s (pulls may still be in-flight, but localStorage
+  // has the previous pull's data which is fresh enough for instant display).
+  setTimeout(_adminRefreshTab, 1000);
 },5000);
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
 setInterval(function(){
