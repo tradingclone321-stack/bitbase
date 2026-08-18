@@ -895,14 +895,30 @@ var depositProofData=null;
 function handleDepositProof(input){
   if(input.files&&input.files[0]){
     var file=input.files[0];
-    var reader=new FileReader();
-    reader.onload=function(e){
-      depositProofData={name:file.name,type:file.type,dataUrl:e.target.result};
-      document.getElementById('depositProofName').textContent=file.name;
-      document.getElementById('depositProofPreview').style.display='flex';
-      lucide.createIcons();
-    };
-    reader.readAsDataURL(file);
+    if(file.type&&file.type.indexOf('image')===0){
+      var img=new Image();
+      img.onload=function(){
+        var maxW=800,maxH=800,w=img.width,h=img.height;
+        if(w>maxW){h=h*maxW/w;w=maxW;}
+        if(h>maxH){w=w*maxH/h;h=maxH;}
+        var c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        depositProofData={name:file.name,type:'image/jpeg',dataUrl:c.toDataURL('image/jpeg',0.6)};
+        document.getElementById('depositProofName').textContent=file.name;
+        document.getElementById('depositProofPreview').style.display='flex';
+        lucide.createIcons();
+      };
+      img.src=URL.createObjectURL(file);
+    }else{
+      var reader=new FileReader();
+      reader.onload=function(e){
+        depositProofData={name:file.name,type:file.type,dataUrl:e.target.result};
+        document.getElementById('depositProofName').textContent=file.name;
+        document.getElementById('depositProofPreview').style.display='flex';
+        lucide.createIcons();
+      };
+      reader.readAsDataURL(file);
+    }
   }
 }
 function removeDepositProof(){
@@ -922,25 +938,30 @@ function submitDepositRequest(){
   var btn=document.querySelector('#depositModal .submit-btn');
   var spinner=document.getElementById('depositSpinner');
   btn.disabled=true;spinner.style.display='inline-block';
-  var userName=localStorage.getItem('bb_name')||'User';
-  var userEmail=localStorage.getItem('bb_email')||'user@email.com';
-  var uid=localStorage.getItem('bb_uid')||'000000';
-  var reqId='DEP-'+uid+'-'+Date.now();
-  var requests=[];
-  try{requests=JSON.parse(localStorage.getItem('bb_deposit_requests')||'[]');}catch(e){}
-  requests.push({
-    id:reqId,userId:uid,userName:userName,userEmail:userEmail,
-    coin:coin,amount:amount,network:network,address:addr,
-    proof:depositProofData,
-    status:'pending',createdAt:Date.now(),resolvedAt:0
-  });
-  localStorage.setItem('bb_deposit_requests',JSON.stringify(requests));
-  if(typeof DB!=='undefined'){DB.pushCollection('bb_deposit_requests');}
-  btn.disabled=false;spinner.style.display='none';
-  document.getElementById('depositAmount').value='';
-  removeDepositProof();
-  closeModal('depositModal');
-  showToast('Deposit of '+amount+' '+coin+' submitted! Awaiting admin approval.','success');
+  try{
+    var userName=localStorage.getItem('bb_name')||'User';
+    var userEmail=localStorage.getItem('bb_email')||'user@email.com';
+    var uid=localStorage.getItem('bb_uid')||'000000';
+    var reqId='DEP-'+uid+'-'+Date.now();
+    var requests=[];
+    try{requests=JSON.parse(localStorage.getItem('bb_deposit_requests')||'[]');}catch(e){}
+    requests.push({
+      id:reqId,userId:uid,userName:userName,userEmail:userEmail,
+      coin:coin,amount:amount,network:network,address:addr,
+      proof:depositProofData,
+      status:'pending',createdAt:Date.now(),resolvedAt:0
+    });
+    localStorage.setItem('bb_deposit_requests',JSON.stringify(requests));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_deposit_requests');}
+    document.getElementById('depositAmount').value='';
+    removeDepositProof();
+    closeModal('depositModal');
+    showToast('Deposit of '+amount+' '+coin+' submitted! Awaiting admin approval.','success');
+  }catch(e){
+    showToast('Submission failed. Try a smaller proof image.','error');
+  }finally{
+    btn.disabled=false;spinner.style.display='none';
+  }
 }
 updateDepositInfo();
 
@@ -970,25 +991,30 @@ function submitWithdraw() {
   const btn = document.getElementById('withdrawSubmitBtn');
   const spinner = document.getElementById('withdrawSpinner');
   btn.disabled = true; spinner.style.display = 'inline-block';
-  var userName=localStorage.getItem('bb_name')||'User';
-  var userEmail=localStorage.getItem('bb_email')||'user@email.com';
-  var uid=localStorage.getItem('bb_uid')||'000000';
-  var reqId='WD-'+uid+'-'+Date.now();
-  var requests=[];
-  try{requests=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');}catch(e){}
-  requests.push({
-    id:reqId,userId:uid,userName:userName,userEmail:userEmail,
-    coin:coin,amount:amount,fee:data.fee,network:network,address:addr,
-    status:'pending',createdAt:Date.now(),resolvedAt:0
-  });
-  localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
-  if(typeof DB!=='undefined'){DB.pushCollection('bb_withdrawal_requests');}
-  btn.disabled = false; spinner.style.display = 'none';
-  document.getElementById('withdrawAddress').value = '';
-  document.getElementById('withdrawAmount').value = '';
-  updateWithdrawInfo();
-  closeModal('withdrawModal');
-  showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
+  try{
+    var userName=localStorage.getItem('bb_name')||'User';
+    var userEmail=localStorage.getItem('bb_email')||'user@email.com';
+    var uid=localStorage.getItem('bb_uid')||'000000';
+    var reqId='WD-'+uid+'-'+Date.now();
+    var requests=[];
+    try{requests=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');}catch(e){}
+    requests.push({
+      id:reqId,userId:uid,userName:userName,userEmail:userEmail,
+      coin:coin,amount:amount,fee:data.fee,network:network,address:addr,
+      status:'pending',createdAt:Date.now(),resolvedAt:0
+    });
+    localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_withdrawal_requests');}
+    document.getElementById('withdrawAddress').value = '';
+    document.getElementById('withdrawAmount').value = '';
+    updateWithdrawInfo();
+    closeModal('withdrawModal');
+    showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
+  }catch(e){
+    showToast('Submission failed. Please try again.','error');
+  }finally{
+    btn.disabled = false; spinner.style.display = 'none';
+  }
 }
 
 // ========== TRANSFER ==========
@@ -1177,33 +1203,39 @@ function submitLoan(){
   var btn=document.getElementById('loanSubmitBtn');
   var spinner=document.getElementById('loanSpinner');
   btn.disabled=true;spinner.style.display='inline-block';
-  var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
+  var loans=[];
+  try{loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');}catch(e){}
   var uid=localStorage.getItem('bb_uid')||'';
   var uname=localStorage.getItem('bb_name')||'User';
   function saveLoan(dataUrl){
-    loans.push({
-      id:'LOAN-'+Date.now(),
-      userId:uid,
-      userName:uname,
-      borrowAmt:borrowAmt,
-      durationDays:loanDurationDays,
-      interestRate:LOAN_RATES[loanDurationDays]||5,
-      proofName:loanProofFile.name,
-      proofType:loanProofFile.type,
-      proofDataUrl:dataUrl,
-      status:'pending',
-      time:Date.now()
-    });
-    localStorage.setItem('bb_loans',JSON.stringify(loans));
-    if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
-    btn.disabled=false;spinner.style.display='none';
-    document.getElementById('loanBorrowAmt').value='';
-    document.getElementById('loanInterestSection').style.display='none';
-    document.getElementById('loanAgreeCheck').checked=false;
-    removeLoanProof();
-    closeModal('loanModal');
-    updateAssetsValues();
-    showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
+    try{
+      loans.push({
+        id:'LOAN-'+Date.now(),
+        userId:uid,
+        userName:uname,
+        borrowAmt:borrowAmt,
+        durationDays:loanDurationDays,
+        interestRate:LOAN_RATES[loanDurationDays]||5,
+        proofName:loanProofFile.name,
+        proofType:loanProofFile.type,
+        proofDataUrl:dataUrl,
+        status:'pending',
+        time:Date.now()
+      });
+      localStorage.setItem('bb_loans',JSON.stringify(loans));
+      if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
+      document.getElementById('loanBorrowAmt').value='';
+      document.getElementById('loanInterestSection').style.display='none';
+      document.getElementById('loanAgreeCheck').checked=false;
+      removeLoanProof();
+      closeModal('loanModal');
+      updateAssetsValues();
+      showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
+    }catch(e){
+      showToast('Submission failed. Try a smaller proof image.','error');
+    }finally{
+      btn.disabled=false;spinner.style.display='none';
+    }
   }
   if(loanProofFile.type&&loanProofFile.type.indexOf('image')===0){
     var img=new Image();
@@ -1215,10 +1247,18 @@ function submitLoan(){
       c.getContext('2d').drawImage(img,0,0,w,h);
       saveLoan(c.toDataURL('image/jpeg',0.6));
     };
+    img.onerror=function(){
+      btn.disabled=false;spinner.style.display='none';
+      showToast('Failed to process image. Please try another.','error');
+    };
     img.src=URL.createObjectURL(loanProofFile);
   }else{
     var reader=new FileReader();
     reader.onload=function(ev){saveLoan(ev.target.result);};
+    reader.onerror=function(){
+      btn.disabled=false;spinner.style.display='none';
+      showToast('Failed to read file. Please try another.','error');
+    };
     reader.readAsDataURL(loanProofFile);
   }
 }
