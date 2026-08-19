@@ -498,6 +498,50 @@ function submitPlan(){
 
 // ===== RENDER ORDERS =====
 function settleOrders(){
+  var DAY_MS=24*60*60*1000;
+  var all=getOrders();
+  var myUid=localStorage.getItem('bb_uid')||'';
+  var changed=false;
+  for(var i=0;i<all.length;i++){
+    var o=all[i];
+    if(!o||o.status!=='active')continue;
+    if(String(o.uid)!==String(myUid))continue;
+    var settledDays=o.settledDays||0;
+    if(settledDays>=o.days)continue;
+    var lastPay=o.lastPayout||o.started;
+    if(Date.now()-lastPay<DAY_MS)continue;
+    var dayProfit=o.amount*o.rate/100;
+    o.settledDays=settledDays+1;
+    o.earned=(o.earned||0)+dayProfit;
+    o.lastPayout=lastPay+DAY_MS;
+    o.updatedAt=Date.now();
+    var isLastDay=(o.settledDays>=o.days);
+    if(isLastDay){
+      o.status='completed';
+      o.completedAt=Date.now();
+      o.updatedAt=Date.now();
+    }
+    try{
+      var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
+      var credit=dayProfit;
+      if(isLastDay)credit+=o.amount;
+      cb+=credit;
+      localStorage.setItem('bb_cash_balance',cb.toString());
+      try{
+        var raw=localStorage.getItem('bb_asset_balances');
+        var ab=raw?JSON.parse(raw):{};
+        if(!ab.USDT)ab.USDT={balance:0,qty:0};
+        ab.USDT.balance=cb;ab.USDT.qty=cb;
+        localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+      }catch(e){}
+    }catch(e){}
+    all[i]=o;
+    changed=true;
+  }
+  if(changed){
+    saveOrders(all);
+    renderOrders();
+  }
   renderOrders();
 }
 
