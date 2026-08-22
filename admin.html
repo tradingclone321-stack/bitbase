@@ -2843,7 +2843,7 @@ setInterval(function(){
   if(document.hidden) return;
   if(typeof DB==='undefined'||!DB.ready) return;
   // Always pull these critical collections (user submissions).
-  var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions'];
+  var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_ai_quants'];
   var active=document.querySelector('.nav-item.active');
   var tab=active?active.getAttribute('data-tab'):'dashboard';
   // Add active tab's collections.
