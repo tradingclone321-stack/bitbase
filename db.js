@@ -114,7 +114,10 @@ DB.upsertUser = function (user) {
     asset_balances: user.assetBalances || DB.get('bb_asset_balances') || {},
     is_admin: adminList.indexOf(String(user.uid)) >= 0,
     is_deactivated: deact.indexOf(String(user.uid)) >= 0,
-    kyc_status: localStorage.getItem('bb_kyc_status') || 'none'
+    kyc_status: localStorage.getItem('bb_kyc_status') || 'none',
+    preferences: DB.get('bb_preferences') || {},
+    demo_balance: DB.get('bb_demo_trades_bal'),
+    demo_positions: DB.get('bb_demo_trades_pos')
   };
   return DB.client.from('users').upsert(row, { onConflict: 'uid' }).then(DB._ok, DB._ok);
 };
@@ -198,6 +201,22 @@ DB.pullLocalUser = function () {
         var hasMap = false;
         try { var pmMap = JSON.parse(localStorage.getItem('bb_profit_modules') || '{}'); hasMap = Object.prototype.hasOwnProperty.call(pmMap, String(uid)); } catch (e) {}
         if (!hasMap) localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
+      }
+      // Restore preferences, demo balance/positions if server has them
+      if (r.preferences && typeof r.preferences === 'object' && Object.keys(r.preferences).length > 0) {
+        var oldP = localStorage.getItem('bb_preferences');
+        var newP = JSON.stringify(r.preferences);
+        if (oldP !== newP) { localStorage.setItem('bb_preferences', newP); changed = true; }
+      }
+      if (r.demo_balance != null && typeof r.demo_balance === 'object') {
+        var oldDb = localStorage.getItem('bb_demo_trades_bal');
+        var newDb = JSON.stringify(r.demo_balance);
+        if (oldDb !== newDb) { localStorage.setItem('bb_demo_trades_bal', newDb); changed = true; }
+      }
+      if (r.demo_positions != null && Array.isArray(r.demo_positions)) {
+        var oldDp = localStorage.getItem('bb_demo_trades_pos');
+        var newDp = JSON.stringify(r.demo_positions);
+        if (oldDp !== newDp) { localStorage.setItem('bb_demo_trades_pos', newDp); changed = true; }
       }
       return changed;
     }

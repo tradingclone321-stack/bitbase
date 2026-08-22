@@ -1572,6 +1572,7 @@ function deleteTrade(id){
   var trades=getAllTrades();
   trades=trades.filter(function(t){return t.id!==id;});
   localStorage.setItem('bb_trades_history',JSON.stringify(trades));
+  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
   refreshTrades();
   showToast('Trade deleted','success');
 }
@@ -1588,6 +1589,7 @@ function forceTradeResult(id,result){
     }
   }
   localStorage.setItem('bb_trades_history',JSON.stringify(trades));
+  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
   refreshTrades();
   showToast('Trade '+id+' will resolve as '+result+' on next tick','success');
 }

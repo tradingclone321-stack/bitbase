@@ -421,10 +421,10 @@ setTimeout(updateLayoutMargin,500);
 // ===== DEMO STORAGE =====
 var DEMO_KEY='bb_demo_trades';
 function loadDemoBalance(){try{return JSON.parse(localStorage.getItem(DEMO_KEY+'_bal'));}catch(e){return null;}}
-function saveDemoBalance(b){localStorage.setItem(DEMO_KEY+'_bal',JSON.stringify(b));}
+function saveDemoBalance(b){localStorage.setItem(DEMO_KEY+'_bal',JSON.stringify(b));if(typeof DB!=='undefined')DB.syncLocalUser();}
 function loadDemoPositions(){try{return JSON.parse(localStorage.getItem(DEMO_KEY+'_pos'))||[];}catch(e){return [];}
 }
-function saveDemoPositions(p){localStorage.setItem(DEMO_KEY+'_pos',JSON.stringify(p));}
+function saveDemoPositions(p){localStorage.setItem(DEMO_KEY+'_pos',JSON.stringify(p));if(typeof DB!=='undefined')DB.syncLocalUser();}
 function loadDemoHistory(){try{return JSON.parse(localStorage.getItem(DEMO_KEY+'_hist'))||[];}catch(e){return [];}
 }
 function saveDemoHistory(h){localStorage.setItem(DEMO_KEY+'_hist',JSON.stringify(h));if(typeof DB!=='undefined')DB.pushCollection('bb_demo_trades_hist');}

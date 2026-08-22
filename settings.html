@@ -941,6 +941,7 @@ function savePreferences() {
     tradingView: document.querySelector('#prefTradingViewGroup .radio-option.selected').dataset.value
   };
   localStorage.setItem('bb_preferences', JSON.stringify(prefs));
+  if(typeof DB!=='undefined')DB.syncLocalUser();
   showToast('Preferences saved successfully!', 'var(--accent-green)');
 }
 

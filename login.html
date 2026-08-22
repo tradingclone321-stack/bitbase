@@ -423,13 +423,17 @@
         }
         function verifyForgotEmail() {
             var email = document.getElementById('forgotEmail').value.trim();
-            var storedEmail = localStorage.getItem('bb_email');
-            if (!email || !storedEmail || email !== storedEmail) {
-                showToast('No account found with that email');
-                return;
-            }
-            document.getElementById('forgotStep1').classList.add('hidden');
-            document.getElementById('forgotStep2').classList.remove('hidden');
+            if (!email) { showToast('Please enter your email'); return; }
+            if (typeof DB === 'undefined' || !DB.ready) { showToast('Connection error. Try again.'); return; }
+            DB.client.from('users').select('uid').eq('email', email).limit(1).single().then(function(res) {
+                if (res && res.data && res.data.uid) {
+                    window._forgotUid = res.data.uid;
+                    document.getElementById('forgotStep1').classList.add('hidden');
+                    document.getElementById('forgotStep2').classList.remove('hidden');
+                } else {
+                    showToast('No account found with that email');
+                }
+            }, function() { showToast('No account found with that email'); });
         }
         function setNewPassword() {
             var newPw = document.getElementById('forgotNewPass').value.trim();
@@ -443,6 +447,9 @@
                 return;
             }
             localStorage.setItem('bb_password', newPw);
+            if (typeof DB !== 'undefined' && DB.ready && window._forgotUid) {
+                DB.updateUser(String(window._forgotUid), { password: newPw });
+            }
             document.getElementById('forgotStep2').classList.add('hidden');
             document.getElementById('forgotSuccess').classList.remove('hidden');
             lucide.createIcons();
