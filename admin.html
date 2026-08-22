@@ -2645,7 +2645,7 @@ function getPlanName(key){
   return names[key]||key;
 }
 function refreshAiQuants(){
-  var orders=getAiQuants();
+  var orders=getAiQuants().filter(function(o){return o.status!=='deleted';});
   var filtered=orders;
   if(currentAiQuantsFilter!=='all')filtered=orders.filter(function(o){return o.status===currentAiQuantsFilter;});
   filtered=filtered.slice().sort(function(a,b){return (b.started||0)-(a.started||0);});
@@ -2769,7 +2769,7 @@ function deleteAiQuantsOrder(realIdx){
   var o=orders[realIdx];
   if(!o)return;
   if(!confirm('Delete this AI quant plan for '+(o.userName||o.uid)+'?'))return;
-  orders.splice(realIdx,1);
+  orders[realIdx]=Object.assign({},o,{status:'deleted',_deletedAt:Date.now()});
   saveAiQuants(orders);
   refreshAiQuants();
   showToast('Plan deleted','success');
