@@ -597,6 +597,7 @@ renderStats('1M');
 
 // ===== SERVER BALANCE SYNC =====
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  DB.pullAll();
   var origPoll=DB.pullLocalUser;
   DB.pullLocalUser=function(){
     return origPoll().then(function(changed){

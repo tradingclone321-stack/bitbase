@@ -750,6 +750,12 @@ DB.diagnose = function () {
 
 DB.init();
 
+// On first load after login, pull all collections so a fresh device
+// gets the user's data (deposits, loans, trades, etc.) from Supabase.
+if (DB.ready && localStorage.getItem('bb_uid')) {
+  setTimeout(function () { DB.pullAll(); }, 2000);
+}
+
 // ========== USER STATUS WATCHER ==========
 // Polls Supabase every 10 s for the current user's is_deactivated / existence
 // and subscribes to Realtime for instant push when available.  Redirects to
