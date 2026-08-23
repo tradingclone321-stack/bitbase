@@ -521,7 +521,7 @@
         </div>
         <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
           <table class="data-table">
-            <thead><tr><th>ID</th><th>User</th><th>Coin</th><th>Amount</th><th>Network</th><th>Proof</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
+            <thead><tr><th>ID</th><th>User</th><th>Coin</th><th>Amount</th><th>Value</th><th>Network</th><th>Proof</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
             <tbody id="depRequestsBody"><tr><td colspan="9" class="empty-state">No deposit requests</td></tr></tbody>
           </table>
         </div>
@@ -1001,9 +1001,27 @@ function refreshUsers(){
   }
   body.innerHTML=html;
 }
+var LIVE_PRICES={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,USDC:1};
+function fetchLivePrices(){
+  fetch('https://api.binance.com/api/v3/ticker/price').then(function(r){return r.json();}).then(function(data){
+    for(var i=0;i<data.length;i++){
+      var s=data[i].symbol;
+      var p=parseFloat(data[i].price);
+      if(s==='BTCUSDT')LIVE_PRICES.BTC=p;
+      else if(s==='ETHUSDT')LIVE_PRICES.ETH=p;
+      else if(s==='SOLUSDT')LIVE_PRICES.SOL=p;
+      else if(s==='BNBUSDT')LIVE_PRICES.BNB=p;
+      else if(s==='ADAUSDT')LIVE_PRICES.ADA=p;
+      else if(s==='DOGEUSDT')LIVE_PRICES.DOGE=p;
+      else if(s==='XRPUSDT')LIVE_PRICES.XRP=p;
+      else if(s==='DOTUSDT')LIVE_PRICES.DOT=p;
+    }
+  }).catch(function(){});
+}
+fetchLivePrices();
+setInterval(fetchLivePrices,30000);
 function getCoinPrice(sym){
-  var prices={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,USDC:1};
-  return prices[sym]||0;
+  return LIVE_PRICES[sym]||0;
 }
 function toggleProfitModule(uid){
   var key='bb_profit_module_'+uid;
@@ -2354,6 +2372,7 @@ function refreshDepositRequests(){
     var r=filtered[i];
     var statusBadge=r.status==='pending'?'<span class="badge-yellow">Pending</span>':r.status==='approved'?'<span class="badge-green">Approved</span>':'<span class="badge-red">Rejected</span>';
     var proofBtn=r.proof?'<button class="btn-sm" style="background:rgba(65,105,225,0.12);color:#4169E1;" onclick="viewDepProof(\''+r.id+'\')">View</button>':'<span style="color:rgba(255,255,255,0.3);">—</span>';
+    var usdVal=r.coin==='USDT'?Number(r.amount).toFixed(2):('≈ $'+(r.amount*(getCoinPrice(r.coin)||0)).toFixed(2));
     var actions='';
     if(r.status==='pending'){
       actions='<button class="btn-sm btn-success" onclick="approveDeposit(\''+r.id+'\')" style="margin-right:4px;">Approve</button><button class="btn-sm btn-danger" onclick="rejectDeposit(\''+r.id+'\')" style="margin-right:4px;">Reject</button>';
@@ -2364,6 +2383,7 @@ function refreshDepositRequests(){
       '<td>'+(r.userName||'User')+' ('+r.userId+')</td>'+
       '<td><strong>'+r.coin+'</strong></td>'+
       '<td style="font-family:monospace;">'+Number(r.amount).toFixed(4)+'</td>'+
+      '<td style="font-family:monospace;color:#16c784;">'+usdVal+'</td>'+
       '<td>'+r.network+'</td>'+
       '<td>'+proofBtn+'</td>'+
       '<td>'+statusBadge+'</td>'+
