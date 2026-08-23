@@ -289,19 +289,26 @@
                  localStorage.setItem('bb_asset_balances', JSON.stringify({BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}));
                  // Save to central admin user list so admin panel can see all registered users
                  try{
-                   var newUser={uid:newUID,name:document.getElementById('fullName').value.trim(),email:document.getElementById('email').value.trim(),cashBalance:0,assetBalances:{BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}};
+                   var newUser={uid:newUID,name:document.getElementById('fullName').value.trim(),email:document.getElementById('email').value.trim(),password:pass,cashBalance:0,assetBalances:{BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}};
                    var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
                    var found=false;
                    for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===newUID){adminUsers[i]=newUser;found=true;break;}}
                    if(!found)adminUsers.push(newUser);
                    localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
-                   // Push new user to central Supabase users table
-                   if(typeof DB!=='undefined'){DB.upsertUser(newUser);}
+                   // Push new user to central Supabase users table — wait for it
+                   var upsertDone=false;
+                   if(typeof DB!=='undefined'&&DB.ready){
+                     DB.upsertUser(newUser).then(function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);},function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);});
+                   }else{
+                     upsertDone=true;
+                   }
                  }catch(e){}
 
-                setTimeout(function() {
-                    window.location.href = 'dashboard.html';
-                }, 1500);
+                if(upsertDone!==false) {
+                 setTimeout(function() {
+                     window.location.href = 'dashboard.html';
+                 }, 1500);
+                }
             }, 2000);
         });
 

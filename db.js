@@ -126,8 +126,7 @@ DB.upsertUser = function (user) {
 DB.pullUsers = function () {
   if (!DB.ready) return Promise.resolve(null);
   return DB.client.from('users').select('*').order('created_at', { ascending: true }).then(function (res) {
-    if (!res || res.error || !res.data || !res.data.length) return DB._ok(res);
-    var rows = res.data;
+    var rows = (res && res.data) ? res.data : [];
     var list = [];
     var adminList = [];
     var deact = [];
@@ -139,20 +138,27 @@ DB.pullUsers = function () {
       if (r.is_deactivated && deact.indexOf(uid) < 0) deact.push(uid);
       localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
     }
-    // keep the current device's own user even if not in DB yet
-    var curUid = localStorage.getItem('bb_uid');
-    if (curUid) {
-      var found = false;
-      for (var j = 0; j < list.length; j++) { if (String(list[j].uid) === String(curUid)) { found = true; break; } }
-      if (!found) {
-        list.push({ uid: curUid, name: localStorage.getItem('bb_name') || 'User', email: localStorage.getItem('bb_email') || '', cashBalance: parseFloat(localStorage.getItem('bb_cash_balance')) || 0, assetBalances: DB.get('bb_asset_balances') || {}, kycStatus: localStorage.getItem('bb_kyc_status') || 'none' });
+    // Also merge in any users from localStorage bb_admin_users not in Supabase yet
+    var localUsers = [];
+    try { localUsers = JSON.parse(localStorage.getItem('bb_admin_users') || '[]'); } catch (e) {}
+    for (var k = 0; k < localUsers.length; k++) {
+      var lu = localUsers[k];
+      if (!lu || !lu.uid) continue;
+      var exists = false;
+      for (var m = 0; m < list.length; m++) { if (String(list[m].uid) === String(lu.uid)) { exists = true; break; } }
+      if (!exists) {
+        list.push({ uid: lu.uid, name: lu.name || 'User', email: lu.email || '', cashBalance: parseFloat(lu.cashBalance) || 0, assetBalances: lu.assetBalances || {}, kycStatus: lu.kycStatus || 'none' });
       }
     }
     DB.set('bb_admin_users', list);
     DB.set('bb_admin_access_list', adminList);
     DB.set('bb_deactivated_accounts', deact);
     return res;
-  }, function (e) { console.warn('[DB] pullUsers failed', e); return null; });
+  }, function (e) {
+    console.warn('[DB] pullUsers failed', e);
+    // On failure, at least keep local users
+    return null;
+  });
 };
 
 DB.updateUser = function (uid, patch) {
@@ -785,11 +791,9 @@ DB._startUserStatusWatcher = function () {
   if (!DB.ready) return;
   var uid = localStorage.getItem('bb_uid');
   if (!uid) return;
-  // Never run on login, register, or admin pages
   var path = (location.pathname || '').toLowerCase();
   if (path.indexOf('login') >= 0 || path.indexOf('register') >= 0 || path.indexOf('admin') >= 0) return;
   DB._statusWatcherStarted = true;
-  var errCount = 0;
   function kick(reason) {
     try {
       localStorage.removeItem('bb_login_time');
@@ -803,17 +807,13 @@ DB._startUserStatusWatcher = function () {
     if (!curUid) return;
     DB.client.from('users').select('is_deactivated').eq('uid', Number(curUid)).limit(1).single().then(function (res) {
       if (!res || res.error || !res.data) {
-        // User row not found — could be new registration or transient error.
-        // Only kick after 5 consecutive failures (50s) to avoid false positives.
-        errCount++;
-        if (errCount >= 5) { kick('not_found'); }
+        // User row not found — may be new registration still propagating.
+        // Do NOT kick. The user is valid locally.
         return;
       }
-      errCount = 0; // Reset on success
       if (res.data.is_deactivated) { kick('deactivated'); return; }
-    }, function () { errCount++; });
+    }, function () {});
   }
-  // Supabase Realtime on users table for instant push.
   try {
     DB.client.channel('user-status-watch').on('postgres_changes', {
       event: 'UPDATE',
@@ -830,7 +830,6 @@ DB._startUserStatusWatcher = function () {
       filter: 'uid=eq.' + uid
     }, function () { kick('deleted'); }).subscribe();
   } catch (e) {}
-  // Fallback poll every 10 s.
   setInterval(checkStatus, 10000);
 };
 // Auto-start once DB is ready and a uid exists.

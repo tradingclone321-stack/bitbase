@@ -318,12 +318,8 @@
                 if (localUid && typeof DB !== 'undefined' && DB.ready) {
                     DB.client.from('users').select('is_deactivated').eq('uid', Number(localUid)).limit(1).single().then(function(res){
                         if (!res || res.error || !res.data) {
-                            // User was deleted from central table
-                            showError('loginError');
-                            document.getElementById('loginError').textContent = 'Account not found. It may have been deleted. Please contact support.';
-                            document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
-                            document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
-                            document.getElementById('loginError').style.color = '#ea3943';
+                            // User row not in Supabase yet — allow login (local account)
+                            completeLogin(null);
                             return;
                         }
                         if (res.data.is_deactivated) {
