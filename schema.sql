@@ -22,6 +22,9 @@ create table if not exists public.users (
   is_admin boolean not null default false,
   profit_module boolean not null default false,
   asset_balances jsonb not null default '{}'::jsonb,
+  preferences jsonb not null default '{}'::jsonb,
+  demo_balance jsonb,
+  demo_positions jsonb,
   created_at timestamptz not null default now()
 );
 alter table public.users add constraint users_uid_key unique (uid);

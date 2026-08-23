@@ -104,7 +104,7 @@
   </div>
 
   <!-- Quick Stats Row -->
-  <div class="grid grid-cols-4 gap-2 sm:gap-4 mb-8">
+  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-4 mb-8">
     <div class="glass-card rounded-xl p-3 sm:p-6">
       <div class="text-[10px] sm:text-sm text-secondary mb-1 sm:mb-2">Total Balance</div>
       <div class="font-mono text-sm sm:text-2xl font-bold gradient-text mb-0.5" id="statTotalBalance">—</div>
@@ -119,6 +119,11 @@
       <div class="text-[10px] sm:text-sm text-secondary mb-1 sm:mb-2">Available Balance</div>
       <div class="font-mono text-sm sm:text-2xl font-bold mb-0.5" id="statAvailable">—</div>
       <div class="text-[10px] sm:text-sm text-secondary">Available to trade</div>
+    </div>
+    <div class="glass-card rounded-xl p-3 sm:p-6">
+      <div class="text-[10px] sm:text-sm text-secondary mb-1 sm:mb-2">Locked</div>
+      <div class="font-mono text-sm sm:text-2xl font-bold mb-0.5" id="statLocked" style="color:#f59e0b;">—</div>
+      <div class="text-[10px] sm:text-sm text-secondary">In AI Quants & Earn</div>
     </div>
   </div>
 
@@ -413,6 +418,26 @@ function renderStats(period) {
   var pct = totalVal > 0 ? (change / totalVal * 100) : 0;
   var isPos = change >= 0;
 
+  // Calculate locked amount from AI Quant + Earn
+  var locked = 0;
+  var myUid = localStorage.getItem('bb_uid') || '';
+  try {
+    var aq = JSON.parse(localStorage.getItem('bb_ai_quants') || '[]');
+    for (var i = 0; i < aq.length; i++) {
+      if (aq[i] && aq[i].status === 'active' && String(aq[i].uid) === String(myUid)) {
+        locked += parseFloat(aq[i].amount) || 0;
+      }
+    }
+  } catch(e) {}
+  try {
+    var ep = JSON.parse(localStorage.getItem('bb_earn_positions') || '[]');
+    for (var i = 0; i < ep.length; i++) {
+      if (ep[i] && ep[i].status === 'active' && String(ep[i].uid) === String(myUid)) {
+        locked += parseFloat(ep[i].amount) || 0;
+      }
+    }
+  } catch(e) {}
+
   document.getElementById('statTotalBalance').textContent = formatUSD(totalVal);
   var sign = isPos ? '+' : '';
   var clr = isPos ? 'var(--accent-green)' : 'var(--accent-red)';
@@ -422,6 +447,9 @@ function renderStats(period) {
   document.getElementById('statPnL').textContent = sign + formatUSD(tradePnL);
   document.getElementById('statPnL').style.color = clr;
   document.getElementById('statAvailable').textContent = formatUSD(CASH_BALANCE);
+  var lockedEl = document.getElementById('statLocked');
+  lockedEl.textContent = formatUSD(locked);
+  lockedEl.style.color = locked > 0 ? '#f59e0b' : 'rgba(255,255,255,0.3)';
 }
 
 // ===== CHART =====

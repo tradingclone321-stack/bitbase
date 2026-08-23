@@ -785,7 +785,11 @@ DB._startUserStatusWatcher = function () {
   if (!DB.ready) return;
   var uid = localStorage.getItem('bb_uid');
   if (!uid) return;
+  // Never run on login, register, or admin pages
+  var path = (location.pathname || '').toLowerCase();
+  if (path.indexOf('login') >= 0 || path.indexOf('register') >= 0 || path.indexOf('admin') >= 0) return;
   DB._statusWatcherStarted = true;
+  var errCount = 0;
   function kick(reason) {
     try {
       localStorage.removeItem('bb_login_time');
@@ -798,9 +802,16 @@ DB._startUserStatusWatcher = function () {
     var curUid = localStorage.getItem('bb_uid');
     if (!curUid) return;
     DB.client.from('users').select('is_deactivated').eq('uid', Number(curUid)).limit(1).single().then(function (res) {
-      if (!res || res.error || !res.data) { kick('deleted'); return; }
+      if (!res || res.error || !res.data) {
+        // User row not found — could be new registration or transient error.
+        // Only kick after 5 consecutive failures (50s) to avoid false positives.
+        errCount++;
+        if (errCount >= 5) { kick('not_found'); }
+        return;
+      }
+      errCount = 0; // Reset on success
       if (res.data.is_deactivated) { kick('deactivated'); return; }
-    }, function () {});
+    }, function () { errCount++; });
   }
   // Supabase Realtime on users table for instant push.
   try {
