@@ -2864,6 +2864,8 @@ setInterval(function(){
   if(typeof DB==='undefined'||!DB.ready) return;
   // Always pull these critical collections (user submissions).
   var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_ai_quants'];
+  // Also refresh user list so new registrations appear
+  var userPull=DB.pullUsers();
   var active=document.querySelector('.nav-item.active');
   var tab=active?active.getAttribute('data-tab'):'dashboard';
   // Add active tab's collections.
@@ -2874,9 +2876,8 @@ setInterval(function(){
   }
   // Fire all pulls in the background — never block on Promise.all.
   for(var j=0;j<allKeys.length;j++) DB.pullCollection(allKeys[j]);
-  // Refresh the UI after 1s (pulls may still be in-flight, but localStorage
-  // has the previous pull's data which is fresh enough for instant display).
-  setTimeout(_adminRefreshTab, 1000);
+  // Refresh UI after pulls complete (or after 2s timeout)
+  Promise.resolve(userPull).then(function(){ setTimeout(_adminRefreshTab, 800); });
 },5000);
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
 setInterval(function(){
