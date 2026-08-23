@@ -114,11 +114,15 @@ DB.upsertUser = function (user) {
     asset_balances: user.assetBalances || DB.get('bb_asset_balances') || {},
     is_admin: adminList.indexOf(String(user.uid)) >= 0,
     is_deactivated: deact.indexOf(String(user.uid)) >= 0,
-    kyc_status: localStorage.getItem('bb_kyc_status') || 'none',
-    preferences: DB.get('bb_preferences') || {},
-    demo_balance: DB.get('bb_demo_trades_bal'),
-    demo_positions: DB.get('bb_demo_trades_pos')
+    kyc_status: localStorage.getItem('bb_kyc_status') || 'none'
   };
+  // Only include optional columns if they have values (avoids PGRST204 if column not yet added)
+  var prefs = DB.get('bb_preferences');
+  if (prefs && Object.keys(prefs).length > 0) row.preferences = prefs;
+  var demoBal = DB.get('bb_demo_trades_bal');
+  if (demoBal != null && typeof demoBal === 'object') row.demo_balance = demoBal;
+  var demoPos = DB.get('bb_demo_trades_pos');
+  if (demoPos != null && Array.isArray(demoPos)) row.demo_positions = demoPos;
   return DB.client.from('users').upsert(row, { onConflict: 'uid' }).then(DB._ok, DB._ok);
 };
 
