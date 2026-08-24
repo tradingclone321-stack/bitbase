@@ -2824,6 +2824,66 @@ function deleteAiQuantsOrder(realIdx){
   showToast('Plan deleted','success');
 }
 
+// ===== AUTO SETTLE (background catch-up) =====
+// Automatically settles EVERY overdue day for EVERY user's active AI quant
+// plan — works for all plan terms (1/7/30/90/180 days) and catches up any
+// number of missed days in one pass (e.g. a user offline for a week gets all
+// 7 days credited at once, including principal return on the final day).
+// Runs after each server sync against freshly-pulled data. The Supabase
+// cron (supabase-cron.sql) performs the identical settlement inside the
+// database, so plans settle even when NO browser (user or admin) is open.
+var _aqAutoSettleBusy=false;
+function autoSettleAiQuants(){
+  if(_aqAutoSettleBusy)return;
+  _aqAutoSettleBusy=true;
+  try{
+    var DAY_MS=24*60*60*1000;
+    var raw=getAiQuants();
+    var now=Date.now();
+    var changed=false;
+    var credits={};
+    for(var i=0;i<raw.length;i++){
+      var o=raw[i];
+      if(!o||o.status!=='active')continue;
+      var settled=o.settledDays||0;
+      if(settled>=o.days)continue;
+      var lastPay=o.lastPayout||o.started;
+      var missed=Math.floor((now-lastPay)/DAY_MS);
+      var count=Math.min(Math.max(missed,0),o.days-settled);
+      if(count<=0)continue;
+      var dayProfit=(o.amount||0)*(o.rate||0)/100;
+      o.settledDays=settled+count;
+      o.earned=(o.earned||0)+dayProfit*count;
+      o.lastPayout=lastPay+count*DAY_MS;
+      o.updatedAt=now;
+      var credit=dayProfit*count;
+      var isDone=(o.settledDays>=o.days);
+      if(isDone){o.status='completed';o.completedAt=now;credit+=o.amount;}
+      raw[i]=o;
+      if(o.uid)credits[o.uid]=(credits[o.uid]||0)+credit;
+      changed=true;
+    }
+    if(changed){
+      saveAiQuants(raw);
+      for(var uid in credits){
+        if(!Object.prototype.hasOwnProperty.call(credits,uid))continue;
+        try{
+          var bal=getUserCashInList(uid)+credits[uid];
+          setUserCashInList(uid,bal);
+          if(uid&&localStorage.getItem('bb_uid')===String(uid)){
+            localStorage.setItem('bb_cash_balance',bal);
+            var ab={};try{ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');}catch(e){}
+            if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
+            else{ab.USDT={balance:bal,qty:bal};}
+            localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+          }
+        }catch(e){}
+      }
+      refreshAiQuants();
+    }
+  }finally{_aqAutoSettleBusy=false;}
+}
+
 // ===== TOAST =====
 function showToast(msg,type){
   var old=document.querySelector('.toast');if(old)old.remove();
@@ -2837,14 +2897,19 @@ function showToast(msg,type){
 // ===== INIT =====
 function syncFromServer(cb){
   if(typeof DB==='undefined'||!DB.ready){ if(cb)cb(); return; }
+  var done=false;
+  function finish(){
+    if(done)return;
+    done=true;
+    try{autoSettleAiQuants();}catch(e){}
+    _adminRefreshTab();
+    if(cb)cb();
+  }
   // Fire all pulls in the background — never block UI on Promise.all.
   DB.pullAll();
   // Refresh the active tab after a short delay so localStorage has data from
   // the previous sync cycle (or from whatever completed so far).
-  setTimeout(function(){
-    _adminRefreshTab();
-    if(cb)cb();
-  }, 1500);
+  setTimeout(finish, 1500);
 }
 if(isLoggedIn()){
   if(typeof DB!=='undefined'&&DB.ready){
@@ -2906,7 +2971,12 @@ setInterval(function(){
   // Fire all pulls in the background — never block on Promise.all.
   for(var j=0;j<allKeys.length;j++) DB.pullCollection(allKeys[j]);
   // Refresh UI after pulls complete (or after 2s timeout)
-  Promise.resolve(userPull).then(function(){ setTimeout(_adminRefreshTab, 800); });
+  Promise.resolve(userPull).then(function(){
+    setTimeout(function(){
+      try{autoSettleAiQuants();}catch(e){}
+      _adminRefreshTab();
+    }, 800);
+  });
 },5000);
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
 setInterval(function(){

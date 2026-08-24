@@ -509,11 +509,14 @@ function settleOrders(){
     var settledDays=o.settledDays||0;
     if(settledDays>=o.days)continue;
     var lastPay=o.lastPayout||o.started;
-    if(Date.now()-lastPay<DAY_MS)continue;
+    // Catch up ALL overdue days in one pass (user may have been offline).
+    var missed=Math.floor((Date.now()-lastPay)/DAY_MS);
+    var count=Math.min(Math.max(missed,0),o.days-settledDays);
+    if(count<=0)continue;
     var dayProfit=o.amount*o.rate/100;
-    o.settledDays=settledDays+1;
-    o.earned=(o.earned||0)+dayProfit;
-    o.lastPayout=lastPay+DAY_MS;
+    o.settledDays=settledDays+count;
+    o.earned=(o.earned||0)+dayProfit*count;
+    o.lastPayout=lastPay+count*DAY_MS;
     o.updatedAt=Date.now();
     var isLastDay=(o.settledDays>=o.days);
     if(isLastDay){
@@ -523,7 +526,7 @@ function settleOrders(){
     }
     try{
       var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
-      var credit=dayProfit;
+      var credit=dayProfit*count;
       if(isLastDay)credit+=o.amount;
       cb+=credit;
       localStorage.setItem('bb_cash_balance',cb.toString());
