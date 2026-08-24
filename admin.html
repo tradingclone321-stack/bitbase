@@ -2739,9 +2739,12 @@ function refreshAiQuants(){
 }
 function settleAiQuantsDay(realIdx){
   var DAY_MS=24*60*60*1000;
-  var orders=getAiQuants();
+  var raw=getAiQuants();
+  var orders=raw.filter(function(x){return x&&x.status!=='deleted';});
   var o=orders[realIdx];
   if(!o||o.status!=='active')return;
+  var rawIdx=raw.indexOf(o);
+  if(rawIdx<0)return;
   var settledDays=o.settledDays||0;
   if(settledDays>=o.days){showToast('All days already settled for this plan','error');return;}
   var dayProfit=o.amount*o.rate/100;
@@ -2769,16 +2772,19 @@ function settleAiQuantsDay(realIdx){
     o.completedAt=Date.now();
     o.updatedAt=Date.now();
   }
-  orders[realIdx]=o;
-  saveAiQuants(orders);
+  raw[rawIdx]=o;
+  saveAiQuants(raw);
   refreshAiQuants();
   showToast('Day settled: +$'+dayProfit.toFixed(2)+' credited'+(isLastDay?' & principal $'+o.amount.toFixed(2)+' returned':'')+' to user','success');
 }
 function completeAiQuantsOrder(realIdx){
-  var orders=getAiQuants();
+  var raw=getAiQuants();
+  var orders=raw.filter(function(x){return x&&x.status!=='deleted';});
   var o=orders[realIdx];
   if(!o||o.status!=='active')return;
   if(!confirm('Complete '+getPlanName(o.plan)+' of $'+o.amount.toFixed(2)+' for '+(o.userName||o.uid)+'?'))return;
+  var rawIdx=raw.indexOf(o);
+  if(rawIdx<0)return;
   var uid=o.uid;
   var fullProfit=o.amount*o.rate/100*o.days;
   var settled=o.earned||0;
@@ -2799,18 +2805,21 @@ function completeAiQuantsOrder(realIdx){
   o.completedAt=Date.now();
   o.updatedAt=Date.now();
   o.earned=fullProfit;
-  orders[realIdx]=o;
-  saveAiQuants(orders);
+  raw[rawIdx]=o;
+  saveAiQuants(raw);
   refreshAiQuants();
   showToast('Plan completed & $'+credit.toFixed(2)+' credited to user','success');
 }
 function deleteAiQuantsOrder(realIdx){
-  var orders=getAiQuants();
+  var raw=getAiQuants();
+  var orders=raw.filter(function(x){return x&&x.status!=='deleted';});
   var o=orders[realIdx];
   if(!o)return;
   if(!confirm('Delete this AI quant plan for '+(o.userName||o.uid)+'?'))return;
-  orders[realIdx]=Object.assign({},o,{status:'deleted',_deletedAt:Date.now()});
-  saveAiQuants(orders);
+  var rawIdx=raw.indexOf(o);
+  if(rawIdx<0)return;
+  raw[rawIdx]=Object.assign({},o,{status:'deleted',_deletedAt:Date.now()});
+  saveAiQuants(raw);
   refreshAiQuants();
   showToast('Plan deleted','success');
 }
