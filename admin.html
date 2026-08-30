@@ -2062,12 +2062,20 @@ function viewKYCDocuments(id){
 function refreshBalances(){
   var users=getAllUsers();
   var sel=document.getElementById('balUserSelect');
+  var prev=sel.value;
   sel.innerHTML='';
   for(var i=0;i<users.length;i++){
     var opt=document.createElement('option');
     opt.value=users[i].uid;
     opt.textContent=users[i].name+' ('+users[i].uid+') — '+fmtUSD(users[i].cashBalance);
     sel.appendChild(opt);
+  }
+  // Restore the admin's selection — without this the 5s poll refresh resets
+  // the dropdown to the first user while the admin is right-clicking one.
+  if(prev){
+    for(var j=0;j<sel.options.length;j++){
+      if(sel.options[j].value===prev){sel.selectedIndex=j;break;}
+    }
   }
   loadUserBalances();
   renderBalanceHistory();

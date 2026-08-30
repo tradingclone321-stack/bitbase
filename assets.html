@@ -257,7 +257,7 @@
   <div class="flex flex-wrap gap-3 mb-6 assets-action-grid">
     <button class="btn-primary px-5 py-2.5 rounded-xl text-sm font-semibold text-white" onclick="openModal('depositModal')"><i data-lucide="arrow-down-left" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Deposit</button>
     <button class="px-5 py-2.5 rounded-xl text-sm font-semibold" style="background:rgba(65,105,225,0.12);border:1px solid rgba(65,105,225,0.3);color:#4169E1;" onclick="openSupport()"><i data-lucide="headphones" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Customer Service</button>
-    <button class="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold" onclick="openModal('withdrawModal')"><i data-lucide="arrow-up-right" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Withdraw</button>
+    <button class="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold" onclick="openWithdrawModal()"><i data-lucide="arrow-up-right" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Withdraw</button>
     <button class="px-5 py-2.5 rounded-xl text-sm font-semibold" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#8b5cf6;" onclick="openModal('loanModal')"><i data-lucide="landmark" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Loan</button>
     <button class="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold" onclick="openModal('transferModal')"><i data-lucide="repeat" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Transfer</button>
     <button class="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold" onclick="openModal('convertModal')"><i data-lucide="arrow-left-right" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Convert</button>
@@ -979,17 +979,30 @@ function submitDepositRequest(){
 updateDepositInfo();
 
 // ========== WITHDRAW ==========
+function openWithdrawModal(){
+  // Re-load the real per-coin balances from storage so "Available" reflects
+  // the actual balance (not a hardcoded default), then refresh the modal.
+  loadCoinBalances();
+  var cb=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+  if(COINS.USDT){COINS.USDT.balance=cb;COINS.USDT.qty=cb;}
+  updateWithdrawInfo();
+  openModal('withdrawModal');
+}
 function updateWithdrawInfo() {
   const coin = document.getElementById('withdrawCoinSelect').value;
   const data = COINS[coin];
-  document.getElementById('withdrawAvailable').textContent = data.balance + ' ' + coin;
+  if(!data)return;
+  const avail=(parseFloat(data.balance)||0);
+  document.getElementById('withdrawAvailable').textContent = (Math.round(avail*10000)/10000) + ' ' + coin;
   document.getElementById('withdrawFee').textContent = data.fee + ' ' + coin;
   const netSelect = document.getElementById('withdrawNetworkSelect');
   netSelect.innerHTML = '<option value="' + data.network + '">' + data.network + '</option>';
 }
 function setMaxWithdraw() {
   const coin = document.getElementById('withdrawCoinSelect').value;
-  document.getElementById('withdrawAmount').value = COINS[coin].balance;
+  const data = COINS[coin];
+  if(!data)return;
+  document.getElementById('withdrawAmount').value = Math.round((parseFloat(data.balance)||0)*10000)/10000;
 }
 function submitWithdraw() {
   var coin = document.getElementById('withdrawCoinSelect').value;
@@ -1000,7 +1013,8 @@ function submitWithdraw() {
   if (!addr) { showToast('Please enter a recipient address', 'error'); return; }
   if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
   if (amount < data.min) { showToast('Minimum withdrawal is ' + data.min + ' ' + coin, 'error'); return; }
-  if (amount > data.balance) { showToast('Insufficient balance', 'error'); return; }
+  var avail=parseFloat(data.balance)||0;
+  if (amount > avail) { showToast('Insufficient balance — available ' + avail.toFixed(8) + ' ' + coin, 'error'); return; }
   var myUid=localStorage.getItem('bb_uid')||'';
   var checkLoan=function(){
     try{
