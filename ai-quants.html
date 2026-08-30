@@ -538,6 +538,27 @@ function settleOrders(){
         localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
       }catch(e){}
     }catch(e){}
+    // Credit the server RELATIVELY (+ amount) and set local from the returned
+    // total. Absolute writes from stale bases are how credited money silently
+    // disappears (server balance replaced with a stale/0 value).
+    if(typeof DB!=='undefined'&&DB.ready&&DB.client&&DB.client.rpc){
+      (function(uidKey,cr){
+        DB.client.rpc('credit_user',{p_uid:Number(uidKey),p_amount:cr}).then(function(res){
+          var nb=(res&&res.data!=null&&!isNaN(parseFloat(res.data)))?parseFloat(res.data):null;
+          if(nb==null||nb<=0){DB.syncLocalUser();return;}
+          localStorage.setItem('bb_cash_balance',String(nb));
+          try{
+            var raw=localStorage.getItem('bb_asset_balances');
+            var ab=raw?JSON.parse(raw):{};
+            if(!ab.USDT)ab.USDT={balance:0,qty:0};
+            ab.USDT.balance=nb;ab.USDT.qty=nb;
+            localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+          }catch(e){}
+        },function(){DB.syncLocalUser();});
+      })(myUid,credit);
+    }else if(typeof DB!=='undefined'){
+      DB.syncLocalUser();
+    }
     all[i]=o;
     changed=true;
   }

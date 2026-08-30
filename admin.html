@@ -2867,21 +2867,43 @@ function autoSettleAiQuants(){
       saveAiQuants(raw);
       for(var uid in credits){
         if(!Object.prototype.hasOwnProperty.call(credits,uid))continue;
-        try{
-          var bal=getUserCashInList(uid)+credits[uid];
-          setUserCashInList(uid,bal);
-          if(uid&&localStorage.getItem('bb_uid')===String(uid)){
-            localStorage.setItem('bb_cash_balance',bal);
-            var ab={};try{ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');}catch(e){}
-            if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-            else{ab.USDT={balance:bal,qty:bal};}
-            localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-          }
-        }catch(e){}
+        var credit=credits[uid];
+        _aqCreditUser(uid,credit);
       }
       refreshAiQuants();
     }
   }finally{_aqAutoSettleBusy=false;}
+}
+
+// Credit a user RELATIVELY on the server (+ amount) and update local caches
+// from the returned total. Absolute writes computed from the admin's cached
+// bb_admin_users mirror can silently overwrite the true balance with a stale
+// (often 0) base — that is exactly how credited money "disappears".
+function _aqCreditUser(uid,credit){
+  var fallback=function(){
+    try{setUserCashInList(uid,getUserCashInList(uid)+credit);}catch(e){}
+  };
+  try{
+    if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.rpc){fallback();return;}
+    DB.client.rpc('credit_user',{p_uid:Number(uid),p_amount:credit}).then(function(res){
+      var nb=(res&&res.data!=null&&!isNaN(parseFloat(res.data)))?parseFloat(res.data):null;
+      if(nb==null||nb<=0){fallback();return;}
+      try{
+        var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+        for(var j=0;j<multi.length;j++){
+          if(String(multi[j].uid)===String(uid)){multi[j].cashBalance=nb;break;}
+        }
+        localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+      }catch(e){}
+      if(uid&&localStorage.getItem('bb_uid')===String(uid)){
+        localStorage.setItem('bb_cash_balance',String(nb));
+        var ab={};try{ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');}catch(e){}
+        if(ab.USDT){ab.USDT.balance=nb;ab.USDT.qty=nb;}
+        else{ab.USDT={balance:nb,qty:nb};}
+        localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
+      }
+    },fallback);
+  }catch(e){fallback();}
 }
 
 // ===== TOAST =====
