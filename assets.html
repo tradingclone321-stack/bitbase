@@ -390,7 +390,6 @@
           <option value="USDT">USDT</option>
           <option value="BTC">BTC</option>
           <option value="ETH">ETH</option>
-          <option value="USDC">USDC</option>
           <option value="SOL">SOL</option>
           <option value="XRP">XRP</option>
           <option value="DOGE">DOGE</option>
@@ -680,6 +679,42 @@ function loadCoinBalances(){
     }
   }
 }
+loadCoinBalances();
+// One-time cleanup: strip coin balances that EXACTLY match the old hardcoded
+// demo defaults that were persisted to storage by earlier versions. Runs only
+// once per device (flag), so a real future balance of e.g. 800 USDC is never
+// touched. USDT is excluded — it is always rebuilt from bb_cash_balance.
+function migratePhantomBalances(){
+  try{
+    if(localStorage.getItem('bb_phantom_cleaned')==='1')return;
+    var raw=localStorage.getItem('bb_asset_balances');
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    var keyed={
+      BTC:{b:0.1442,q:0.1542},ETH:{b:2.041,q:2.341},USDC:{b:800},
+      SOL:{b:15.2,q:15.7},BNB:{b:3.0,q:3.2},ADA:{b:15000,q:15000},
+      DOGE:{b:50000,q:50000},XRP:{b:4500,q:5000},DOT:{b:200,q:200}
+    };
+    var touched=false;
+    for(var k in keyed){
+      var d=data[k];if(!d||d.balance===undefined)continue;
+      var cfg=keyed[k];
+      var db=parseFloat(d.balance),bq=d.qty===undefined?undefined:parseFloat(d.qty);
+      if(!isFinite(db))continue;
+      var match=Math.abs(db-cfg.b)<=0.0000001;
+      if(cfg.q!==undefined){if(bq===undefined||Math.abs(bq-cfg.q)>0.0000001)match=false;}
+      if(!match)continue;
+      data[k]={balance:0,qty:0};
+      touched=true;
+    }
+    if(touched){
+      localStorage.setItem('bb_asset_balances',JSON.stringify(data));
+      localStorage.setItem('bb_phantom_cleaned','1');
+    }
+  }catch(e){}
+}
+migratePhantomBalances();
+// Re-load after the migration
 loadCoinBalances();
 COINS.USDT.balance = CASH_BALANCE;
 COINS.USDT.qty = CASH_BALANCE;
