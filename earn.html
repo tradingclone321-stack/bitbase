@@ -496,7 +496,7 @@ function returnBalance(coin,amount){
 }
 // ===== FLEXIBLE SAVINGS =====
 var FLEX_RATES={USDT:{apy:3.50,min:10},USDC:{apy:3.20,min:10},BTC:{apy:1.50,min:0.001},ETH:{apy:2.00,min:0.01},SOL:{apy:2.80,min:0.1}};
-var FLEX_BALANCES={USDT:2500,USDC:800,BTC:0.1442,ETH:2.041,SOL:15.2};
+var FLEX_BALANCES={USDT:0,USDC:0,BTC:0,ETH:0,SOL:0};
 
 function openFlexibleModal(){
   document.getElementById('flexAmount').value='';
@@ -559,7 +559,7 @@ function submitFlexible(){
 // ===== LOCKED STAKING =====
 var LOCKED_RATES={30:6.00,60:7.00,90:8.00,180:10.00,365:12.00};
 var LOCKED_MIN={USDT:100,BTC:0.01,ETH:0.1,SOL:1,BNB:0.5};
-var LOCKED_BALANCES={USDT:2500,BTC:0.1442,ETH:2.041,SOL:15.2,BNB:4.5};
+var LOCKED_BALANCES={USDT:0,BTC:0,ETH:0,SOL:0,BNB:0};
 var selectedLockedDays=30;
 
 function openLockedModal(){
@@ -626,17 +626,17 @@ function submitLocked(){
 
 // ===== DEFI YIELD =====
 var DEFI_RATES={USDT:{apy:8.50,protocol:'Aave V3',min:50},ETH:{apy:5.20,protocol:'Lido stETH',min:0.05},USDC:{apy:7.80,protocol:'Compound V3',min:50},SOL:{apy:6.50,protocol:'Marinade Finance',min:1},DAI:{apy:9.00,protocol:'Curve Pool',min:50}};
-var DEFI_BALANCES={USDT:2500,ETH:2.041,USDC:800,SOL:15.2,DAI:1200};
+var DEFI_BALANCES={USDT:0,ETH:0,USDC:0,SOL:0,DAI:0};
 
 (function(){
   try{
+    var data=null;
     var raw=localStorage.getItem('bb_asset_balances');
-    if(raw){
-      var data=JSON.parse(raw);
-      for(var k in FLEX_BALANCES){if(data[k]&&data[k].balance!==undefined)FLEX_BALANCES[k]=data[k].balance;}
-      for(var k in LOCKED_BALANCES){if(data[k]&&data[k].balance!==undefined)LOCKED_BALANCES[k]=data[k].balance;}
-      for(var k in DEFI_BALANCES){if(data[k]&&data[k].balance!==undefined)DEFI_BALANCES[k]=data[k].balance;}
-    }
+    if(raw){try{data=JSON.parse(raw);}catch(e){}}
+    // Real balances come from storage; anything not stored is 0 (no defaults).
+    for(var k in FLEX_BALANCES){FLEX_BALANCES[k]=(data&&data[k]&&data[k].balance!==undefined)?data[k].balance:0;}
+    for(var k in LOCKED_BALANCES){LOCKED_BALANCES[k]=(data&&data[k]&&data[k].balance!==undefined)?data[k].balance:0;}
+    for(var k in DEFI_BALANCES){DEFI_BALANCES[k]=(data&&data[k]&&data[k].balance!==undefined)?data[k].balance:0;}
     var cb=localStorage.getItem('bb_cash_balance');
     if(cb!==null){
       var cash=parseFloat(cb);

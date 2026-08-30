@@ -644,16 +644,16 @@
 lucide.createIcons();
 
 const COINS = {
-  USDT: { name:'Tether', network:'ERC20', color:'#26a17b', min:1, fee:1, balance:2500, rate:1, sym:'USDT', qty:5000, bg:'linear-gradient(135deg,#26a17b,#1a9e6f)' },
-  BTC:  { name:'Bitcoin', network:'Bitcoin', color:'#f7931a', min:0.0001, fee:0.0001, balance:0.1442, rate:64464.00, sym:'BTC', qty:0.1542, bg:'linear-gradient(135deg,#f7931a,#fdb022)' },
-  ETH:  { name:'Ethereum', network:'ERC20', color:'#627eea', min:0.001, fee:0.001, balance:2.041, rate:1880.96, sym:'ETH', qty:2.341, bg:'linear-gradient(135deg,#627eea,#8b5cf6)' },
-  USDC: { name:'USD Coin', network:'ERC20', color:'#2775ca', min:1, fee:1, balance:800, rate:1 },
-  SOL:  { name:'Solana', network:'Solana', color:'#9945ff', min:0.01, fee:0.005, balance:15.2, rate:74.78, sym:'SOL', qty:15.7, bg:'linear-gradient(135deg,#9945ff,#14f195)' },
-  BNB:  { name:'BNB', network:'BEP20', color:'#f3ba2f', min:0.001, fee:0.001, balance:3.0, rate:569.95, sym:'BNB', qty:3.2, bg:'linear-gradient(135deg,#f3ba2f,#f0b90b)' },
-  ADA:  { name:'Cardano', network:'Cardano', color:'#0033ad', min:1, fee:1, balance:15000, rate:0.165, sym:'ADA', qty:15000, bg:'linear-gradient(135deg,#0033ad,#0052ff)' },
-  DOGE: { name:'Dogecoin', network:'Dogecoin', color:'#ba9f33', min:1, fee:5, balance:50000, rate:0.07243, sym:'DOGE', qty:50000, bg:'linear-gradient(135deg,#c2a633,#ba9f33)' },
-  XRP:  { name:'XRP', network:'XRP Ledger', color:'#346aa9', min:1, fee:0.5, balance:4500, rate:1.1006, sym:'XRP', qty:5000, bg:'linear-gradient(135deg,#23292f,#346aa9)' },
-  DOT:  { name:'Polkadot', network:'Polkadot', color:'#e6007a', min:0.1, fee:0.1, balance:200, rate:0.816, sym:'DOT', qty:200, bg:'linear-gradient(135deg,#e6007a,#c70066)' },
+  USDT: { name:'Tether', network:'ERC20', color:'#26a17b', min:1, fee:1, balance:0, rate:1, sym:'USDT', qty:0, bg:'linear-gradient(135deg,#26a17b,#1a9e6f)' },
+  BTC:  { name:'Bitcoin', network:'Bitcoin', color:'#f7931a', min:0.0001, fee:0.0001, balance:0, rate:64464.00, sym:'BTC', qty:0, bg:'linear-gradient(135deg,#f7931a,#fdb022)' },
+  ETH:  { name:'Ethereum', network:'ERC20', color:'#627eea', min:0.001, fee:0.001, balance:0, rate:1880.96, sym:'ETH', qty:0, bg:'linear-gradient(135deg,#627eea,#8b5cf6)' },
+  USDC: { name:'USD Coin', network:'ERC20', color:'#2775ca', min:1, fee:1, balance:0, rate:1 },
+  SOL:  { name:'Solana', network:'Solana', color:'#9945ff', min:0.01, fee:0.005, balance:0, rate:74.78, sym:'SOL', qty:0, bg:'linear-gradient(135deg,#9945ff,#14f195)' },
+  BNB:  { name:'BNB', network:'BEP20', color:'#f3ba2f', min:0.001, fee:0.001, balance:0, rate:569.95, sym:'BNB', qty:0, bg:'linear-gradient(135deg,#f3ba2f,#f0b90b)' },
+  ADA:  { name:'Cardano', network:'Cardano', color:'#0033ad', min:1, fee:1, balance:0, rate:0.165, sym:'ADA', qty:0, bg:'linear-gradient(135deg,#0033ad,#0052ff)' },
+  DOGE: { name:'Dogecoin', network:'Dogecoin', color:'#ba9f33', min:1, fee:5, balance:0, rate:0.07243, sym:'DOGE', qty:0, bg:'linear-gradient(135deg,#c2a633,#ba9f33)' },
+  XRP:  { name:'XRP', network:'XRP Ledger', color:'#346aa9', min:1, fee:0.5, balance:0, rate:1.1006, sym:'XRP', qty:0, bg:'linear-gradient(135deg,#23292f,#346aa9)' },
+  DOT:  { name:'Polkadot', network:'Polkadot', color:'#e6007a', min:0.1, fee:0.1, balance:0, rate:0.816, sym:'DOT', qty:0, bg:'linear-gradient(135deg,#e6007a,#c70066)' },
 };
 // ===== DYNAMIC PORTFOLIO CALCULATION =====
 var CASH_BALANCE = (function(){var v=localStorage.getItem('bb_cash_balance');return v!==null?parseFloat(v):0;})();
@@ -666,12 +666,19 @@ function saveCoinBalances(){
   if(typeof DB!=='undefined'){DB.syncLocalUser();}
 }
 function loadCoinBalances(){
-  try{
-    var raw=localStorage.getItem('bb_asset_balances');
-    if(!raw)return;
-    var data=JSON.parse(raw);
-    for(var k in data){if(COINS[k]&&data[k]){COINS[k].balance=data[k].balance;COINS[k].qty=data[k].qty;}}
-  }catch(e){}
+  var data=null;
+  try{var raw=localStorage.getItem('bb_asset_balances');if(raw)data=JSON.parse(raw);}catch(e){}
+  // Explicitly zero every coin that isn't stored. A partial write from another
+  // page (e.g. only USDT) must NEVER leave phantom hardcoded defaults active.
+  for(var k in COINS){
+    if(data&&data[k]&&data[k].balance!==undefined){
+      COINS[k].balance=data[k].balance;
+      COINS[k].qty=data[k].qty!==undefined?data[k].qty:data[k].balance;
+    }else{
+      COINS[k].balance=0;
+      COINS[k].qty=0;
+    }
+  }
 }
 loadCoinBalances();
 COINS.USDT.balance = CASH_BALANCE;

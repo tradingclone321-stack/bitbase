@@ -213,28 +213,29 @@ refreshAdminLink();
 var CASH_BALANCE = (function(){var v=localStorage.getItem('bb_cash_balance');return v!==null?parseFloat(v):0;})();
 
 var holdings = [
-  { symbol:'USDT', name:'Tether', qty:5000, price:1.00, color:'#26a17b', bg:'linear-gradient(135deg,#26a17b,#1a9e6f)', icon:'USDT' },
-  { symbol:'BTC', name:'Bitcoin', qty:0.1542, price:64464.00, color:'#f7931a', bg:'linear-gradient(135deg,#f7931a,#fdb022)', icon:'BTC' },
-  { symbol:'ETH', name:'Ethereum', qty:2.341, price:1880.96, color:'#627eea', bg:'linear-gradient(135deg,#627eea,#8b5cf6)', icon:'ETH' },
-  { symbol:'SOL', name:'Solana', qty:15.7, price:74.78, color:'#9945ff', bg:'linear-gradient(135deg,#9945ff,#14f195)', icon:'SOL' },
-  { symbol:'BNB', name:'BNB', qty:3.2, price:569.95, color:'#f3ba2f', bg:'linear-gradient(135deg,#f3ba2f,#f0b90b)', icon:'BNB' },
-  { symbol:'ADA', name:'Cardano', qty:15000, price:0.165, color:'#0033ad', bg:'linear-gradient(135deg,#0033ad,#0052ff)', icon:'ADA' },
-  { symbol:'DOGE', name:'Dogecoin', qty:50000, price:0.07243, color:'#c2a633', bg:'linear-gradient(135deg,#c2a633,#ba9f33)', icon:'DOGE' },
-  { symbol:'XRP', name:'XRP', qty:5000, price:1.1006, color:'#23292f', bg:'linear-gradient(135deg,#23292f,#346aa9)', icon:'XRP' },
-  { symbol:'DOT', name:'Polkadot', qty:200, price:0.816, color:'#e6007a', bg:'linear-gradient(135deg,#e6007a,#c70066)', icon:'DOT' }
+  { symbol:'USDT', name:'Tether', qty:0, price:1.00, color:'#26a17b', bg:'linear-gradient(135deg,#26a17b,#1a9e6f)', icon:'USDT' },
+  { symbol:'BTC', name:'Bitcoin', qty:0, price:64464.00, color:'#f7931a', bg:'linear-gradient(135deg,#f7931a,#fdb022)', icon:'BTC' },
+  { symbol:'ETH', name:'Ethereum', qty:0, price:1880.96, color:'#627eea', bg:'linear-gradient(135deg,#627eea,#8b5cf6)', icon:'ETH' },
+  { symbol:'SOL', name:'Solana', qty:0, price:74.78, color:'#9945ff', bg:'linear-gradient(135deg,#9945ff,#14f195)', icon:'SOL' },
+  { symbol:'BNB', name:'BNB', qty:0, price:569.95, color:'#f3ba2f', bg:'linear-gradient(135deg,#f3ba2f,#f0b90b)', icon:'BNB' },
+  { symbol:'ADA', name:'Cardano', qty:0, price:0.165, color:'#0033ad', bg:'linear-gradient(135deg,#0033ad,#0052ff)', icon:'ADA' },
+  { symbol:'DOGE', name:'Dogecoin', qty:0, price:0.07243, color:'#c2a633', bg:'linear-gradient(135deg,#c2a633,#ba9f33)', icon:'DOGE' },
+  { symbol:'XRP', name:'XRP', qty:0, price:1.1006, color:'#23292f', bg:'linear-gradient(135deg,#23292f,#346aa9)', icon:'XRP' },
+  { symbol:'DOT', name:'Polkadot', qty:0, price:0.816, color:'#e6007a', bg:'linear-gradient(135deg,#e6007a,#c70066)', icon:'DOT' }
 ];
 
 (function(){
-  try{
-    var raw=localStorage.getItem('bb_asset_balances');
-    if(!raw)return;
-    var data=JSON.parse(raw);
-    for(var i=0;i<holdings.length;i++){
-      if(data[holdings[i].symbol]&&data[holdings[i].symbol].qty!==undefined){
-        holdings[i].qty=data[holdings[i].symbol].qty;
-      }
+  var data=null;
+  try{var raw=localStorage.getItem('bb_asset_balances');if(raw)data=JSON.parse(raw);}catch(e){}
+  for(var i=0;i<holdings.length;i++){
+    var h=holdings[i];
+    if(data&&data[h.symbol]&&data[h.symbol].qty!==undefined){
+      h.qty=data[h.symbol].qty;
+    }else{
+      // No stored balance for this coin -> real balance is 0, not a default.
+      h.qty=0;
     }
-  }catch(e){}
+  }
   for(var i=0;i<holdings.length;i++){
     if(holdings[i].symbol==='USDT'){holdings[i].qty=CASH_BALANCE;break;}
   }

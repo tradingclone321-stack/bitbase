@@ -911,14 +911,16 @@ setInterval(()=>{
 const QS_PRICES={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.1650,DOGE:0.07243,XRP:1.1006,DOT:0.816};
 let COINS=(function(){
   var c={
-    BTC:{qty:0.1542,rate:64464.00},ETH:{qty:2.341,rate:1880.96},SOL:{qty:15.7,rate:74.78},
-    BNB:{qty:3.2,rate:569.95},ADA:{qty:15000,rate:0.1650},DOGE:{qty:50000,rate:0.07243},
-    XRP:{qty:5000,rate:1.1006},DOT:{qty:200,rate:0.816}
+    BTC:{qty:0,rate:64464.00},ETH:{qty:0,rate:1880.96},SOL:{qty:0,rate:74.78},
+    BNB:{qty:0,rate:569.95},ADA:{qty:0,rate:0.1650},DOGE:{qty:0,rate:0.07243},
+    XRP:{qty:0,rate:1.1006},DOT:{qty:0,rate:0.816}
   };
-  try{
-    var raw=localStorage.getItem('bb_asset_balances');
-    if(raw){var d=JSON.parse(raw);for(var k in d){if(c[k]&&d[k]){c[k].qty=d[k].qty;}}}
-  }catch(e){}
+  var d=null;
+  try{var raw=localStorage.getItem('bb_asset_balances');if(raw)d=JSON.parse(raw);}catch(e){}
+  for(var k in c){
+    // Real balance comes from storage; anything not stored is 0 (no defaults).
+    if(d&&d[k]&&d[k].qty!==undefined){c[k].qty=d[k].qty;}else{c[k].qty=0;}
+  }
   return c;
 })();
 function saveCoinBalances(){
