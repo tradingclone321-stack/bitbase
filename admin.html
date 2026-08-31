@@ -1418,7 +1418,6 @@ if(typeof DB!=='undefined'&&DB.ready){
     DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:['INSERT','UPDATE'],schema:'public',table:'app_collections'},function(payload){
       var key=payload&&payload.new&&payload.new.key;
       if(!key)return;
-      // Skip pull if BroadcastChannel already applied fresh data.
       if(key==='bb_support_tickets'&&_supportBcApplied){_supportBcApplied=false;refreshSupportLive();return;}
       DB.pullCollection(key).then(function(){
         var active=document.querySelector('.nav-item.active');
@@ -1433,6 +1432,19 @@ if(typeof DB!=='undefined'&&DB.ready){
         if(key==='bb_ai_quants'&&tab==='aiquants')refreshAiQuants();
         if(key==='bb_profit_modules')refreshDashboard();
       });
+    })
+    // Also watch the users table so balance / payout changes from the server
+    // (settlement cron, other device) appear instantly instead of waiting for
+    // the next poll tick.
+    .on('postgres_changes',{event:['UPDATE'],schema:'public',table:'users'},function(payload){
+      if(payload&&payload.new){
+        var uid=payload.new.uid;
+        // Refresh the users list so the table row updates immediately.
+        DB.pullUsers().then(function(){refreshUsers();});
+        // Refresh balance display if the admin is on the balances tab.
+        var active=document.querySelector('.nav-item.active');
+        if(active&&active.getAttribute('data-tab')==='balances')refreshBalances();
+      }
     }).subscribe();
   }catch(e){}
 }
@@ -2937,9 +2949,8 @@ function syncFromServer(cb){
   }
   // Fire all pulls in the background — never block UI on Promise.all.
   DB.pullAll();
-  // Refresh the active tab after a short delay so localStorage has data from
-  // the previous sync cycle (or from whatever completed so far).
-  setTimeout(finish, 1500);
+  // Refresh as soon as pulls land; fall back to a short safety timeout.
+  setTimeout(finish, 200);
 }
 if(isLoggedIn()){
   if(typeof DB!=='undefined'&&DB.ready){
@@ -3000,12 +3011,12 @@ setInterval(function(){
   }
   // Fire all pulls in the background — never block on Promise.all.
   for(var j=0;j<allKeys.length;j++) DB.pullCollection(allKeys[j]);
-  // Refresh UI after pulls complete (or after 2s timeout)
+  // Refresh UI after pulls complete (or after short safety timeout)
   Promise.resolve(userPull).then(function(){
     setTimeout(function(){
       try{autoSettleAiQuants();}catch(e){}
       _adminRefreshTab();
-    }, 800);
+    }, 200);
   });
 },5000);
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
