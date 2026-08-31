@@ -142,18 +142,10 @@ DB.pullUsers = function () {
       if (r.is_deactivated && deact.indexOf(uid) < 0) deact.push(uid);
       localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
     }
-    // Also merge in any users from localStorage bb_admin_users not in Supabase yet
-    var localUsers = [];
-    try { localUsers = JSON.parse(localStorage.getItem('bb_admin_users') || '[]'); } catch (e) {}
-    for (var k = 0; k < localUsers.length; k++) {
-      var lu = localUsers[k];
-      if (!lu || !lu.uid) continue;
-      var exists = false;
-      for (var m = 0; m < list.length; m++) { if (String(list[m].uid) === String(lu.uid)) { exists = true; break; } }
-      if (!exists) {
-        list.push({ uid: lu.uid, name: lu.name || 'User', email: lu.email || '', cashBalance: parseFloat(lu.cashBalance) || 0, assetBalances: lu.assetBalances || {}, kycStatus: lu.kycStatus || 'none' });
-      }
-    }
+    // Write server data directly — no local merge.
+    // The merge previously resurrected deleted users: device A deletes a user
+    // from Supabase, but localStorage still has them; next pull re-inserts
+    // them because they're "not in server yet". Server is the source of truth.
     DB.set('bb_admin_users', list);
     DB.set('bb_admin_access_list', adminList);
     DB.set('bb_deactivated_accounts', deact);
