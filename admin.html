@@ -1218,6 +1218,18 @@ function saveUserEdit(){
     localStorage.setItem('bb_admin_users',JSON.stringify(multi));
     if(typeof DB!=='undefined'){DB.pushUsers();}
   }catch(e){}
+  // Explicitly push the balance to the users row so it persists to the server
+  // regardless of the (possibly racy) full pushUsers() re-upload, and so other
+  // admin devices receive it via Realtime immediately.
+  if(typeof DB!=='undefined'){
+    DB.updateUser(uid,{cash_balance:balance});
+    // Sync USDT asset balance to match (admin edits the cash balance).
+    try{
+      var uAbs=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
+      if(uAbs.USDT){uAbs.USDT.balance=balance;uAbs.USDT.qty=balance;}
+      localStorage.setItem('bb_asset_balances',JSON.stringify(uAbs));
+    }catch(e){}
+  }
   closeUserEditModal();
   refreshUsers();
   showToast('User updated successfully','success');
@@ -2997,27 +3009,13 @@ function _adminRefreshTab(){
 setInterval(function(){
   if(document.hidden) return;
   if(typeof DB==='undefined'||!DB.ready) return;
-  // Always pull these critical collections (user submissions).
-  var always=['bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_ai_quants'];
-  // Also refresh user list so new registrations appear
-  var userPull=DB.pullUsers();
-  var active=document.querySelector('.nav-item.active');
-  var tab=active?active.getAttribute('data-tab'):'dashboard';
-  // Add active tab's collections.
-  var tabKeys=DB.TAB_MAP[tab]||[];
-  var allKeys=always.slice();
-  for(var i=0;i<tabKeys.length;i++){
-    if(allKeys.indexOf(tabKeys[i])<0)allKeys.push(tabKeys[i]);
-  }
-  // Fire all pulls in the background — never block on Promise.all.
-  for(var j=0;j<allKeys.length;j++) DB.pullCollection(allKeys[j]);
-  // Refresh UI after pulls complete (or after short safety timeout)
-  Promise.resolve(userPull).then(function(){
-    setTimeout(function(){
-      try{autoSettleAiQuants();}catch(e){}
-      _adminRefreshTab();
-    }, 200);
-  });
+  // Pull EVERYTHING every tick so both devices always have the same data.
+  DB.pullAll();
+  // Refresh UI with whatever is in localStorage shortly after.
+  setTimeout(function(){
+    try{autoSettleAiQuants();}catch(e){}
+    _adminRefreshTab();
+  }, 200);
 },5000);
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
 setInterval(function(){
