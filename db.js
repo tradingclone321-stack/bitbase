@@ -78,19 +78,26 @@ DB.usersToRows = function (list) {
 
 // Upsert every user from localStorage into the users table.
 // Push the current device's user (latest balances) to the central table.
+// IMPORTANT: this is a targeted UPDATE of balance/profile fields ONLY.
+// It must never re-assert is_admin / is_deactivated / kyc_status / password
+// (those are admin-controlled) and must never re-CREATE a row the admin
+// deleted — an UPDATE on a missing row is a no-op, so a deleted account stays
+// deleted and a deactivation on the server is not overwritten by this device.
 DB.syncLocalUser = function () {
   if (!DB.ready) return Promise.resolve();
   var uid = localStorage.getItem('bb_uid');
   if (!uid) return Promise.resolve();
-  var u = {
-    uid: uid,
+  var patch = {
     name: localStorage.getItem('bb_name') || 'User',
     email: localStorage.getItem('bb_email') || '',
-    password: localStorage.getItem('bb_password') || '',
-    cashBalance: parseFloat(localStorage.getItem('bb_cash_balance')) || 0,
-    assetBalances: DB.get('bb_asset_balances') || {}
+    cash_balance: parseFloat(localStorage.getItem('bb_cash_balance')) || 0,
+    asset_balances: DB.get('bb_asset_balances') || {}
   };
-  return DB.upsertUser(u);
+  var demoBal = DB.get('bb_demo_trades_bal');
+  if (demoBal != null && typeof demoBal === 'object') patch.demo_balance = demoBal;
+  var demoPos = DB.get('bb_demo_trades_pos');
+  if (demoPos != null && Array.isArray(demoPos)) patch.demo_positions = demoPos;
+  return DB.client.from('users').update(patch).eq('uid', Number(uid)).then(DB._ok, DB._ok);
 };
 
 DB.pushUsers = function () {
@@ -797,17 +804,46 @@ DB._startUserStatusWatcher = function () {
     } catch (e) {}
     window.location.href = 'login.html';
   }
+  // Drop the uid from the LOCAL deactivated list the moment the server says the
+  // account is active. The admin's browser knows it reactivated the user, but a
+  // logged-in user's own browser may have flagged itself during an earlier
+  // failed login — that stale flag otherwise bounces them straight back to the
+  // homepage forever (dashboard.html and every page block access on it).
+  function clearDeactivatedFlag(accUid) {
+    try {
+      var d = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      var idx = d.indexOf(accUid);
+      if (idx >= 0) { d.splice(idx, 1); localStorage.setItem('bb_deactivated_accounts', JSON.stringify(d)); }
+    } catch (e) {}
+  }
+  // A just-registered account may exist locally before the insert reaches the
+  // server, so deletion-enforcement waits out this grace window. The account
+  // timestamp / last login is used as the "born" reference; signed-in accounts
+  // that predate it must exist server-side or they were deleted.
+  function isNewborn() {
+    var born = 0;
+    try { born = parseInt(localStorage.getItem('bb_registered_at') || localStorage.getItem('bb_login_time') || '0', 10) || 0; } catch (e) {}
+    return born > 0 && (Date.now() - born) < 180000;
+  }
   function checkStatus() {
     if (!DB.ready || !DB.client) return;
     var curUid = localStorage.getItem('bb_uid');
     if (!curUid) return;
     DB.client.from('users').select('is_deactivated').eq('uid', Number(curUid)).limit(1).single().then(function (res) {
       if (!res || res.error || !res.data) {
-        // User row not found — may be new registration still propagating.
-        // Do NOT kick. The user is valid locally.
+        // Distinguish "row confirmed absent" (PGRST116 / empty) from transient
+        // network / RLS errors. Only absence means the account was deleted.
+        var err = res && res.error;
+        var missing = !res || (!res.data && (!err || err.code === 'PGRST116' || err.code === '406'));
+        if (!missing) return;      // transient error — try again next poll
+        if (isNewborn()) return;   // brand-new registration still propagating
+        kick('deleted');
         return;
       }
       if (res.data.is_deactivated) { kick('deactivated'); return; }
+      // Row exists and is active — e.g. the admin just reactivated this user.
+      // Heal any stale local flag so they can navigate the app again.
+      clearDeactivatedFlag(curUid);
     }, function () {});
   }
   try {
@@ -818,7 +854,9 @@ DB._startUserStatusWatcher = function () {
       filter: 'uid=eq.' + uid
     }, function (payload) {
       var row = payload && payload.new;
-      if (row && row.is_deactivated) kick('deactivated');
+      if (!row) return;
+      if (row.is_deactivated) { kick('deactivated'); return; }
+      clearDeactivatedFlag(uid);
     }).on('postgres_changes', {
       event: 'DELETE',
       schema: 'public',

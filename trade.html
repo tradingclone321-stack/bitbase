@@ -841,6 +841,10 @@ function placeTrade(dir){
   document.getElementById('amtInput').value='';
   updateSummary();
   setTimeout(()=>{
+    // If the position was already closed early (closePos refunded 50%), do
+    // NOT settle it again — the old code credited the full amt+profit here on
+    // top of the 50% refund (double payout).
+    if(pos.status!=='Active')return;
     var forceKey='bb_force_resolve_'+id;
     var forced=localStorage.getItem(forceKey);
     if(forced!==null)localStorage.removeItem(forceKey);

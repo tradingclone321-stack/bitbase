@@ -318,7 +318,25 @@
                 if (localUid && typeof DB !== 'undefined' && DB.ready) {
                     DB.client.from('users').select('is_deactivated').eq('uid', Number(localUid)).limit(1).single().then(function(res){
                         if (!res || res.error || !res.data) {
-                            // User row not in Supabase yet — allow login (local account)
+                            // PGRST116 / empty = row confirmed absent = the account
+                            // was deleted. Only a brand-new registration within the
+                            // propagation grace window may be missing legitimately.
+                            var err = res && res.error;
+                            var missing = !res || (!res.data && (!err || err.code === 'PGRST116' || err.code === '406'));
+                            if (missing) {
+                                var born = 0;
+                                try { born = parseInt(localStorage.getItem('bb_registered_at') || localStorage.getItem('bb_login_time') || '0', 10) || 0; } catch(e){}
+                                if (born <= 0 || (Date.now() - born) >= 180000) {
+                                    showError('loginError');
+                                    document.getElementById('loginError').textContent = 'This account no longer exists. Please register a new account.';
+                                    document.getElementById('loginError').style.background = 'rgba(234,57,67,0.1)';
+                                    document.getElementById('loginError').style.borderColor = 'rgba(234,57,67,0.2)';
+                                    document.getElementById('loginError').style.color = '#ea3943';
+                                    return;
+                                }
+                            }
+                            // Newborn registration or transient error — allow the login;
+                            // the status watcher re-checks the server on its next poll.
                             completeLogin(null);
                             return;
                         }
@@ -330,6 +348,13 @@
                             document.getElementById('loginError').style.color = '#ea3943';
                             return;
                         }
+                        // Server says the account is active — clear any stale local
+                        // deactivation flag so a re-activated user can sign in again.
+                        try {
+                            var dl = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+                            var di = dl.indexOf(localUid);
+                            if (di >= 0) { dl.splice(di, 1); localStorage.setItem('bb_deactivated_accounts', JSON.stringify(dl)); }
+                        } catch(e){}
                         completeLogin(null);
                     }, function(){
                         completeLogin(null);
@@ -360,7 +385,17 @@
                     }
                     var deactivated = [];
                     try { deactivated = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]'); } catch(e){}
-                    if (centralUser && centralUser.is_deactivated) { deactivated.push(myUid); localStorage.setItem('bb_deactivated_accounts', JSON.stringify(deactivated)); }
+                    if (centralUser) {
+                        var dIdx = deactivated.indexOf(myUid);
+                        if (centralUser.is_deactivated) {
+                            if (dIdx < 0) deactivated.push(myUid);
+                            localStorage.setItem('bb_deactivated_accounts', JSON.stringify(deactivated));
+                        } else if (dIdx >= 0) {
+                            // Re-activated since the last failed login — drop the stale flag.
+                            deactivated.splice(dIdx, 1);
+                            localStorage.setItem('bb_deactivated_accounts', JSON.stringify(deactivated));
+                        }
+                    }
                     if (myUid && deactivated.indexOf(myUid) >= 0) {
                         showError('loginError');
                         document.getElementById('loginError').textContent = 'Your account has been deactivated. Contact support for assistance.';

@@ -451,13 +451,21 @@ function updateSummary(positions){
 function removePosition(index){
   var positions=getMyPositions();
   var p=positions[index];
+  if(!p)return;
   if(p.type==='locked'){showToast('Locked staking cannot be unstaked before maturity','error');return;}
   if(!confirm('Unstake '+p.amount+' '+p.coin+' from '+p.type+'?')) return;
+  // Refund FIRST, then mark the position deleted. Identify by stable `id`:
+  // getMyPositions() and getPositions() parse localStorage separately, so
+  // reference equality (all[i]===p) NEVER matches — the old code refunded
+  // the balance but left the position active, letting users unstake forever.
+  var pid=p.id;
   returnBalance(p.coin,p.amount);
   var all=getPositions();
   for(var i=0;i<all.length;i++){
-    if(all[i]===p){all[i]=Object.assign({},p,{status:'deleted',_deletedAt:Date.now()});break;}
+    if(all[i]&&all[i].id===pid){all[i]=Object.assign({},all[i],{status:'deleted',_deletedAt:Date.now()});break;}
   }
+  // Safety net: if no stable id matched, fall back to index match to guarantee
+  // the position is never left earning after the refund.
   savePositions(all);
   renderPositions();
   showToast(p.amount+' '+p.coin+' unstaked successfully!','success');
@@ -499,6 +507,7 @@ var FLEX_RATES={USDT:{apy:3.50,min:10},USDC:{apy:3.20,min:10},BTC:{apy:1.50,min:
 var FLEX_BALANCES={USDT:0,USDC:0,BTC:0,ETH:0,SOL:0};
 
 function openFlexibleModal(){
+  refreshEarnBalances();
   document.getElementById('flexAmount').value='';
   updateFlexibleEarnings();
   openModal('flexibleModal');
@@ -563,6 +572,7 @@ var LOCKED_BALANCES={USDT:0,BTC:0,ETH:0,SOL:0,BNB:0};
 var selectedLockedDays=30;
 
 function openLockedModal(){
+  refreshEarnBalances();
   document.getElementById('lockedAmount').value='';
   selectedLockedDays=30;
   document.querySelectorAll('#lockedDurationGroup .locked-dur').forEach(function(b){
@@ -628,7 +638,11 @@ function submitLocked(){
 var DEFI_RATES={USDT:{apy:8.50,protocol:'Aave V3',min:50},ETH:{apy:5.20,protocol:'Lido stETH',min:0.05},USDC:{apy:7.80,protocol:'Compound V3',min:50},SOL:{apy:6.50,protocol:'Marinade Finance',min:1},DAI:{apy:9.00,protocol:'Curve Pool',min:50}};
 var DEFI_BALANCES={USDT:0,ETH:0,USDC:0,SOL:0,DAI:0};
 
-(function(){
+// Always read the CURRENT stored balances (cash + asset_balances) instead of
+// trusting possibly-stale in-memory values. The old code loaded these once at
+// page boot, so the MAX button / "Available" text kept showing the pre-action
+// balance until a full reload — letting users over-stake more than they hold.
+function refreshEarnBalances(){
   try{
     var data=null;
     var raw=localStorage.getItem('bb_asset_balances');
@@ -645,9 +659,11 @@ var DEFI_BALANCES={USDT:0,ETH:0,USDC:0,SOL:0,DAI:0};
       if(DEFI_BALANCES.USDT!==undefined)DEFI_BALANCES.USDT=cash;
     }
   }catch(e){}
-})();
+}
+refreshEarnBalances();
 
 function openDefiModal(){
+  refreshEarnBalances();
   document.getElementById('defiAmount').value='';
   updateDefiEarnings();
   openModal('defiModal');

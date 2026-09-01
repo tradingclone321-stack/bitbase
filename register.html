@@ -271,6 +271,29 @@
             btnSpinner.classList.remove('hidden');
             document.getElementById('submitBtn').disabled = true;
 
+            // Pick a 6-digit UID unique against BOTH the local admin cache and
+            // the live Supabase users table. uid is the primary key — writing a
+            // duplicate would silently OVERWRITE the existing user's account.
+            function pickUniqueUid(attempt){
+              attempt=attempt||0;
+              var uid=String(Math.floor(100000+Math.random()*900000));
+              var taken=false;
+              try{
+                var au=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+                for(var i=0;i<au.length;i++){if(String(au[i].uid)===uid){taken=true;break;}}
+              }catch(e){}
+              if(taken){
+                if(attempt<6)return pickUniqueUid(attempt+1);
+                return Promise.resolve(uid);
+              }
+              if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.from){return Promise.resolve(uid);}
+              return DB.client.from('users').select('uid').eq('uid',Number(uid)).limit(1).then(function(res){
+                var rows=(res&&res.data)?res.data:[];
+                if(rows.length>0&&attempt<6)return pickUniqueUid(attempt+1);
+                return uid;
+              },function(){return uid;});
+            }
+
             // Simulate API call
             setTimeout(function() {
                 btnText.classList.remove('hidden');
@@ -278,37 +301,51 @@
                 document.getElementById('submitBtn').disabled = false;
                 document.getElementById('submitSuccess').classList.remove('hidden');
 
-// Generate UID on account creation (6 digits, assigned once)
-                 var newUID = String(Math.floor(100000 + Math.random() * 900000));
-                 localStorage.setItem('bb_uid', newUID);
-                 localStorage.setItem('bb_name', document.getElementById('fullName').value.trim());
-                 localStorage.setItem('bb_email', document.getElementById('email').value.trim());
+                // Generate UID on account creation (6 digits, assigned once).
+                // The old code picked a raw random UID and never checked for a
+                // collision — a duplicate would UPSERT-overwrite the existing
+                // account on Supabase.
+                pickUniqueUid().then(function(newUID){
+                // New accounts start completely clean — clear any stale local
+                // deactivation flag left behind by an earlier profile.
+                try{
+                  var staleDeact=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
+                  var sdIdx=staleDeact.indexOf(newUID);
+                  if(sdIdx>=0){staleDeact.splice(sdIdx,1);localStorage.setItem('bb_deactivated_accounts',JSON.stringify(staleDeact));}
+                }catch(e){}
+                localStorage.setItem('bb_uid', newUID);
+                localStorage.setItem('bb_name', document.getElementById('fullName').value.trim());
+                localStorage.setItem('bb_email', document.getElementById('email').value.trim());
                   localStorage.setItem('bb_password', pass);
-                 localStorage.setItem('bb_login_time', Date.now());
-                 localStorage.setItem('bb_cash_balance', '0');
-                 localStorage.setItem('bb_asset_balances', JSON.stringify({BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}));
-                 // Save to central admin user list so admin panel can see all registered users
-                 try{
-                   var newUser={uid:newUID,name:document.getElementById('fullName').value.trim(),email:document.getElementById('email').value.trim(),password:pass,cashBalance:0,assetBalances:{BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}};
-                   var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-                   var found=false;
-                   for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===newUID){adminUsers[i]=newUser;found=true;break;}}
-                   if(!found)adminUsers.push(newUser);
-                   localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
-                   // Push new user to central Supabase users table — wait for it
-                   var upsertDone=false;
-                   if(typeof DB!=='undefined'&&DB.ready){
-                     DB.upsertUser(newUser).then(function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);},function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);});
-                   }else{
-                     upsertDone=true;
-                   }
-                 }catch(e){}
+                localStorage.setItem('bb_login_time', Date.now());
+                // Registered-at timestamp lets the deleted-account watcher tell
+                // a fresh signup (propagation grace) from a genuinely removed user.
+                localStorage.setItem('bb_registered_at', Date.now());
+                localStorage.setItem('bb_cash_balance', '0');
+                localStorage.setItem('bb_asset_balances', JSON.stringify({BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}));
+                // Save to central admin user list so admin panel can see all registered users
+                try{
+                  var newUser={uid:newUID,name:document.getElementById('fullName').value.trim(),email:document.getElementById('email').value.trim(),password:pass,cashBalance:0,assetBalances:{BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}};
+                  var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+                  var found=false;
+                  for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===newUID){adminUsers[i]=newUser;found=true;break;}}
+                  if(!found)adminUsers.push(newUser);
+                  localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
+                  // Push new user to central Supabase users table — wait for it
+                  var upsertDone=false;
+                  if(typeof DB!=='undefined'&&DB.ready){
+                    DB.upsertUser(newUser).then(function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);},function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);});
+                  }else{
+                    upsertDone=true;
+                  }
+                }catch(e){}
 
                 if(upsertDone!==false) {
                  setTimeout(function() {
                      window.location.href = 'dashboard.html';
                  }, 1500);
                 }
+                });
             }, 2000);
         });
 

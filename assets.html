@@ -721,7 +721,7 @@ COINS.USDT.qty = CASH_BALANCE;
 
 function getHoldingsValue(){
   var total=0;
-  var coins=['BTC','ETH','SOL','BNB','ADA','DOGE','XRP','DOT'];
+  var coins=['BTC','ETH','SOL','BNB','ADA','DOGE','XRP','DOT','USDC'];
   for(var i=0;i<coins.length;i++){
     var c=COINS[coins[i]];
     total+=c.qty*c.rate;
@@ -733,6 +733,7 @@ function fmtNum(n){return n.toLocaleString('en-US',{minimumFractionDigits:n<10?4
 
 var COIN_META = [
   {sym:'USDT',name:'Tether',wallet:'spot',bg:'linear-gradient(135deg,#26a17b,#1a9e6f)',tradePair:'USDT/USDT',badge:'Stable',badgeColor:'#26a17b'},
+  {sym:'USDC',name:'USD Coin',wallet:'spot',bg:'linear-gradient(135deg,#2775ca,#5b8ffa)',tradePair:'USDC/USDT',badge:'Stable',badgeColor:'#2775ca'},
   {sym:'BTC',name:'Bitcoin',wallet:'spot',bg:'linear-gradient(135deg,#f7931a,#fdb022)',tradePair:'BTC/USDT'},
   {sym:'ETH',name:'Ethereum',wallet:'spot',bg:'linear-gradient(135deg,#627eea,#8b5cf6)',tradePair:'ETH/USDT'},
   {sym:'SOL',name:'Solana',wallet:'spot earn',bg:'linear-gradient(135deg,#9945ff,#14f195)',tradePair:'SOL/USDT',badge:'Staked',badgeColor:'#10b981'},
@@ -753,7 +754,8 @@ function getCoinLogoSvg(sym){
     DOGE:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#c2a633"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">D</text></svg>',
     XRP:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#346aa9"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">X</text></svg>',
     DOT:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#e6007a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">●</text></svg>',
-    USDT:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">₮</text></svg>'
+    USDT:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">₮</text></svg>',
+    USDC:'<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2775ca"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">$</text></svg>'
   };
   return logos[sym]||'<div class="coin-icon" style="background:#333;">'+sym+'</div>';
 }
@@ -1154,6 +1156,7 @@ function submitTransfer() {
 // ========== CONVERT ==========
 const RATES = {
   'BTC-USDT': 64464.00, 'ETH-USDT': 1880.96, 'SOL-USDT': 74.78, 'USDC-USDT': 1, 'USDT-USDT': 1,
+  'USDT-USDC': 1,
   'BTC-ETH': 34.27, 'BTC-SOL': 862.05, 'BTC-USDC': 64464.00,
   'ETH-BTC': 0.02917, 'ETH-SOL': 25.16, 'ETH-USDC': 1880.96,
   'SOL-BTC': 0.00116, 'SOL-ETH': 0.03974, 'SOL-USDC': 74.78,
@@ -1198,7 +1201,9 @@ function submitConvert() {
   if (amount > COINS[from].balance) { showToast('Insufficient ' + from + ' balance', 'error'); return; }
   const key = from + '-' + to;
   const rate = RATES[key] || 0;
+  if (rate <= 0) { showToast('Conversion rate unavailable for ' + from + ' to ' + to, 'error'); return; }
   const received = amount * rate;
+  if (received <= 0) { showToast('Invalid conversion amount', 'error'); return; }
   const btn = document.getElementById('convertSubmitBtn');
   const spinner = document.getElementById('convertSpinner');
   btn.disabled = true; spinner.style.display = 'inline-block';

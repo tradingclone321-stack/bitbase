@@ -250,13 +250,10 @@ function getTradeRecords(){
       if(!r.uid && myUid)return false;
       return true;
     });
-    // Only clean up if this user has uid-tagged records
-    var hasUid=false;
-    for(var i=0;i<trades.length;i++){if(trades[i]&&trades[i].uid){hasUid=true;break;}}
-    if(hasUid){
-      localStorage.setItem('bb_trades_history',JSON.stringify(recent));
-      if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
-    }
+    // DISPLAY-ONLY filter: each user sees their own trades from the last 7
+    // days. The old code WROTE this filtered subset back to localStorage and
+    // pushed it to Supabase — bb_trades_history is shared by all users, so it
+    // permanently deleted everyone else's history. Never write back here.
     return recent.map(function(r){
       return {type:'trade',asset:r.pair,side:r.side,amount:r.amount,price:r.price,fee:r.fee||0,time:new Date(r.time).toISOString(),status:r.status==='Won'||r.status==='Closed'?'Completed':r.status==='Lost'?'Rejected':'Pending',orderId:r.id,profit:r.profit,exitPrice:r.exitPrice,source:r.source||'real'};
     });
@@ -264,12 +261,10 @@ function getTradeRecords(){
 }
 
 function getAllHistory(){
-  var cutoff=Date.now()-7*24*60*60*1000;
-  var staticData=historyData.filter(function(item){
-    var itemTime=new Date(item.time).getTime();
-    return itemTime>=cutoff;
-  });
-  return staticData.concat(getTradeRecords()).sort(function(a,b){
+  // Seeded demo rows are dated Jan-2026; keep them visible as demo content
+  // rather than age-filtering them out for every fresh profile. Real trades
+  // are already age+user filtered inside getTradeRecords for display only.
+  return historyData.slice().concat(getTradeRecords()).sort(function(a,b){
     return new Date(b.time)-new Date(a.time);
   });
 }

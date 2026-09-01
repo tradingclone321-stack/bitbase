@@ -1729,31 +1729,72 @@ function approveWithdrawal(id){
             localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
           }
         }else{
-          // Deduct from the target user's coin asset balances
-          var tab={};
-          try{
-            var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-            for(var m=0;m<multi.length;m++){
-              if(String(multi[m].uid)===String(reqUid)){tab=multi[m].assetBalances||{};break;}
+          // Deduct from the target user's coin asset balance. The old code used
+          // THIS device's cached asset_balances (often empty or stale on another
+          // admin machine) and wrote the result back ABSOLUTELY with
+          // DB.updateUser({asset_balances:tab}) — silently dropping the user's
+          // other coins and/or not deducting at all. Now the deduction is
+          // server-relative via the adjust_user_asset RPC, so the user's real
+          // balances are the ones modified.
+          var legacyCoinDeduct=function(){
+            var tab={};
+            try{
+              var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+              for(var m=0;m<multi.length;m++){
+                if(String(multi[m].uid)===String(reqUid)){tab=multi[m].assetBalances||{};break;}
+              }
+            }catch(e){}
+            if(tab[coin]){
+              tab[coin].balance=(tab[coin].balance||0)-totalDeduct;
+              tab[coin].qty=(tab[coin].qty||0)-totalDeduct;
+              if(tab[coin].balance<0)tab[coin].balance=0;
+              if(tab[coin].qty<0)tab[coin].qty=0;
             }
-          }catch(e){}
-          if(tab[coin]){
-            tab[coin].balance=(tab[coin].balance||0)-totalDeduct;
-            tab[coin].qty=(tab[coin].qty||0)-totalDeduct;
-            if(tab[coin].balance<0)tab[coin].balance=0;
-            if(tab[coin].qty<0)tab[coin].qty=0;
-          }
-          try{
-            var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-            for(var m=0;m<multi.length;m++){
-              if(String(multi[m].uid)===String(reqUid)){multi[m].assetBalances=tab;break;}
+            try{
+              var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+              for(var m=0;m<multi.length;m++){
+                if(String(multi[m].uid)===String(reqUid)){multi[m].assetBalances=tab;break;}
+              }
+              localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+            }catch(e){}
+            if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{asset_balances:tab});}
+            if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
+              localStorage.setItem('bb_asset_balances',JSON.stringify(tab));
             }
-            localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-          }catch(e){}
-          if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{asset_balances:tab});}
-          if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
-            localStorage.setItem('bb_asset_balances',JSON.stringify(tab));
-          }
+          };
+          var deductCoin=function(){
+            if(reqUid&&typeof DB!=='undefined'&&DB.client&&DB.client.rpc){
+              DB.client.rpc('adjust_user_asset',{p_uid:Number(reqUid),p_coin:coin,p_delta:-totalDeduct}).then(function(r){
+                var nb=(r&&r.data!=null)?parseFloat(r.data):null;
+                if(nb==null){legacyCoinDeduct();return;}
+                // Update only this admin device's display cache from the server.
+                try{
+                  var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+                  for(var m=0;m<multi.length;m++){
+                    if(String(multi[m].uid)===String(reqUid)){
+                      var ab=(multi[m].assetBalances)||{};
+                      if(!ab[coin]||typeof ab[coin]!=='object')ab[coin]={};
+                      ab[coin].balance=nb;ab[coin].qty=nb;
+                      multi[m].assetBalances=ab;
+                      break;
+                    }
+                  }
+                  localStorage.setItem('bb_admin_users',JSON.stringify(multi));
+                }catch(e){}
+                if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
+                  try{
+                    var lab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
+                    if(!lab[coin]||typeof lab[coin]!=='object')lab[coin]={};
+                    lab[coin].balance=nb;lab[coin].qty=nb;
+                    localStorage.setItem('bb_asset_balances',JSON.stringify(lab));
+                  }catch(e){}
+                }
+              },function(){legacyCoinDeduct();});
+              return;
+            }
+            legacyCoinDeduct();
+          };
+          deductCoin();
         }
       }catch(e){}
       saveWithdrawals(requests);
@@ -2444,9 +2485,10 @@ function getUserCashInList(uid){
   return 0;
 }
 function setUserCashInList(uid,newBal,userName,userEmail){
-  var found=false;
+  // Update the admin's local cache for the UI.
   try{
     var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+    var found=false;
     for(var j=0;j<multi.length;j++){
       if(String(multi[j].uid)===String(uid)){multi[j].cashBalance=newBal;found=true;break;}
     }
@@ -2455,7 +2497,33 @@ function setUserCashInList(uid,newBal,userName,userEmail){
     }
     localStorage.setItem('bb_admin_users',JSON.stringify(multi));
   }catch(e){}
-  if(uid&&typeof DB!=='undefined'){DB.updateUser(uid,{cash_balance:newBal});}
+  if(!uid||typeof DB==='undefined')return;
+  // Write the NEW total as a DELTA against the user's live SERVER balance
+  // (via the relative credit_user RPC) instead of an absolute value derived
+  // from this admin device's possibly-stale cache. The old code wrote
+  // cash_balance = (getUserCashInList(...) which returns 0 when the user
+  // isn't cached locally) + delta — clobbering the user's real balance with
+  // a tiny or zero-based number. credit_user just ADDS, so it never overwrites.
+  var setAbs=function(){DB.updateUser(uid,{cash_balance:newBal});};
+  try{
+    if(!DB.client||!DB.client.rpc){setAbs();return;}
+    DB.client.from('users').select('cash_balance').eq('uid',Number(uid)).limit(1).single().then(function(res){
+      var cur=(res&&res.data&&res.data.cash_balance!=null)?parseFloat(res.data.cash_balance):null;
+      if(cur==null){setAbs();return;}
+      var delta=newBal-cur;
+      if(Math.abs(delta)<0.0000001)return;
+      DB.client.rpc('credit_user',{p_uid:Number(uid),p_amount:delta}).then(function(r){
+        var nb=(r&&r.data!=null&&!isNaN(parseFloat(r.data)))?parseFloat(r.data):null;
+        if(nb!=null){
+          try{
+            var ml=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
+            for(var k=0;k<ml.length;k++){if(String(ml[k].uid)===String(uid)){ml[k].cashBalance=nb;break;}}
+            localStorage.setItem('bb_admin_users',JSON.stringify(ml));
+          }catch(e){}
+        }
+      },setAbs);
+    },setAbs);
+  }catch(e){setAbs();}
 }
 function approveDeposit(id){
   var requests=getAllDepositRequestsRaw();
