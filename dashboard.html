@@ -214,7 +214,6 @@ var CASH_BALANCE = (function(){var v=localStorage.getItem('bb_cash_balance');ret
 
 var holdings = [
   { symbol:'USDT', name:'Tether', qty:0, price:1.00, color:'#26a17b', bg:'linear-gradient(135deg,#26a17b,#1a9e6f)', icon:'USDT' },
-  { symbol:'USDC', name:'USD Coin', qty:0, price:1.00, color:'#2775ca', bg:'linear-gradient(135deg,#2775ca,#5b8ffa)', icon:'USDC' },
   { symbol:'BTC', name:'Bitcoin', qty:0, price:64464.00, color:'#f7931a', bg:'linear-gradient(135deg,#f7931a,#fdb022)', icon:'BTC' },
   { symbol:'ETH', name:'Ethereum', qty:0, price:1880.96, color:'#627eea', bg:'linear-gradient(135deg,#627eea,#8b5cf6)', icon:'ETH' },
   { symbol:'SOL', name:'Solana', qty:0, price:74.78, color:'#9945ff', bg:'linear-gradient(135deg,#9945ff,#14f195)', icon:'SOL' },
@@ -245,12 +244,12 @@ var holdings = [
 // Historical return multipliers per period (how much value has changed over time)
 // e.g. for 1Y, past price = current price / multiplier
 var periodMultipliers = {
-  '24H': { btc:0.997, eth:0.995, sol:0.991, bnb:0.998, ada:0.994, doge:0.993, xrp:0.996, dot:0.992, usdt:1.0, usdc:1.0, cash:1.0 },
-  '7D':  { btc:0.985, eth:0.978, sol:0.965, bnb:0.988, ada:0.972, doge:0.960, xrp:0.975, dot:0.968, usdt:1.0, usdc:1.0, cash:1.0 },
-  '1M':  { btc:0.958, eth:0.942, sol:0.910, bnb:0.965, ada:0.930, doge:0.895, xrp:0.940, dot:0.920, usdt:1.0, usdc:1.0, cash:1.0 },
-  '3M':  { btc:0.885, eth:0.855, sol:0.810, bnb:0.895, ada:0.840, doge:0.780, xrp:0.850, dot:0.820, usdt:1.0, usdc:1.0, cash:1.0 },
-  '1Y':  { btc:0.720, eth:0.650, sol:0.520, bnb:0.740, ada:0.620, doge:0.480, xrp:0.600, dot:0.550, usdt:1.0, usdc:1.0, cash:1.0 },
-  'ALL': { btc:0.350, eth:0.220, sol:0.100, bnb:0.400, ada:0.180, doge:0.060, xrp:0.150, dot:0.120, usdt:1.0, usdc:1.0, cash:1.0 }
+  '24H': { btc:0.997, eth:0.995, sol:0.991, bnb:0.998, ada:0.994, doge:0.993, xrp:0.996, dot:0.992, usdt:1.0, cash:1.0 },
+  '7D':  { btc:0.985, eth:0.978, sol:0.965, bnb:0.988, ada:0.972, doge:0.960, xrp:0.975, dot:0.968, usdt:1.0, cash:1.0 },
+  '1M':  { btc:0.958, eth:0.942, sol:0.910, bnb:0.965, ada:0.930, doge:0.895, xrp:0.940, dot:0.920, usdt:1.0, cash:1.0 },
+  '3M':  { btc:0.885, eth:0.855, sol:0.810, bnb:0.895, ada:0.840, doge:0.780, xrp:0.850, dot:0.820, usdt:1.0, cash:1.0 },
+  '1Y':  { btc:0.720, eth:0.650, sol:0.520, bnb:0.740, ada:0.620, doge:0.480, xrp:0.600, dot:0.550, usdt:1.0, cash:1.0 },
+  'ALL': { btc:0.350, eth:0.220, sol:0.100, bnb:0.400, ada:0.180, doge:0.060, xrp:0.150, dot:0.120, usdt:1.0, cash:1.0 }
 };
 
 // Volatility per period for generating chart noise
@@ -323,10 +322,9 @@ function getCoinLogoSvg(sym){
     DOGE:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#c2a633"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">D</text></svg>',
     XRP:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#346aa9"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">X</text></svg>',
     DOT:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#e6007a"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">●</text></svg>',
-    USDT:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">₮</text></svg>',
-    USDC:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2775ca"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">$</text></svg>'
+    USDT:'<svg width="38" height="38" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">₮</text></svg>'
   };
-  return logos[sym]||'<div style="width:38px;height:38px;border-radius:50%;background:'+({BTC:'linear-gradient(135deg,#f7931a,#fdb022)',ETH:'linear-gradient(135deg,#627eea,#8b5cf6)',SOL:'linear-gradient(135deg,#9945ff,#14f195)',BNB:'linear-gradient(135deg,#f3ba2f,#f0b90b)',ADA:'linear-gradient(135deg,#0033ad,#0052ff)',DOGE:'linear-gradient(135deg,#c2a633,#ba9f33)',XRP:'linear-gradient(135deg,#23292f,#346aa9)',DOT:'linear-gradient(135deg,#e6007a,#c70066)',USDT:'linear-gradient(135deg,#26a17b,#1a9e6f)',USDC:'linear-gradient(135deg,#2775ca,#5b8ffa)'}[sym]||'#333')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;">'+sym+'</div>';
+  return logos[sym]||'<div style="width:38px;height:38px;border-radius:50%;background:'+({BTC:'linear-gradient(135deg,#f7931a,#fdb022)',ETH:'linear-gradient(135deg,#627eea,#8b5cf6)',SOL:'linear-gradient(135deg,#9945ff,#14f195)',BNB:'linear-gradient(135deg,#f3ba2f,#f0b90b)',ADA:'linear-gradient(135deg,#0033ad,#0052ff)',DOGE:'linear-gradient(135deg,#c2a633,#ba9f33)',XRP:'linear-gradient(135deg,#23292f,#346aa9)',DOT:'linear-gradient(135deg,#e6007a,#c70066)',USDT:'linear-gradient(135deg,#26a17b,#1a9e6f)'}[sym]||'#333')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;">'+sym+'</div>';
 }
 function renderHoldings() {
   var el = document.getElementById('holdingsList');
@@ -354,7 +352,7 @@ function renderHoldings() {
   el.innerHTML = html;
 }
 
-var COIN_PRICES_DASH={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,USDC:1};
+var COIN_PRICES_DASH={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1};
 var CHANGES_DASH={};
 function fetchLiveData(){
   fetch('https://api.binance.com/api/v3/ticker/price').then(function(r){return r.json();}).then(function(prices){

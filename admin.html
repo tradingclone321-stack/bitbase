@@ -478,7 +478,6 @@
             <option value="USDT">USDT</option>
             <option value="BTC">BTC</option>
             <option value="ETH">ETH</option>
-            <option value="USDC">USDC</option>
             <option value="SOL">SOL</option>
             <option value="XRP">XRP</option>
             <option value="DOGE">DOGE</option>
@@ -1001,7 +1000,7 @@ function refreshUsers(){
   }
   body.innerHTML=html;
 }
-var LIVE_PRICES={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,USDC:1};
+var LIVE_PRICES={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1};
 function fetchLivePrices(){
   fetch('https://api.binance.com/api/v3/ticker/price').then(function(r){return r.json();}).then(function(data){
     for(var i=0;i<data.length;i++){
@@ -2309,7 +2308,6 @@ var DEPOSIT_DEFAULTS={
   USDT:{address:'0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',network:'ERC20'},
   BTC:{address:'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',network:'Bitcoin'},
   ETH:{address:'0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',network:'ERC20'},
-  USDC:{address:'0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',network:'ERC20'},
   SOL:{address:'7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',network:'Solana'},
   XRP:{address:'rN7PbqX2RPjxfn5RfKE1RMpDqGzRGQ3q5e',network:'XRPL'},
   DOGE:{address:'DFundmtrigzA6E25Swr2pRe4Eb79bGP8G1',network:'Dogecoin'}
@@ -2395,7 +2393,7 @@ function refreshDepositList(){
   var addrs=getDepositAddresses();
   var container=document.getElementById('depAddressesList');
   var html='';
-  var coins=['USDT','BTC','ETH','USDC','SOL','XRP','DOGE'];
+  var coins=['USDT','BTC','ETH','SOL','XRP','DOGE'];
   for(var i=0;i<coins.length;i++){
     var c=coins[i];
     var d=addrs[c];
@@ -2716,7 +2714,7 @@ function refreshEarn(){
     apySum+=p.apy||0;
     if(!p.endDate||new Date(p.endDate).getTime()>now)activeCount++;
   }
-  var prices={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,USDC:1,DAI:1};
+  var prices={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,DAI:1};
   document.getElementById('earnTotalStaked').textContent='$'+totalStaked.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('earnTotalEarned').textContent='$'+totalEarnedNum.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('earnActiveCount').textContent=activeCount;

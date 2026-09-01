@@ -187,7 +187,6 @@
           <label class="input-label">Select Asset</label>
           <select id="flexAsset" class="input-field" onchange="updateFlexibleEarnings()">
             <option value="USDT" data-apr="3.50" data-min="10">USDT — 3.50% APY</option>
-            <option value="USDC" data-apr="3.20" data-min="10">USDC — 3.20% APY</option>
             <option value="BTC" data-apr="1.50" data-min="0.001">BTC — 1.50% APY</option>
             <option value="ETH" data-apr="2.00" data-min="0.01">ETH — 2.00% APY</option>
             <option value="SOL" data-apr="2.80" data-min="0.1">SOL — 2.80% APY</option>
@@ -286,7 +285,6 @@
           <select id="defiAsset" class="input-field" onchange="updateDefiEarnings()">
             <option value="USDT" data-apr="8.50" data-min="50">USDT — Aave V3</option>
             <option value="ETH" data-apr="5.20" data-min="0.05">ETH — Lido stETH</option>
-            <option value="USDC" data-apr="7.80" data-min="50">USDC — Compound V3</option>
             <option value="SOL" data-apr="6.50" data-min="1">SOL — Marinade Finance</option>
             <option value="DAI" data-apr="9.00" data-min="50">DAI — Curve Pool</option>
           </select>
@@ -430,7 +428,7 @@ function renderPositions(){
   updateSummary(positions);
 }
 
-var COIN_PRICES={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,USDT:1,USDC:1,DAI:1};
+var COIN_PRICES={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,USDT:1,DAI:1};
 function updateSummary(positions){
   var totalEarnedUsd=0,totalStakedUsd=0;
   var now=Date.now();
@@ -503,8 +501,8 @@ function returnBalance(coin,amount){
   if(typeof DB!=='undefined')DB.syncLocalUser();
 }
 // ===== FLEXIBLE SAVINGS =====
-var FLEX_RATES={USDT:{apy:3.50,min:10},USDC:{apy:3.20,min:10},BTC:{apy:1.50,min:0.001},ETH:{apy:2.00,min:0.01},SOL:{apy:2.80,min:0.1}};
-var FLEX_BALANCES={USDT:0,USDC:0,BTC:0,ETH:0,SOL:0};
+var FLEX_RATES={USDT:{apy:3.50,min:10},BTC:{apy:1.50,min:0.001},ETH:{apy:2.00,min:0.01},SOL:{apy:2.80,min:0.1}};
+var FLEX_BALANCES={USDT:0,BTC:0,ETH:0,SOL:0};
 
 function openFlexibleModal(){
   refreshEarnBalances();
@@ -635,8 +633,8 @@ function submitLocked(){
 }
 
 // ===== DEFI YIELD =====
-var DEFI_RATES={USDT:{apy:8.50,protocol:'Aave V3',min:50},ETH:{apy:5.20,protocol:'Lido stETH',min:0.05},USDC:{apy:7.80,protocol:'Compound V3',min:50},SOL:{apy:6.50,protocol:'Marinade Finance',min:1},DAI:{apy:9.00,protocol:'Curve Pool',min:50}};
-var DEFI_BALANCES={USDT:0,ETH:0,USDC:0,SOL:0,DAI:0};
+var DEFI_RATES={USDT:{apy:8.50,protocol:'Aave V3',min:50},ETH:{apy:5.20,protocol:'Lido stETH',min:0.05},SOL:{apy:6.50,protocol:'Marinade Finance',min:1},DAI:{apy:9.00,protocol:'Curve Pool',min:50}};
+var DEFI_BALANCES={USDT:0,ETH:0,SOL:0,DAI:0};
 
 // Always read the CURRENT stored balances (cash + asset_balances) instead of
 // trusting possibly-stale in-memory values. The old code loaded these once at
