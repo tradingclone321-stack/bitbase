@@ -2856,86 +2856,42 @@ function deleteAiQuantsOrder(realIdx){
   showToast('Plan deleted','success');
 }
 
-// ===== AUTO SETTLE (background catch-up) =====
-// Automatically settles EVERY overdue day for EVERY user's active AI quant
-// plan — works for all plan terms (1/7/30/90/180 days) and catches up any
-// number of missed days in one pass (e.g. a user offline for a week gets all
-// 7 days credited at once, including principal return on the final day).
-// Runs after each server sync against freshly-pulled data. The Supabase
-// cron (supabase-cron.sql) performs the identical settlement inside the
-// database, so plans settle even when NO browser (user or admin) is open.
+// ===== AUTO SETTLE (server authority) =====
+// Settlement is done ONLY inside the database (supabase-cron.sql:
+// settle_ai_quants()). It locks the ai-quants row so concurrent callers
+// serialize and can never double-credit a day. Browser engines no longer
+// compute or credit anything themselves — they just trigger the RPC and
+// re-render the server's result. This kills the old "×2 credited" race
+// caused by the user page and admin page both settling the same order.
 var _aqAutoSettleBusy=false;
+var _aqSettleWarned=false;
 function autoSettleAiQuants(){
   if(_aqAutoSettleBusy)return;
   _aqAutoSettleBusy=true;
   try{
-    var DAY_MS=24*60*60*1000;
-    var raw=getAiQuants();
-    var now=Date.now();
-    var changed=false;
-    var credits={};
-    for(var i=0;i<raw.length;i++){
-      var o=raw[i];
-      if(!o||o.status!=='active')continue;
-      var settled=o.settledDays||0;
-      if(settled>=o.days)continue;
-      var lastPay=o.lastPayout||o.started;
-      var missed=Math.floor((now-lastPay)/DAY_MS);
-      var count=Math.min(Math.max(missed,0),o.days-settled);
-      if(count<=0)continue;
-      var dayProfit=(o.amount||0)*(o.rate||0)/100;
-      o.settledDays=settled+count;
-      o.earned=(o.earned||0)+dayProfit*count;
-      o.lastPayout=lastPay+count*DAY_MS;
-      o.updatedAt=now;
-      var credit=dayProfit*count;
-      var isDone=(o.settledDays>=o.days);
-      if(isDone){o.status='completed';o.completedAt=now;credit+=o.amount;}
-      raw[i]=o;
-      if(o.uid)credits[o.uid]=(credits[o.uid]||0)+credit;
-      changed=true;
+    if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.rpc){
+      refreshAiQuants();
+      return;
     }
-    if(changed){
-      saveAiQuants(raw);
-      for(var uid in credits){
-        if(!Object.prototype.hasOwnProperty.call(credits,uid))continue;
-        var credit=credits[uid];
-        _aqCreditUser(uid,credit);
+    DB.client.rpc('settle_ai_quants',{}).then(function(res){
+      var settled=(res&&res.data&&res.data.settledOrders)||0;
+      if(settled>0){
+        // Server advanced lastPayout etc. — pull the freshly-updated orders
+        // and the users table, then refresh whatever the admin sees.
+        DB.pullCollection('bb_ai_quants').then(function(){refreshAiQuants();});
+        DB.pullUsers().then(function(){
+          _adminRefreshTab();
+        });
+      }
+    },function(e){
+      // RPC unavailable (function not installed yet). Show one warning.
+      if(!_aqSettleWarned){
+        _aqSettleWarned=true;
+        showToast('AI Quant settlement RPC missing — run supabase-cron.sql on Supabase','error');
       }
       refreshAiQuants();
-    }
+    });
   }finally{_aqAutoSettleBusy=false;}
-}
-
-// Credit a user RELATIVELY on the server (+ amount) and update local caches
-// from the returned total. Absolute writes computed from the admin's cached
-// bb_admin_users mirror can silently overwrite the true balance with a stale
-// (often 0) base — that is exactly how credited money "disappears".
-function _aqCreditUser(uid,credit){
-  var fallback=function(){
-    try{setUserCashInList(uid,getUserCashInList(uid)+credit);}catch(e){}
-  };
-  try{
-    if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.rpc){fallback();return;}
-    DB.client.rpc('credit_user',{p_uid:Number(uid),p_amount:credit}).then(function(res){
-      var nb=(res&&res.data!=null&&!isNaN(parseFloat(res.data)))?parseFloat(res.data):null;
-      if(nb==null||nb<=0){fallback();return;}
-      try{
-        var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-        for(var j=0;j<multi.length;j++){
-          if(String(multi[j].uid)===String(uid)){multi[j].cashBalance=nb;break;}
-        }
-        localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-      }catch(e){}
-      if(uid&&localStorage.getItem('bb_uid')===String(uid)){
-        localStorage.setItem('bb_cash_balance',String(nb));
-        var ab={};try{ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');}catch(e){}
-        if(ab.USDT){ab.USDT.balance=nb;ab.USDT.qty=nb;}
-        else{ab.USDT={balance:nb,qty:nb};}
-        localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-      }
-    },fallback);
-  }catch(e){fallback();}
 }
 
 // ===== TOAST =====
