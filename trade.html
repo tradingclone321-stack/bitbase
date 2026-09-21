@@ -468,6 +468,19 @@ let balance = (function(){var v=localStorage.getItem('bb_cash_balance');return v
 let positions = [];
 let tradeIdCounter = parseInt(localStorage.getItem('bb_trade_id_counter')) || 1000;
 
+// Real-trade positions persist to storage like the demo page does. The old
+// code kept positions only in memory and settled via a one-shot setTimeout,
+// so closing the floating panel, reloading or navigating away killed both the
+// timer and the array — resolved trades never credited profit and stayed
+// "Active" (= Pending) in history forever.
+function loadPositions(){
+  try{return JSON.parse(localStorage.getItem('bb_trade_positions'))||[];}catch(e){return [];}
+}
+function savePositions(){
+  try{localStorage.setItem('bb_trade_positions',JSON.stringify(positions));}catch(e){}
+}
+positions = loadPositions();
+
 function parseNum(s){return parseFloat(String(s).replace(/[^0-9.\-]/g,''))||0;}
 function fmtP(n,d){d=d||currentPair.dec;return n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function fmtD(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -834,36 +847,16 @@ function placeTrade(dir){
   localStorage.setItem('bb_trade_id_counter', tradeIdCounter);
   const pos={id,pair:currentPair.sym,dir,amt,dur:dur.seconds,profit,entryPrice:currentPrice,exitPrice:0,startTime:Date.now(),status:'Active'};
   positions.push(pos);
+  savePositions();
     saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'real',uid:localStorage.getItem('bb_uid')||''});
   renderPositions();
   showTradePanel(pos);
   showToast(`${dir} trade placed: ${fmtD(amt)} on ${currentPair.sym}`,'var(--green)');
   document.getElementById('amtInput').value='';
   updateSummary();
-  setTimeout(()=>{
-    // If the position was already closed early (closePos refunded 50%), do
-    // NOT settle it again — the old code credited the full amt+profit here on
-    // top of the 50% refund (double payout).
-    if(pos.status!=='Active')return;
-    var forceKey='bb_force_resolve_'+id;
-    var forced=localStorage.getItem(forceKey);
-    if(forced!==null)localStorage.removeItem(forceKey);
-    const pmOn=(localStorage.getItem('bb_profit_module_'+uid)||localStorage.getItem('bb_profit_module'))==='true';
-    const won=forced!==null?forced==='Won':(pmOn?true:Math.random()>0.7);
-    pos.status=won?'Won':'Lost';
-    pos.exitPrice=currentPrice*(1+(Math.random()*0.004-0.002));
-    balance+=won?amt+profit:amt-profit;
-    localStorage.setItem('bb_cash_balance',balance);
-    saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:won?'Won':'Lost',profit:profit,source:'real',uid:localStorage.getItem('bb_uid')||''});
-    if(typeof DB!=='undefined'){DB.syncLocalUser();}
-    var pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
-    pnl+=won?profit:-profit;
-    localStorage.setItem('bb_trade_pnl',pnl.toString());
-    try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
-    renderPositions();
-    showTradeResult(pos);
-    showToast(won?`Trade ${id} won! +${fmtD(profit)}`:`Trade ${id} lost. -${fmtD(profit)}`,won?'var(--green)':'var(--red)');
-  },dur.seconds*1000);
+  // Settlement no longer depends on a one-shot setTimeout. The 1s loop
+  // (settleExpiredPositions) resolves this position, so it still settles even
+  // if the floating panel is closed or the page reloads/navigates away.
 }
 
 function renderPositions(){
@@ -901,14 +894,58 @@ function closePos(id){
   if(typeof DB!=='undefined'){DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
   saveTradeRecord({id:id,pair:pos.pair,side:pos.dir==='UP'?'Buy':'Sell',amount:pos.amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:'Closed',profit:pos.profit,refund:refund,source:'real',uid:localStorage.getItem('bb_uid')||''});
+  savePositions();
   renderPositions();
   if(activeTradePanel&&activeTradePanel.id===id)removeTradePanel();
   showToast(`Position ${id} closed. Refunded ${fmtD(refund)}`,'var(--accent)');
 }
+
+// Settles every Active position whose duration has passed. Runs every second
+// AND on page load, so a trade resolves even if the floating mini screen was
+// closed or the page reloaded while it was open. The old code relied on a
+// single setTimeout in placeTrade() which died with the panel/page and left
+// trades stuck "Active" (= Pending in history) with profit never credited.
+function settleExpiredPositions(){
+  var now=Date.now();
+  var settledAny=false;
+  var myUid=localStorage.getItem('bb_uid')||'';
+  for(var i=0;i<positions.length;i++){
+    var p=positions[i];
+    if(!p||p.status!=='Active')continue;
+    if(now < (p.startTime+p.dur*1000))continue;
+    var forceKey='bb_force_resolve_'+p.id;
+    var forced=localStorage.getItem(forceKey);
+    if(forced!==null)localStorage.removeItem(forceKey);
+    var pmOn=(localStorage.getItem('bb_profit_module_'+myUid)||localStorage.getItem('bb_profit_module'))==='true';
+    var won=forced!==null?forced==='Won':(pmOn?true:Math.random()>0.7);
+    p.status=won?'Won':'Lost';
+    p.exitPrice=currentPrice*(1+(Math.random()*0.004-0.002));
+    balance+=won?(p.amt+p.profit):(p.amt-p.profit);
+    localStorage.setItem('bb_cash_balance',balance);
+    saveTradeRecord({id:p.id,pair:p.pair,side:p.dir==='UP'?'Buy':'Sell',amount:p.amt,price:p.entryPrice,exitPrice:p.exitPrice,fee:0,time:p.startTime,resolvedTime:now,status:won?'Won':'Lost',profit:p.profit,source:'real',uid:myUid});
+    if(typeof DB!=='undefined'){DB.syncLocalUser();}
+    var pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
+    pnl+=won?p.profit:-p.profit;
+    localStorage.setItem('bb_trade_pnl',pnl.toString());
+    try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
+    settledAny=true;
+    if(activeTradePanel&&activeTradePanel.id===p.id){
+      showTradeResult(p);
+      showToast(won?'Trade '+p.id+' won! +'+fmtD(p.profit):'Trade '+p.id+' lost. -'+fmtD(p.profit),won?'var(--green)':'var(--red)');
+    }
+  }
+  if(settledAny){
+    savePositions();
+    renderPositions();
+    updateSummary();
+  }
+}
 setInterval(()=>{
+  settleExpiredPositions();
   if(positions.some(p=>p.status==='Active'))renderPositions();
   updateTradeTimer();
 },1000);
+settleExpiredPositions();
 
 
 // ===== COIN BALANCES (shared with assets page) =====
@@ -1004,9 +1041,32 @@ requestAnimationFrame(()=>{
   lucide.createIcons();
 });
 
-// ===== SERVER BALANCE SYNC =====
+// ===== SERVER BALANCE SYNC (no page reload) =====
+// db.js's DB.startLocalPolling() reloads the page whenever the server user
+// row differs from localStorage. Right after a trade settles (profit added)
+// the push can race the next poll, so the page auto-refreshed and wiped the
+// in-memory positions + settlement timer — trades stayed "Active"/pending and
+// profit was never credited. Here we sync without reloading, and we never
+// overwrite the local balance while a trade is in flight.
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
-  DB.startLocalPolling(10000);
+  var myUidPoll=(localStorage.getItem('bb_uid')||'').trim();
+  (function tradeSafePoll(){
+    var activeTag=Date.now();
+    if(typeof DB!=='undefined'&&DB.pullProfitModules){try{DB.pullProfitModules();}catch(e){}}
+    if(typeof DB==='undefined'||!DB.ready||!DB.pullLocalUser){return;}
+    var hasActive=positions.some(function(p){return p&&p.status==='Active';});
+    if(!hasActive){
+      DB.pullLocalUser().then(function(){
+        try{
+          var b=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+          balance=b;
+          var be=document.getElementById('balance');
+          if(be)be.textContent=fmtD(balance).replace('$','');
+        }catch(e){}
+      },function(){});
+    }
+    setTimeout(tradeSafePoll,10000);
+  })();
 }
 </script>
 <style>
