@@ -2986,10 +2986,11 @@ function syncFromServer(cb){
     _adminRefreshTab();
     if(cb)cb();
   }
-  // Fire all pulls in the background — never block UI on Promise.all.
-  DB.pullAll();
-  // Refresh as soon as pulls land; fall back to a short safety timeout.
-  setTimeout(finish, 200);
+  // Fire all pulls in the background — but refresh only after they land so
+  // the UI never renders stale data ahead of the network response.
+  DB.pullAll().then(finish, finish);
+  // Safety: if a single pull stalls forever, still refresh rather than block.
+  setTimeout(finish, 2000);
 }
 if(isLoggedIn()){
   if(typeof DB!=='undefined'&&DB.ready){
@@ -3045,6 +3046,14 @@ setInterval(function(){
     _adminRefreshTab();
   });
 },5000);
+// When the admin switches back to this tab, pull immediately — the 5s poll
+// is skipped while the tab is hidden, so new registrations would otherwise
+// wait up to a minute to appear.
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&typeof DB!=='undefined'&&DB.ready){
+    DB.pullAll().then(function(){_adminRefreshTab();},function(){_adminRefreshTab();});
+  }
+});
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
 setInterval(function(){
   if(document.hidden) return;
