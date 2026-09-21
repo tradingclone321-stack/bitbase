@@ -300,7 +300,17 @@ DB.startLocalPolling = function (intervalMs) {
       // the local change survives, then pull. During an RPC+pull cycle
       // (settleOrders) suppress the push on the first tick while still pulling.
       if (DB._skipSyncUntil && Date.now() < DB._skipSyncUntil) { pull(); return; }
-      var run = localDirty ? sync(true).then(pull, pull) : pull().then(sync.bind(null, false), sync.bind(null, false));
+      // changed must come from pullLocalUser (boolean: true only when the server
+      // row differs from localStorage). sync's return is the Supabase response
+      // object — always truthy — so chaining it makes the page reload on every
+      // tick. Discard the sync result and keep pull's boolean for the reload.
+      var afterSync = function (changed) { return sync(false).then(function () { return changed; }, function () { return changed; }); };
+      var run;
+      if (localDirty) {
+        run = sync(true).then(pull, pull);
+      } else {
+        run = pull().then(afterSync, afterSync);
+      }
       run.then(function (changed) {
         if (changed && window.location && window.location.reload) window.location.reload();
         DB.pullProfitModules();
