@@ -1447,10 +1447,10 @@ if(typeof DB!=='undefined'&&DB.ready){
     // Also watch the users table so balance / payout changes from the server
     // (settlement cron, other device) appear instantly instead of waiting for
     // the next poll tick.
-    .on('postgres_changes',{event:['UPDATE'],schema:'public',table:'users'},function(payload){
-      if(payload&&payload.new){
-        var uid=payload.new.uid;
-        // Refresh the users list so the table row updates immediately.
+    .on('postgres_changes',{event:['INSERT','UPDATE','DELETE'],schema:'public',table:'users'},function(payload){
+      if(payload&&(payload.new||payload.old)){
+        // Refresh the users list so new registrations (INSERT) and updated
+        // rows (UPDATE) appear immediately instead of waiting for the poll.
         DB.pullUsers().then(function(){refreshUsers();});
         // Refresh balance display if the admin is on the balances tab.
         var active=document.querySelector('.nav-item.active');
@@ -3032,12 +3032,13 @@ setInterval(function(){
   if(document.hidden) return;
   if(typeof DB==='undefined'||!DB.ready) return;
   // Pull EVERYTHING every tick so both devices always have the same data.
-  DB.pullAll();
-  // Refresh UI with whatever is in localStorage shortly after.
-  setTimeout(function(){
+  DB.pullAll().then(function(){
     try{autoSettleAiQuants();}catch(e){}
     _adminRefreshTab();
-  }, 200);
+  },function(){
+    try{autoSettleAiQuants();}catch(e){}
+    _adminRefreshTab();
+  });
 },5000);
 // Slow full poll: pull everything every 30s as a safety net for Realtime gaps.
 setInterval(function(){
