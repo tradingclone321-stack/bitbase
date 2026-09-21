@@ -902,43 +902,67 @@ function closePos(id){
 
 // Settles every Active position whose duration has passed. Runs every second
 // AND on page load, so a trade resolves even if the floating mini screen was
-// closed or the page reloaded while it was open. The old code relied on a
-// single setTimeout in placeTrade() which died with the panel/page and left
-// trades stuck "Active" (= Pending in history) with profit never credited.
+// closed or the page reloaded while it was open. Delegates to the shared
+// DB.settleRealTrades() (in db.js) which reads/writes the single source of
+// truth (bb_trade_positions in localStorage), so a trade is settled exactly
+// once even if trade.html and e.g. history.html are open at the same time.
+// This page re-syncs its in-memory array/balance from storage afterwards.
 function settleExpiredPositions(){
-  var now=Date.now();
-  var settledAny=false;
-  var myUid=localStorage.getItem('bb_uid')||'';
-  for(var i=0;i<positions.length;i++){
-    var p=positions[i];
-    if(!p||p.status!=='Active')continue;
-    if(now < (p.startTime+p.dur*1000))continue;
-    var forceKey='bb_force_resolve_'+p.id;
-    var forced=localStorage.getItem(forceKey);
-    if(forced!==null)localStorage.removeItem(forceKey);
-    var pmOn=(localStorage.getItem('bb_profit_module_'+myUid)||localStorage.getItem('bb_profit_module'))==='true';
-    var won=forced!==null?forced==='Won':(pmOn?true:Math.random()>0.7);
-    p.status=won?'Won':'Lost';
-    p.exitPrice=currentPrice*(1+(Math.random()*0.004-0.002));
-    balance+=won?(p.amt+p.profit):(p.amt-p.profit);
-    localStorage.setItem('bb_cash_balance',balance);
-    saveTradeRecord({id:p.id,pair:p.pair,side:p.dir==='UP'?'Buy':'Sell',amount:p.amt,price:p.entryPrice,exitPrice:p.exitPrice,fee:0,time:p.startTime,resolvedTime:now,status:won?'Won':'Lost',profit:p.profit,source:'real',uid:myUid});
-    if(typeof DB!=='undefined'){DB.syncLocalUser();}
-    var pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
-    pnl+=won?p.profit:-p.profit;
-    localStorage.setItem('bb_trade_pnl',pnl.toString());
-    try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
-    settledAny=true;
-    if(activeTradePanel&&activeTradePanel.id===p.id){
-      showTradeResult(p);
-      showToast(won?'Trade '+p.id+' won! +'+fmtD(p.profit):'Trade '+p.id+' lost. -'+fmtD(p.profit),won?'var(--green)':'var(--red)');
-    }
+  var settledIds=[];
+  if(typeof DB!=='undefined'&&DB.settleRealTrades){
+    try{ settledIds=DB.settleRealTrades()||[]; }catch(e){ settledIds=[]; }
+  } else {
+    settledIds=localSettleExpiredFallback();
   }
-  if(settledAny){
-    savePositions();
+  if(settledIds.length){
+    positions=loadPositions();
+    balance=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+    try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
     renderPositions();
     updateSummary();
+    settledIds.forEach(function(id){
+      var p=positions.find(function(x){return x&&x.id===id;});
+      if(p&&activeTradePanel&&activeTradePanel.id===id){
+        showTradeResult(p);
+        showToast(p.status==='Won'?'Trade '+p.id+' won! +'+fmtD(p.profit):'Trade '+p.id+' lost. -'+fmtD(p.profit),p.status==='Won'?'var(--green)':'var(--red)');
+      }
+    });
   }
+}
+// Local-only fallback (used only when db.js is absent): mirrors the exact
+// settlement rules of DB.settleRealTrades against localStorage.
+function localSettleExpiredFallback(){
+  var settled=[];
+  try{
+    var arr=[];
+    try{arr=JSON.parse(localStorage.getItem('bb_trade_positions')||'[]')||[];}catch(e){arr=[];}
+    if(!Array.isArray(arr))arr=[];
+    var now=Date.now();
+    var myUid=localStorage.getItem('bb_uid')||'';
+    var balance=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+    var pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
+    for(var i=0;i<arr.length;i++){
+      var p=arr[i];
+      if(!p||p.status!=='Active')continue;
+      if(now<(p.startTime+p.dur*1000))continue;
+      var forceKey='bb_force_resolve_'+p.id;
+      var forced=localStorage.getItem(forceKey);
+      if(forced!==null)localStorage.removeItem(forceKey);
+      var pmOn=(localStorage.getItem('bb_profit_module_'+myUid)||localStorage.getItem('bb_profit_module'))==='true';
+      var won=forced!==null?forced==='Won':(pmOn?true:Math.random()>0.7);
+      p.status=won?'Won':'Lost';
+      p.exitPrice=(p.entryPrice||0)*(1+(Math.random()*0.004-0.002));
+      balance+=won?(p.amt+p.profit):(p.amt-p.profit);
+      pnl+=won?p.profit:-p.profit;
+      settled.push(p.id);
+    }
+    if(settled.length){
+      localStorage.setItem('bb_cash_balance',balance);
+      localStorage.setItem('bb_trade_pnl',pnl.toString());
+      localStorage.setItem('bb_trade_positions',JSON.stringify(arr));
+    }
+  }catch(e){}
+  return settled;
 }
 setInterval(()=>{
   settleExpiredPositions();
@@ -1051,12 +1075,15 @@ requestAnimationFrame(()=>{
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
   var myUidPoll=(localStorage.getItem('bb_uid')||'').trim();
   (function tradeSafePoll(){
-    var activeTag=Date.now();
     if(typeof DB!=='undefined'&&DB.pullProfitModules){try{DB.pullProfitModules();}catch(e){}}
     if(typeof DB==='undefined'||!DB.ready||!DB.pullLocalUser){return;}
     var hasActive=positions.some(function(p){return p&&p.status==='Active';});
     if(!hasActive){
-      DB.pullLocalUser().then(function(){
+      DB.syncLocalUser().then(function(){
+        return DB.pullLocalUser();
+      },function(){
+        return DB.pullLocalUser();
+      }).then(function(){
         try{
           var b=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
           balance=b;

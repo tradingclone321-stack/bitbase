@@ -242,7 +242,19 @@ DB.startLocalPolling = function (intervalMs) {
   intervalMs = intervalMs || 10000;
   if (!DB._localPollTimer) {
     var poll = function () {
-      DB.pullLocalUser().then(function (changed) {
+      try { DB.settleRealTrades(); } catch (e) {}
+      // Push local state to the server BEFORE pulling it back. pullLocalUser
+      // overwrites bb_cash_balance with the server value unconditionally, so
+      // without this a freshly-credited trade (profit/capital) would be
+      // reverted by a stale server row mid-trade or right after settlement.
+      var thenPull = function () {
+        return DB.syncLocalUser().then(function () {
+          return DB.pullLocalUser();
+        }, function () {
+          return DB.pullLocalUser();
+        });
+      };
+      thenPull().then(function (changed) {
         if (changed && window.location && window.location.reload) window.location.reload();
         DB.pullProfitModules();
       }, function () {
@@ -257,6 +269,72 @@ DB.startLocalPolling = function (intervalMs) {
     DB._profitPollTimer = setInterval(DB.pullProfitModules, 5000);
   }
 };
+
+// Settle expired REAL trades no matter which page is open. The trade page used
+// to be the only place that settled positions, so navigating to history or
+// another page while a trade was running left it stuck "Active" (= Pending in
+// history) and never credited the balance. Positions live in bb_trade_positions
+// (shared localStorage), so any page can settle them. Idempotent: a position
+// whose status != 'Active' is skipped, so it is safe to call repeatedly from
+// multiple pages/tabs. Returns array of settled ids (empty when nothing settled).
+DB.settleRealTrades = function () {
+  var settled = [];
+  try {
+    var positions = [];
+    try { positions = JSON.parse(localStorage.getItem('bb_trade_positions') || '[]') || []; } catch (e) { positions = []; }
+    if (!Array.isArray(positions)) positions = [];
+    var now = Date.now();
+    var myUid = localStorage.getItem('bb_uid') || '';
+    var balance = parseFloat(localStorage.getItem('bb_cash_balance')) || 0;
+    var pnl = parseFloat(localStorage.getItem('bb_trade_pnl') || '0');
+    var history = [];
+    try { history = JSON.parse(localStorage.getItem('bb_trades_history') || '[]') || []; } catch (e) { history = []; }
+    if (!Array.isArray(history)) history = [];
+    for (var i = 0; i < positions.length; i++) {
+      var p = positions[i];
+      if (!p || p.status !== 'Active') continue;
+      if (now < (p.startTime + p.dur * 1000)) continue;
+      var forceKey = 'bb_force_resolve_' + p.id;
+      var forced = localStorage.getItem(forceKey);
+      if (forced !== null) localStorage.removeItem(forceKey);
+      var pmOn = (localStorage.getItem('bb_profit_module_' + myUid) || localStorage.getItem('bb_profit_module')) === 'true';
+      var won = forced !== null ? forced === 'Won' : (pmOn ? true : Math.random() > 0.7);
+      p.status = won ? 'Won' : 'Lost';
+      p.exitPrice = (p.entryPrice || 0) * (1 + (Math.random() * 0.004 - 0.002));
+      balance += won ? (p.amt + p.profit) : (p.amt - p.profit);
+      pnl += won ? p.profit : -p.profit;
+      localStorage.setItem('bb_trade_pnl', pnl.toString());
+      var idx = -1;
+      for (var j = 0; j < history.length; j++) {
+        if (history[j] && history[j].id === p.id) { idx = j; break; }
+      }
+      var rec = {
+        id: p.id, pair: p.pair, side: p.dir === 'UP' ? 'Buy' : 'Sell',
+        amount: p.amt, price: p.entryPrice, exitPrice: p.exitPrice, fee: 0,
+        time: p.startTime, resolvedTime: now, status: won ? 'Won' : 'Lost',
+        profit: p.profit, source: 'real', uid: myUid
+      };
+      if (idx >= 0) { history[idx] = rec; } else { history.push(rec); }
+      settled.push(p.id);
+    }
+    if (settled.length) {
+      localStorage.setItem('bb_cash_balance', balance);
+      localStorage.setItem('bb_trade_positions', JSON.stringify(positions));
+      localStorage.setItem('bb_trades_history', JSON.stringify(history));
+      DB.pushCollection('bb_trades_history');
+      DB.syncLocalUser();
+    }
+  } catch (e) { console.warn('[DB] settleRealTrades error', e); }
+  return settled;
+};
+
+// Run once on every page load so a trade that expired while the user was away
+// is settled immediately regardless of which page they open.
+try {
+  if (localStorage.getItem('bb_uid')) {
+    setTimeout(function () { DB.settleRealTrades(); }, 500);
+  }
+} catch (e) {}
 
 // Shared profit-module flags (uid -> bool). Stored in app_collections so
 // admin toggles reach every device without depending on the users table.
