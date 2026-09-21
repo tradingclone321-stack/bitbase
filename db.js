@@ -8,7 +8,7 @@
 var DB = {};
 DB.ready = false;
 DB.client = null;
-DB.VERSION = '2026-08-18-pushfix';
+DB.VERSION = '2026-09-22-user-registration-fix';
 DB._lastPullTime = 0;
 DB._lastSyncError = '';
 
@@ -30,6 +30,93 @@ DB.get = function (key) { try { return JSON.parse(localStorage.getItem(key) || '
 DB.set = function (key, val) { localStorage.setItem(key, JSON.stringify(val)); };
 DB._ok = function (r) { if (r && r.error) console.warn('[DB]', r.error.message || r.error); return r; };
 DB.safeParse = function (s) { try { return JSON.parse(s); } catch (e) { return s; } };
+
+// Supabase normally RESOLVES with { data: null, error } on a failed request.
+// Registration and the live user list must explicitly reject that response.
+DB.userError = function (code, message) {
+  var error = new Error(message);
+  error.code = code;
+  return error;
+};
+DB.requireUserConnection = function () {
+  if (!DB.ready) DB.init();
+  if (!DB.ready || !DB.client || !DB.client.from) {
+    throw DB.userError('DB_NOT_READY', 'Supabase is unavailable. Check the configuration and reload the page.');
+  }
+};
+DB.userRequestTimeout = 15000;
+DB.userRequest = function (query) {
+  return new Promise(function (resolve, reject) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      reject(DB.userError('DB_TIMEOUT', 'The database request timed out. Please try again.'));
+      if (controller) controller.abort();
+    }, DB.userRequestTimeout);
+    if (controller && query.abortSignal) query = query.abortSignal(controller.signal);
+    Promise.resolve(query).then(function (response) {
+      clearTimeout(timer);
+      if (!response) { reject(DB.userError('DB_EMPTY_RESPONSE', 'The database returned no response.')); return; }
+      if (response.error) { reject(response.error); return; }
+      resolve(response);
+    }, function (error) { clearTimeout(timer); reject(error); });
+  });
+};
+DB.describeUserError = function (error) {
+  var code = error && error.code ? String(error.code) : '';
+  if (['42703', '42P01', 'PGRST204', 'PGRST205'].indexOf(code) >= 0) {
+    return 'Database schema is incomplete (' + code + '). Run repair-users.sql in Supabase SQL Editor.';
+  }
+  if (code === '42501' || code === 'PGRST301' || code === 'PGRST303') {
+    return 'Database access was denied (' + code + '). Check the project key and existing access policies.';
+  }
+  return (error && error.message ? error.message : 'Cannot reach the database.') + (code ? ' [' + code + ']' : '');
+};
+
+// INSERT, never UPSERT: a random UID collision must not overwrite an account.
+// Only confirmed server data may become the new browser session.
+DB.registerUser = async function (details) {
+  DB.requireUserConnection();
+  var name = String(details.name || '').trim();
+  var email = String(details.email || '').trim();
+  var password = String(details.password || '');
+  if (!name || !email || password.length < 8) {
+    throw DB.userError('INVALID_REGISTRATION', 'Name, email and a password of at least 8 characters are required.');
+  }
+  var existing = await DB.userRequest(DB.client.from('users').select('uid').eq('email', email).limit(1));
+  if (existing.data && existing.data.length) {
+    throw DB.userError('EMAIL_EXISTS', 'An account with this email already exists. Please sign in.');
+  }
+  for (var attempt = 0; attempt < 8; attempt++) {
+    var row = {
+      uid: Math.floor(100000 + Math.random() * 900000),
+      name: name,
+      email: email,
+      password: password,
+      cash_balance: 0,
+      asset_balances: details.assetBalances || {},
+      is_admin: false,
+      is_deactivated: false,
+      kyc_status: 'none'
+    };
+    try {
+      var saved = await DB.userRequest(DB.client.from('users').insert(row)
+        .select('uid,name,email,cash_balance,asset_balances,kyc_status').single());
+      if (!saved.data || String(saved.data.uid) !== String(row.uid)) {
+        throw DB.userError('DB_UNCONFIRMED', 'The server did not confirm account creation. Try signing in before registering again.');
+      }
+      return saved.data;
+    } catch (error) {
+      if (!error || error.code !== '23505') throw error;
+      // The database constraint arbitrates concurrent registrations. Check
+      // email after a conflict to distinguish duplicate email from UID collision.
+      var duplicate = await DB.userRequest(DB.client.from('users').select('uid').eq('email', email).limit(1));
+      if (duplicate.data && duplicate.data.length) {
+        throw DB.userError('EMAIL_EXISTS', 'An account with this email already exists. Please sign in.');
+      }
+    }
+  }
+  throw DB.userError('UID_EXHAUSTED', 'Could not assign an account number. Please try again.');
+};
 
 // Runs cb as soon as the Supabase client is ready (or immediately if it
 // already is). Used by pages whose first write must reach the server even if
@@ -181,70 +268,73 @@ DB.upsertUser = function (user) {
   });
 };
 
-// Pull the users table into localStorage so admin sees every device's users.
-DB.pullUsers = function () {
-  if (!DB.ready) return Promise.resolve(null);
-  return DB.client.from('users').select('*').order('created_at', { ascending: true }).then(function (res) {
-    var rows = (res && res.data) ? res.data : [];
+// Cached data is only a fallback; never report it as a successful live read.
+DB.cachedUsers = function () {
+  var list = DB.get('bb_admin_users');
+  return Array.isArray(list) ? list : [];
+};
+DB.USER_LIST_COLUMNS = 'uid,name,email,cash_balance,asset_balances,kyc_status,is_admin,is_deactivated,profit_module,created_at';
+DB._usersFetchPromise = null;
+DB._lastUsersError = '';
+DB._readUserRows = async function () {
+  DB.requireUserConnection();
+  var rows = [];
+  var offset = 0;
+  var pageSize = 250;
+  while (true) {
+    var response = await DB.userRequest(DB.client.from('users')
+      .select(DB.USER_LIST_COLUMNS, { count: 'exact' })
+      .order('created_at', { ascending: false }).order('uid', { ascending: false })
+      .range(offset, offset + pageSize - 1));
+    if (!Array.isArray(response.data)) {
+      throw DB.userError('DB_INVALID_RESPONSE', 'The database did not return a user list.');
+    }
+    var page = response.data;
+    rows = rows.concat(page);
+    offset += page.length;
+    if (!page.length || (typeof response.count === 'number' ? offset >= response.count : page.length < pageSize)) break;
+  }
+  return rows;
+};
+DB.fetchUsersLive = function () {
+  if (DB._usersFetchPromise) return DB._usersFetchPromise;
+  DB._usersFetchPromise = DB._readUserRows().then(function (rows) {
     var list = [];
     var adminList = [];
-    var deact = [];
+    var deactivated = [];
+    var seen = Object.create(null);
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       var uid = String(r.uid);
-      list.push({ uid: uid, name: r.name || 'User', email: r.email || '', cashBalance: parseFloat(r.cash_balance) || 0, assetBalances: r.asset_balances || {}, kycStatus: r.kyc_status || 'none' });
-      if (r.is_admin && adminList.indexOf(uid) < 0) adminList.push(uid);
-      if (r.is_deactivated && deact.indexOf(uid) < 0) deact.push(uid);
-      localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
+      if (seen[uid]) continue;
+      seen[uid] = true;
+      list.push({ uid: uid, name: r.name || 'User', email: r.email || '',
+        cashBalance: parseFloat(r.cash_balance) || 0, assetBalances: r.asset_balances || {},
+        kycStatus: r.kyc_status || 'none', createdAt: r.created_at });
+      if (r.is_admin) adminList.push(uid);
+      if (r.is_deactivated) deactivated.push(uid);
     }
-    // Write server data directly — no local merge.
-    // The merge previously resurrected deleted users: device A deletes a user
-    // from Supabase, but localStorage still has them; next pull re-inserts
-    // them because they're "not in server yet". Server is the source of truth.
-    DB.set('bb_admin_users', list);
-    DB.set('bb_admin_access_list', adminList);
-    DB.set('bb_deactivated_accounts', deact);
-    return res;
-  }, function (e) {
-    console.warn('[DB] pullUsers failed', e);
-    // On failure, at least keep local users
-    return null;
-  });
-};
-
-// Cached copy of the users list (from the last successful pull).
-DB.cachedUsers = function () {
-  var list = [];
-  try { list = JSON.parse(localStorage.getItem('bb_admin_users') || '[]'); } catch (e) { list = []; }
-  if (!Array.isArray(list)) list = [];
-  return list;
-};
-
-// Live read of the central users table, sorted newest-first (created_at DESC)
-// so a brand-new registration appears at the TOP of the admin list instead of
-// hiding at the bottom. Falls back to the cached list when the server (or the
-// Supabase client) is unavailable so the UI never blanks out.
-DB.fetchUsersLive = function () {
-  if (!DB.ready || !DB.client || !DB.client.from) return Promise.resolve(DB.cachedUsers());
-  return DB.client.from('users').select('*').order('created_at', { ascending: false }).then(function (res) {
-    var rows = (res && res.data) ? res.data : [];
-    var list = [];
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      list.push({
-        uid: String(r.uid),
-        name: r.name || 'User',
-        email: r.email || '',
-        cashBalance: parseFloat(r.cash_balance) || 0,
-        assetBalances: r.asset_balances || {},
-        kycStatus: r.kyc_status || 'none'
-      });
-    }
+    // Commit the cache only after EVERY page succeeds. A denied or interrupted
+    // read must not turn a known user list into an apparently empty database.
+    try {
+      DB.set('bb_admin_users', list);
+      DB.set('bb_admin_access_list', adminList);
+      DB.set('bb_deactivated_accounts', deactivated);
+      rows.forEach(function (r) { localStorage.setItem('bb_profit_module_' + r.uid, r.profit_module ? 'true' : 'false'); });
+    } catch (error) { console.warn('[DB] User cache could not be saved'); }
+    DB._lastUsersError = '';
     return list;
-  }, function (e) {
-    console.warn('[DB] fetchUsersLive failed', e);
-    return DB.cachedUsers();
-  });
+  }).catch(function (error) {
+    DB._lastUsersError = DB.describeUserError(error);
+    throw error;
+  }).finally(function () { DB._usersFetchPromise = null; });
+  return DB._usersFetchPromise;
+};
+// Background callers historically expect this method to resolve on failure.
+// Preserve that contract, but preserve the cache and retain the actual error.
+DB.pullUsers = function () {
+  return DB.fetchUsersLive().then(function (list) { return { data: list, error: null }; },
+    function (error) { return { data: null, error: error }; });
 };
 
 DB.updateUser = function (uid, patch) {

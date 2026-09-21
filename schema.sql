@@ -1,7 +1,8 @@
 -- BitBase - Supabase schema (run in Supabase SQL Editor)
 -- Matches supabase_tables.csv
--- NOTE: For this demo app RLS is disabled so the anon key can read/write. 
--- In production enable RLS and add policies.
+-- Legacy demo schema: RLS is enabled with permissive demo policies.
+-- Use Supabase Auth and restricted policies before handling real accounts.
+-- Existing installations: use repair-users.sql, which preserves permissions.
 
 -- ============================================================
 -- users (central user registry - fixes "admin sees only one user")
@@ -27,8 +28,14 @@ create table if not exists public.users (
   demo_positions jsonb,
   created_at timestamptz not null default now()
 );
-alter table public.users add constraint users_uid_key unique (uid);
-alter table public.users add constraint users_email_key unique (email);
+-- CREATE TABLE IF NOT EXISTS does not add fields to an older table.
+alter table public.users add column if not exists preferences jsonb not null default '{}'::jsonb;
+alter table public.users add column if not exists demo_balance jsonb;
+alter table public.users add column if not exists demo_positions jsonb;
+alter table public.users add column if not exists created_at timestamptz not null default now();
+-- Existing constraints already own these index names, so reruns are harmless.
+create unique index if not exists users_uid_key on public.users (uid);
+create unique index if not exists users_email_key on public.users (email);
 create index if not exists users_uid_idx on public.users (uid);
 create index if not exists users_email_idx on public.users (email);
 
@@ -210,13 +217,33 @@ create table if not exists public.balance_history (
 -- Realtime (WebSocket) - lets admin/users receive chat messages
 -- instantly instead of waiting for the next poll.
 -- ============================================================
-alter publication supabase_realtime add table public.app_collections;
-alter publication supabase_realtime add table public.users;
+do $realtime$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime' and not puballtables) then
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'app_collections') then
+      alter publication supabase_realtime add table public.app_collections;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'users') then
+      alter publication supabase_realtime add table public.users;
+    end if;
+  end if;
+end
+$realtime$;
 
 -- ============================================================
--- RLS (disabled for demo - anon key has full access)
+-- RLS (permissive legacy demo policies; fresh demo installs only)
 -- ============================================================
 alter table public.users enable row level security;
 alter table public.app_collections enable row level security;
-create policy "public access" on public.users for all using (true) with check (true);
-create policy "public access" on public.app_collections for all using (true) with check (true);
+do $policies$
+begin
+  -- Do not overwrite an installation that already has its own policies.
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'users') then
+    create policy "public access" on public.users for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'app_collections') then
+    create policy "public access" on public.app_collections for all using (true) with check (true);
+  end if;
+end
+$policies$;
+notify pgrst, 'reload schema';

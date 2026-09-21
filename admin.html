@@ -10,7 +10,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922v2"></script>
+  <script src="db.js?v=20260922-users-fix3"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -756,7 +756,7 @@ function toggleAdminSidebar(){
 function showAdminPanel(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('adminPanel').style.display='flex';
-  lucide.createIcons();
+  if(window.lucide)lucide.createIcons();
   refreshAll();
 }
 
@@ -767,7 +767,7 @@ function switchTab(tab){
   document.getElementById('tab-'+tab).style.display='block';
   document.querySelector('.nav-item[data-tab="'+tab+'"]').classList.add('active');
   if(window.innerWidth<=767)document.getElementById('adminMain').classList.toggle('support-active',tab==='support');
-  lucide.createIcons();
+  if(window.lucide)lucide.createIcons();
   if(tab!=='support')stopAdminSupportPoll();
   if(tab==='dashboard')refreshDashboard();
   if(tab==='users'){
@@ -790,6 +790,12 @@ function switchTab(tab){
 // ===== DATA HELPERS =====
 function getCashBalance(){try{return parseFloat(localStorage.getItem('bb_cash_balance'))||0;}catch(e){return 0;}}
 function getAllUsers(){
+  // A successful central read, including an empty list, is authoritative.
+  // Do not prepend a stale account from this browser to the server cache.
+  try{
+    var cached=JSON.parse(localStorage.getItem('bb_admin_users')||'null');
+    if(Array.isArray(cached))return cached;
+  }catch(e){}
   var users=[];
   // Get single user from localStorage
   var name=localStorage.getItem('bb_name');
@@ -955,16 +961,20 @@ function refreshDashboard(){
 // the pull->localStorage->render indirection that allowed stale local copies to
 // hide brand-new registrations. Falls back to the cached list if the server or
 // client is unavailable, and always shows a visible live/offline indicator.
-function renderUsers(users){
+function escapeUserText(value){
+  return String(value==null?'':value).replace(/[&<>"']/g,function(char){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
+  });
+}
+function renderUsers(users,live,errorMessage){
   var body=document.getElementById('usersBody');
   var statusEl=document.getElementById('usersSyncText');
   var dot=document.getElementById('usersSyncDot');
-  var live=arguments[1]===true;
-  if(live&&dot)dot.style.background='#16c784';
+  if(dot)dot.style.background=live?'#16c784':'#ef4444';
   if(live&&statusEl)statusEl.textContent=(users.length>0?users.length+' users':'0 users')+' loaded live from server — newest first';
-  if(!live&&statusEl)statusEl.textContent=(users.length>0?users.length+' users':'0 users')+' (offline cache)';
-  if(users.length===0){body.innerHTML='<tr><td colspan="11" class="empty-state">No registered users</td></tr>';return;}
+  if(!live&&statusEl)statusEl.textContent='Could not load live users — '+(errorMessage||'connection unavailable')+' Showing '+users.length+' cached users.';
   var p1=document.getElementById('dashUsers');if(p1)p1.textContent=users.length;
+  if(users.length===0){body.innerHTML='<tr><td colspan="11" class="empty-state">'+(live?'No registered users':'Live user list unavailable. Check the error above, then refresh.')+'</td></tr>';return;}
   var adminList=getAdminAccessList();
   var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
   // Calculate locked amounts from AI Quant + Earn
@@ -1005,8 +1015,8 @@ function renderUsers(users){
     var toggleBtn=isDeactivated?'<button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="reactivateUser(\''+u.uid+'\')">Reactivate</button>':'<button class="btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;" onclick="deactivateUser(\''+u.uid+'\')">Deactivate</button>';
     html+='<tr style="'+(isDeactivated?'opacity:0.5;':'')+'">'+
       '<td style="font-family:monospace;font-weight:600;color:#f7931a;">'+u.uid+'</td>'+
-      '<td>'+u.name+'</td>'+
-      '<td>'+u.email+'</td>'+
+      '<td>'+escapeUserText(u.name)+'</td>'+
+      '<td>'+escapeUserText(u.email)+'</td>'+
       '<td style="font-family:monospace;">'+fmtUSD(u.cashBalance)+'</td>'+
       '<td style="font-family:monospace;color:'+(lockedAmt>0?'#f59e0b':'rgba(255,255,255,0.3)')+';">'+(lockedAmt>0?fmtUSD(lockedAmt):'<span style="font-size:10px;">—</span>')+'</td>'+
       '<td style="font-family:monospace;">'+fmtUSD(totalAssets)+'</td>'+
@@ -1025,20 +1035,16 @@ function renderUsers(users){
 function refreshUsers(){
   var dot=document.getElementById('usersSyncDot');
   var statusEl=document.getElementById('usersSyncText');
-  if(typeof DB==='undefined'||!DB.ready||!DB.fetchUsersLive){
-    if(dot)dot.style.background='#ef4444';
-    if(statusEl)statusEl.textContent='Supabase offline — showing cached list';
-    renderUsers(getAllUsers(),false);
-    return;
+  if(typeof DB==='undefined'||!DB.fetchUsersLive){
+    renderUsers(getAllUsers(),false,'Database scripts did not load. Check db.js and supabase-config.js.');
+    return Promise.resolve();
   }
   if(dot)dot.style.background='#f59e0b';
-  DB.fetchUsersLive().then(function(users){
+  if(statusEl)statusEl.textContent='Loading live user list…';
+  return DB.fetchUsersLive().then(function(users){
     renderUsers(users,true);
-    // Keep the cached list in sync so dashboard/balance tabs agree.
-    try{localStorage.setItem('bb_admin_users',JSON.stringify(users));}catch(e){}
-  },function(){
-    if(dot)dot.style.background='#ef4444';
-    renderUsers(getAllUsers(),false);
+  },function(error){
+    renderUsers(getAllUsers(),false,DB.describeUserError(error));
   });
 }
 function manualRefreshUsers(){refreshUsers();}
@@ -1117,7 +1123,7 @@ function openUserEdit(uid){
   var isUserAdmin=adminAccessList.indexOf(uid)>=0;
   setAdminAccessUI(isUserAdmin);
   document.getElementById('userEditModal').classList.add('open');
-  lucide.createIcons();
+  if(window.lucide)lucide.createIcons();
 }
 function closeUserEditModal(){document.getElementById('userEditModal').classList.remove('open');}
 function deactivateUser(uid){
@@ -1358,7 +1364,7 @@ function openTicket(id){
   startAdminSupportPoll();
   refreshTickets();
   document.getElementById('chatPanel').classList.add('open');
-  lucide.createIcons();
+  if(window.lucide)lucide.createIcons();
 }
 function closeChatFullPage(){
   document.getElementById('chatEmpty').style.display='none';
@@ -1468,7 +1474,7 @@ if(typeof DB!=='undefined'&&DB.ready){
   // Supabase Realtime: listen for row changes on app_collections for
   // cross-device instant updates (BroadcastChannel only covers same browser).
   try{
-    DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:['INSERT','UPDATE'],schema:'public',table:'app_collections'},function(payload){
+    DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:'*',schema:'public',table:'app_collections'},function(payload){
       var key=payload&&payload.new&&payload.new.key;
       if(!key)return;
       if(key==='bb_support_tickets'&&_supportBcApplied){_supportBcApplied=false;refreshSupportLive();return;}
@@ -1489,16 +1495,16 @@ if(typeof DB!=='undefined'&&DB.ready){
     // Also watch the users table so balance / payout changes from the server
     // (settlement cron, other device) appear instantly instead of waiting for
     // the next poll tick.
-    .on('postgres_changes',{event:['INSERT','UPDATE','DELETE'],schema:'public',table:'users'},function(payload){
+    .on('postgres_changes',{event:'*',schema:'public',table:'users'},function(payload){
       if(payload&&(payload.new||payload.old)){
         // Refresh the users list so new registrations (INSERT) and updated
         // rows (UPDATE) appear immediately instead of waiting for the poll.
         // refreshUsers() queries the live users table directly, so this renders
         // the freshly-registered user without any localStorage round-trip.
-        refreshUsers();
-        // Refresh balance display if the admin is on the balances tab.
-        var active=document.querySelector('.nav-item.active');
-        if(active&&active.getAttribute('data-tab')==='balances')refreshBalances();
+        refreshUsers().then(function(){
+          var active=document.querySelector('.nav-item.active');
+          if(active&&active.getAttribute('data-tab')==='balances')refreshBalances();
+        });
       }
     }).subscribe();
   }catch(e){}
@@ -1931,7 +1937,7 @@ function refreshLoans(){
     '</tr>';
   }
   body.innerHTML=html;
-  lucide.createIcons();
+  if(window.lucide)lucide.createIcons();
 }
 function viewLoanProof(id){
   var loans=getAllLoans();
@@ -3039,7 +3045,7 @@ if(isLoggedIn()){
     syncFromServer();
   }
 }else{
-  lucide.createIcons();
+  if(window.lucide)lucide.createIcons();
   if(typeof DB!=='undefined'&&DB.ready){DB.getAdminPassword();}
   if(currentUserHasAdminAccess()){
     var note=document.getElementById('adminAccessNote');
@@ -3075,6 +3081,9 @@ function _adminRefreshTab(){
 }
 setInterval(function(){
   if(document.hidden) return;
+  if(!isLoggedIn()) return;
+  // User visibility must not wait for unrelated collection requests to finish.
+  refreshUsers();
   if(typeof DB==='undefined'||!DB.ready) return;
   // Pull EVERYTHING every tick so both devices always have the same data.
   DB.pullAll().then(function(){
@@ -3089,6 +3098,7 @@ setInterval(function(){
 // is skipped while the tab is hidden, so new registrations would otherwise
 // wait up to a minute to appear.
 document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&isLoggedIn())refreshUsers();
   if(!document.hidden&&typeof DB!=='undefined'&&DB.ready){
     DB.pullAll().then(function(){_adminRefreshTab();},function(){_adminRefreshTab();});
   }
@@ -3101,6 +3111,7 @@ setInterval(function(){
 
 function refreshAll(){
   refreshDashboard();
+  refreshUsers();
 }
 </script>
 </body>

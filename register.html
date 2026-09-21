@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=20260922v2"></script>
-    <script src="db.js?v=20260922v2"></script>
+    <script src="db.js?v=20260922-users-fix3"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -183,6 +183,7 @@
                 <span class="text-sm text-gray-400">I agree to the <a href="#" class="text-accent hover:underline">Terms of Service</a> and <a href="#" class="text-accent hover:underline">Privacy Policy</a></span>
             </label>
             <p id="termsError" class="text-sm hidden" style="color: #ea3943;">You must agree to the terms</p>
+            <div id="submitError" role="alert" class="hidden rounded-xl p-4 text-sm" style="background:rgba(234,57,67,0.1);border:1px solid rgba(234,57,67,0.2);color:#ea3943;"></div>
             <div id="submitSuccess" class="hidden rounded-xl p-4 text-sm text-center font-medium" style="background: rgba(22,199,132,0.1); border: 1px solid rgba(22,199,132,0.2); color: #16c784;">
                 Account created successfully! Redirecting...
             </div>
@@ -200,7 +201,7 @@
     </div>
 
     <script>
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
 
         function togglePassword(id, btn) {
             const input = document.getElementById(id);
@@ -212,7 +213,7 @@
                 input.type = 'password';
                 icon.setAttribute('data-lucide', 'eye');
             }
-            lucide.createIcons();
+            if (window.lucide) lucide.createIcons();
         }
 
         function showError(id) {
@@ -223,12 +224,13 @@
         }
 
         const form = document.getElementById('registerForm');
-        form.addEventListener('submit', function(e) {
+        form.addEventListener('submit', async function(e) {
             e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn.disabled) return;
             let valid = true;
-
-            // Hide all errors
-            ['nameError','emailError','passError','confirmError','countryError','termsError'].forEach(hideError);
+            ['nameError','emailError','passError','confirmError','countryError','termsError','submitError','submitSuccess'].forEach(hideError);
+            document.getElementById('emailError').textContent = 'Please enter a valid email address';
 
             const name = document.getElementById('fullName').value.trim();
             const email = document.getElementById('email').value.trim();
@@ -236,138 +238,77 @@
             const confirm = document.getElementById('confirm-password').value.trim();
             const country = document.getElementById('country').value;
             const terms = document.getElementById('terms').checked;
-
             if (!name) { showError('nameError'); valid = false; }
             if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('emailError'); valid = false; }
             if (!pass || pass.length < 8) { showError('passError'); valid = false; }
             if (pass !== confirm) { showError('confirmError'); valid = false; }
             if (!country) { showError('countryError'); valid = false; }
             if (!terms) { showError('termsError'); valid = false; }
-
             if (!valid) return;
 
-            // Check for existing account with same email
-            var existingEmail = localStorage.getItem('bb_email');
-            if (existingEmail && existingEmail === email) {
-                showError('emailError');
-                document.getElementById('emailError').textContent = 'An account with this email already exists. Please sign in.';
-                return;
-            }
-            try {
-                var adminUsers = JSON.parse(localStorage.getItem('bb_admin_users') || '[]');
-                for (var i = 0; i < adminUsers.length; i++) {
-                    if (adminUsers[i].email === email) {
-                        showError('emailError');
-                        document.getElementById('emailError').textContent = 'An account with this email already exists. Please sign in.';
-                        return;
-                    }
-                }
-            } catch(e) {}
-
-            // Show loading
             const btnText = document.getElementById('btnText');
             const btnSpinner = document.getElementById('btnSpinner');
             btnText.classList.add('hidden');
             btnSpinner.classList.remove('hidden');
-            document.getElementById('submitBtn').disabled = true;
-
-            // Pick a 6-digit UID unique against BOTH the local admin cache and
-            // the live Supabase users table. uid is the primary key — writing a
-            // duplicate would silently OVERWRITE the existing user's account.
-            function pickUniqueUid(attempt){
-              attempt=attempt||0;
-              var uid=String(Math.floor(100000+Math.random()*900000));
-              var taken=false;
-              try{
-                var au=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-                for(var i=0;i<au.length;i++){if(String(au[i].uid)===uid){taken=true;break;}}
-              }catch(e){}
-              if(taken){
-                if(attempt<6)return pickUniqueUid(attempt+1);
-                return Promise.resolve(uid);
-              }
-              if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.from){return Promise.resolve(uid);}
-              return DB.client.from('users').select('uid').eq('uid',Number(uid)).limit(1).then(function(res){
-                var rows=(res&&res.data)?res.data:[];
-                if(rows.length>0&&attempt<6)return pickUniqueUid(attempt+1);
-                return uid;
-              },function(){return uid;});
-            }
-
-            // Simulate API call
-            setTimeout(function() {
+            submitBtn.disabled = true;
+            let confirmed = false;
+            try {
+                if (typeof DB === 'undefined' || !DB.registerUser) {
+                    throw { code: 'DB_NOT_READY' };
+                }
+                const assets = {};
+                ['BTC','ETH','SOL','BNB','ADA','DOGE','XRP','DOT','USDT'].forEach(function(coin) {
+                    assets[coin] = { balance: 0, qty: 0 };
+                });
+                const saved = await DB.registerUser({ name: name, email: email, password: pass, assetBalances: assets });
+                confirmed = true;
+                const uid = String(saved.uid);
+                // Never inherit another account's settings, KYC, or demo data.
+                ['bb_preferences','bb_demo_trades_bal','bb_demo_trades_pos','bb_kyc_status'].forEach(function(key) {
+                    localStorage.removeItem(key);
+                });
+                localStorage.setItem('bb_uid', uid);
+                localStorage.setItem('bb_name', saved.name);
+                localStorage.setItem('bb_email', saved.email);
+                localStorage.setItem('bb_password', pass);
+                localStorage.setItem('bb_login_time', String(Date.now()));
+                localStorage.setItem('bb_registered_at', String(Date.now()));
+                localStorage.setItem('bb_cash_balance', String(saved.cash_balance || 0));
+                localStorage.setItem('bb_asset_balances', JSON.stringify(saved.asset_balances || assets));
+                localStorage.setItem('bb_kyc_status', saved.kyc_status || 'none');
+                const users = DB.cachedUsers().filter(function(user) { return String(user.uid) !== uid; });
+                users.unshift({ uid: uid, name: saved.name, email: saved.email, cashBalance: 0,
+                    assetBalances: saved.asset_balances || assets, kycStatus: saved.kyc_status || 'none' });
+                localStorage.setItem('bb_admin_users', JSON.stringify(users));
+                ['bb_admin_access_list','bb_deactivated_accounts'].forEach(function(key) {
+                    const list = DB.get(key);
+                    if (Array.isArray(list)) DB.set(key, list.filter(function(value) { return String(value) !== uid; }));
+                });
+                showError('submitSuccess');
+                setTimeout(function() { window.location.href = 'dashboard.html'; }, 700);
+            } catch (error) {
+                let message;
+                if (confirmed) {
+                    message = 'Your account was created, but this browser could not save your session. Enable browser storage, then sign in.';
+                } else if (error && error.code === 'EMAIL_EXISTS') {
+                    document.getElementById('emailError').textContent = error.message;
+                    showError('emailError');
+                    message = 'Please sign in with your existing account.';
+                } else if (error && error.code === 'DB_NOT_READY') {
+                    message = 'Connection unavailable. Reload this page and try again.';
+                } else if (error && (error.code === 'DB_TIMEOUT' || error.code === 'DB_UNCONFIRMED')) {
+                    message = 'We could not confirm your registration. Try signing in before submitting again.';
+                } else {
+                    message = 'Could not save your account. Please try again or contact support.';
+                    if (error && error.code) message += ' Reference: ' + error.code;
+                }
+                document.getElementById('submitError').textContent = message;
+                showError('submitError');
+                submitBtn.disabled = false;
+            } finally {
                 btnText.classList.remove('hidden');
                 btnSpinner.classList.add('hidden');
-                document.getElementById('submitBtn').disabled = false;
-                document.getElementById('submitSuccess').classList.remove('hidden');
-
-                // Generate UID on account creation (6 digits, assigned once).
-                // The old code picked a raw random UID and never checked for a
-                // collision — a duplicate would UPSERT-overwrite the existing
-                // account on Supabase.
-                pickUniqueUid().then(function(newUID){
-                // New accounts start completely clean — clear any stale local
-                // deactivation flag left behind by an earlier profile.
-                try{
-                  var staleDeact=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
-                  var sdIdx=staleDeact.indexOf(newUID);
-                  if(sdIdx>=0){staleDeact.splice(sdIdx,1);localStorage.setItem('bb_deactivated_accounts',JSON.stringify(staleDeact));}
-                }catch(e){}
-                localStorage.setItem('bb_uid', newUID);
-                localStorage.setItem('bb_name', document.getElementById('fullName').value.trim());
-                localStorage.setItem('bb_email', document.getElementById('email').value.trim());
-                  localStorage.setItem('bb_password', pass);
-                localStorage.setItem('bb_login_time', Date.now());
-                // Registered-at timestamp lets the deleted-account watcher tell
-                // a fresh signup (propagation grace) from a genuinely removed user.
-                localStorage.setItem('bb_registered_at', Date.now());
-                localStorage.setItem('bb_cash_balance', '0');
-                localStorage.setItem('bb_asset_balances', JSON.stringify({BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}));
-                // Save to central admin user list so admin panel can see all registered users
-                try{
-                  var newUser={uid:newUID,name:document.getElementById('fullName').value.trim(),email:document.getElementById('email').value.trim(),password:pass,cashBalance:0,assetBalances:{BTC:{balance:0,qty:0},ETH:{balance:0,qty:0},SOL:{balance:0,qty:0},BNB:{balance:0,qty:0},ADA:{balance:0,qty:0},DOGE:{balance:0,qty:0},XRP:{balance:0,qty:0},DOT:{balance:0,qty:0},USDT:{balance:0,qty:0}}};
-                  var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-                  var found=false;
-                  for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===newUID){adminUsers[i]=newUser;found=true;break;}}
-                  if(!found)adminUsers.push(newUser);
-                  localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
-                  // Push new user to central Supabase users table — wait for it.
-                  // Registered users MUST appear in the admin panel on every
-                  // device, so never skip the server push just because Supabase
-                  // hasn't initialised yet (slow CDN): retry until it is ready.
-                  var upsertDone=false;
-                  var _pushRetried=false;
-                  function _pushNewUser(){
-                    if(typeof DB==='undefined'||!DB.ready)return false;
-                    if(_pushRetried)return true;
-                    _pushRetried=true;
-                    DB.upsertUser(newUser).then(function(){upsertDone=true;},function(){upsertDone=true;});
-                    return true;
-                  }
-                  if(!_pushNewUser()){
-                    if(typeof DB!=='undefined'&&DB.whenReady){
-                      DB.whenReady(function(){
-                        if(!_pushRetried)setTimeout(_pushNewUser,0);
-                      });
-                    }
-                  }
-                }catch(e){}
-
-                // Go to the dashboard once the server push has settled; the
-                // background retry (DB.whenReady) keeps pushing meanwhile, and
-                // dashboard.html will sync the account anyway.
-                var _navTimer=null;
-                function _goDash(){
-                  if(_navTimer)clearTimeout(_navTimer);
-                  _navTimer=null;
-                  window.location.href='dashboard.html';
-                }
-                var _pushProbe=setInterval(function(){
-                  if(upsertDone){clearInterval(_pushProbe);_goDash();}
-                },100);
-                setTimeout(function(){if(_navTimer===null){_goDash();}},4000);
-                });
-            }, 2000);
+            }
         });
 
         // Clear errors on input
