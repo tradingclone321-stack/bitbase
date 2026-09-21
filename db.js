@@ -83,16 +83,26 @@ DB.usersToRows = function (list) {
 // (those are admin-controlled) and must never re-CREATE a row the admin
 // deleted — an UPDATE on a missing row is a no-op, so a deleted account stays
 // deleted and a deactivation on the server is not overwritten by this device.
-DB.syncLocalUser = function () {
+// force=true pushes cash_balance / asset_balances even when the device does not
+// think it just modified them (used by startLocalPolling's push-first branch;
+// the poll cleared _localDirty beforehand, so the flag alone is no longer set).
+DB.syncLocalUser = function (force) {
   if (!DB.ready) return Promise.resolve();
   var uid = localStorage.getItem('bb_uid');
   if (!uid) return Promise.resolve();
+  var pushBalance = force === true || !!DB._localDirty;
   var patch = {
     name: localStorage.getItem('bb_name') || 'User',
-    email: localStorage.getItem('bb_email') || '',
-    cash_balance: parseFloat(localStorage.getItem('bb_cash_balance')) || 0,
-    asset_balances: DB.get('bb_asset_balances') || {}
+    email: localStorage.getItem('bb_email') || ''
   };
+  // Balance/asset fields only travel with a balance push. A bare
+  // sanitize-style sync (settings prefs save, trade clean poll, login upsert)
+  // must NOT re-assert the device's possibly-stale absolute cash_balance, or
+  // it would overwrite an admin's server-side adjustment ("balance reverts").
+  if (pushBalance) {
+    patch.cash_balance = parseFloat(localStorage.getItem('bb_cash_balance')) || 0;
+    patch.asset_balances = DB.get('bb_asset_balances') || {};
+  }
   var demoBal = DB.get('bb_demo_trades_bal');
   if (demoBal != null && typeof demoBal === 'object') patch.demo_balance = demoBal;
   var demoPos = DB.get('bb_demo_trades_pos');
@@ -130,7 +140,30 @@ DB.upsertUser = function (user) {
   if (demoBal != null && typeof demoBal === 'object') row.demo_balance = demoBal;
   var demoPos = DB.get('bb_demo_trades_pos');
   if (demoPos != null && Array.isArray(demoPos)) row.demo_positions = demoPos;
-  return DB.client.from('users').upsert(row, { onConflict: 'uid' }).then(DB._ok, DB._ok);
+  var uid = row.uid;
+  if (!uid) return Promise.resolve();
+  // If the server already has this user, balance is SERVER-authoritative
+  // (admin adjustments, AI-quant credits). Only push this device's absolute
+  // cash_balance / asset_balances when it just changed them locally
+  // (DB._localDirty) or the server row does not exist yet (first signup).
+  // Otherwise the login / settings upsert would push the device's stale local
+  // balance straight over the admin's adjustment — the "balance reverts to the
+  // old value when the user opens their account" bug.
+  var dirty = !!DB._localDirty;
+  DB._localDirty = false;
+  return DB.client.from('users').select('uid').eq('uid', uid).limit(1).then(function (res) {
+    var exists = res && res.data && res.data.length > 0;
+    if (exists && !dirty) {
+      delete row.cash_balance;
+      delete row.asset_balances;
+    }
+    return DB.client.from('users').upsert(row, { onConflict: 'uid' }).then(DB._ok, DB._ok);
+  }, function () {
+    // Server unreachable: never clobber a possibly-existing balance.
+    delete row.cash_balance;
+    delete row.asset_balances;
+    return DB.client.from('users').upsert(row, { onConflict: 'uid' }).then(DB._ok, DB._ok);
+  });
 };
 
 // Pull the users table into localStorage so admin sees every device's users.
@@ -241,20 +274,34 @@ DB.pullLocalUser = function () {
 DB.startLocalPolling = function (intervalMs) {
   intervalMs = intervalMs || 10000;
   if (!DB._localPollTimer) {
+    // Two sources write cash_balance and must not fight:
+    //  * Real trades credit LOCALLY inside DB.settleRealTrades() before their
+    //    push is even queued, so local is the newer value and must be pushed
+    //    (pushed-tagged) before any pull reads the still-stale server row.
+    //  * AI Quants / admin credits land on the SERVER (settle_ai_quants RPC,
+    //    credit_user) while local is stale, so pulling first is mandatory or
+    //    the poll would push the stale absolute value over the fresh credit.
+    // Default: pull-then-push (protects server-authority credits on every page).
+    // When local was just dirtied locally (trade settled), push-then-pull so the
+    // real-trade credit survives. _skipSyncUntil suppresses a push during an
+    // active RPC+pull cycle (settleOrders) while still pulling on that tick.
+    var sync = function (force) {
+      if (DB._skipSyncUntil && Date.now() < DB._skipSyncUntil) return Promise.resolve();
+      return DB.syncLocalUser(force);
+    };
+    var pull = function () { return DB.pullLocalUser(); };
     var poll = function () {
       try { DB.settleRealTrades(); } catch (e) {}
-      // Push local state to the server BEFORE pulling it back. pullLocalUser
-      // overwrites bb_cash_balance with the server value unconditionally, so
-      // without this a freshly-credited trade (profit/capital) would be
-      // reverted by a stale server row mid-trade or right after settlement.
-      var thenPull = function () {
-        return DB.syncLocalUser().then(function () {
-          return DB.pullLocalUser();
-        }, function () {
-          return DB.pullLocalUser();
-        });
-      };
-      thenPull().then(function (changed) {
+      var localDirty = !!DB._localDirty;
+      DB._localDirty = false;
+      // pullLocalUser→sync is the default (server balances are authoritative
+      // for admin/AI-quant credits). When this device just wrote a balance
+      // locally (trade settled, coin swapped) push it first with force=true so
+      // the local change survives, then pull. During an RPC+pull cycle
+      // (settleOrders) suppress the push on the first tick while still pulling.
+      if (DB._skipSyncUntil && Date.now() < DB._skipSyncUntil) { pull(); return; }
+      var run = localDirty ? sync(true).then(pull, pull) : pull().then(sync.bind(null, false), sync.bind(null, false));
+      run.then(function (changed) {
         if (changed && window.location && window.location.reload) window.location.reload();
         DB.pullProfitModules();
       }, function () {
@@ -321,6 +368,7 @@ DB.settleRealTrades = function () {
       localStorage.setItem('bb_cash_balance', balance);
       localStorage.setItem('bb_trade_positions', JSON.stringify(positions));
       localStorage.setItem('bb_trades_history', JSON.stringify(history));
+      DB._localDirty = true;
       DB.pushCollection('bb_trades_history');
       DB.syncLocalUser();
     }

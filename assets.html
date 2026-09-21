@@ -657,7 +657,7 @@ function saveCoinBalances(){
   var data={};
   for(var k in COINS){data[k]={balance:COINS[k].balance,qty:COINS[k].qty};}
   localStorage.setItem('bb_asset_balances',JSON.stringify(data));
-  if(typeof DB!=='undefined'){DB.syncLocalUser();}
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
 }
 function loadCoinBalances(){
   var data=null;

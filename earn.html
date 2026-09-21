@@ -482,7 +482,7 @@ function deductBalance(coin,amount){
     if(data[coin]){data[coin].balance=Math.max(0,data[coin].balance-amount);data[coin].qty=Math.max(0,data[coin].qty-amount);}
   }
   localStorage.setItem('bb_asset_balances',JSON.stringify(data));
-  if(typeof DB!=='undefined')DB.syncLocalUser();
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
 }
 function returnBalance(coin,amount){
   var data={};
@@ -498,7 +498,7 @@ function returnBalance(coin,amount){
     else{data[coin]={balance:amount,qty:amount};}
   }
   localStorage.setItem('bb_asset_balances',JSON.stringify(data));
-  if(typeof DB!=='undefined')DB.syncLocalUser();
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
 }
 // ===== FLEXIBLE SAVINGS =====
 var FLEX_RATES={USDT:{apy:3.50,min:10},BTC:{apy:1.50,min:0.001},ETH:{apy:2.00,min:0.01},SOL:{apy:2.80,min:0.1}};

@@ -841,7 +841,7 @@ function placeTrade(dir){
   const profit=amt*dur.profitPct/100;
   balance-=amt;
   localStorage.setItem('bb_cash_balance',balance);
-  if(typeof DB!=='undefined'){DB.syncLocalUser();}
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
   const id='T-'+(++tradeIdCounter);
   localStorage.setItem('bb_trade_id_counter', tradeIdCounter);
@@ -891,7 +891,7 @@ function closePos(id){
   const refund=pos.amt*0.5;
   balance+=refund;
   localStorage.setItem('bb_cash_balance',balance);
-  if(typeof DB!=='undefined'){DB.syncLocalUser();}
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
   saveTradeRecord({id:id,pair:pos.pair,side:pos.dir==='UP'?'Buy':'Sell',amount:pos.amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:'Closed',profit:pos.profit,refund:refund,source:'real',uid:localStorage.getItem('bb_uid')||''});
   savePositions();
@@ -960,6 +960,11 @@ function localSettleExpiredFallback(){
       localStorage.setItem('bb_cash_balance',balance);
       localStorage.setItem('bb_trade_pnl',pnl.toString());
       localStorage.setItem('bb_trade_positions',JSON.stringify(arr));
+      // This page settles real trades every second, before the shared
+      // startLocalPolling tick (which skips already-settled positions). Mark
+      // the local balance change so the next sync/poll pushes the credit
+      // instead of a stale pull overwriting the freshly-added profit.
+      if(typeof DB!=='undefined'&&DB._localDirty!==undefined){DB._localDirty=true;}
     }
   }catch(e){}
   return settled;
@@ -1035,7 +1040,7 @@ function submitQuickSell(){
   saveCoinBalances();
   balance+=received;
   localStorage.setItem('bb_cash_balance',balance);
-  if(typeof DB!=='undefined'){DB.syncLocalUser();}
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
   document.getElementById('balance').textContent=fmtD(balance).replace('$','');
   closeQuickSellModal();
   showToast('Sold '+amt+' '+coin+' for $'+received.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USDT','var(--green)');

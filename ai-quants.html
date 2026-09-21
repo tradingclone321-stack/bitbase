@@ -360,7 +360,10 @@ function addUsdt(amount,deduct){
     data.USDT.qty=data.USDT.balance;
     localStorage.setItem('bb_asset_balances',JSON.stringify(data));
   }catch(e){}
-  if(typeof DB!=='undefined')DB.syncLocalUser();
+  if(typeof DB!=='undefined'){
+    DB._localDirty = true;
+    DB.syncLocalUser();
+  }
 }
 
 // ===== RENDER PLANS =====
@@ -511,6 +514,13 @@ function settleOrders(){
   if(_lastSettleCall && Date.now()-_lastSettleCall<5000)return;
   _lastSettleCall=Date.now();
   if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.rpc)return;
+  // The RPC credits the user's cash_balance on the SERVER. Until we pull it,
+  // our local bb_cash_balance is stale — and the shared startLocalPolling
+  // (sync-then-pull) would push that stale absolute value straight over the
+  // fresh credit, making it disappear permanently. Suppress the poll's push
+  // for the duration of this RPC+pull cycle so the credited balance arrives
+  // locally first. We then re-sync so the server copy is untouched.
+  DB._skipSyncUntil = Date.now() + 7000;
   DB.client.rpc('settle_ai_quants',{}).then(function(){
     // Refresh the order list + the user's balance from the server.
     DB.pullCollection('bb_ai_quants').then(function(){
@@ -520,6 +530,9 @@ function settleOrders(){
     DB.pullLocalUser().then(function(){
       renderOrders();
       try{refreshOpenOrderDetails();}catch(e){}
+      // After pulling the server's fresh (credited) balance, mirror it back so
+      // a later poll push carries the correct amount rather than the stale one.
+      DB.syncLocalUser();
     });
   },function(){
     // RPC unavailable — nothing can settle client-side by design.
