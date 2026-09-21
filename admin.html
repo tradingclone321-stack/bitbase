@@ -766,7 +766,12 @@ function switchTab(tab){
   lucide.createIcons();
   if(tab!=='support')stopAdminSupportPoll();
   if(tab==='dashboard')refreshDashboard();
-  if(tab==='users')refreshUsers();
+  if(tab==='users'){
+    // Fresh pull so a newly-registered user shows the moment this tab opens,
+    // not just on the next 5s poll tick.
+    if(typeof DB!=='undefined'&&DB.ready&&DB.pullUsers){DB.pullUsers().then(function(){refreshUsers();});}
+    else refreshUsers();
+  }
   if(tab==='support')refreshTickets();
   if(tab==='trades')refreshTrades();
   if(tab==='withdrawals')refreshWithdrawals();

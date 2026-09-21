@@ -31,6 +31,21 @@ DB.set = function (key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 DB._ok = function (r) { if (r && r.error) console.warn('[DB]', r.error.message || r.error); return r; };
 DB.safeParse = function (s) { try { return JSON.parse(s); } catch (e) { return s; } };
 
+// Runs cb as soon as the Supabase client is ready (or immediately if it
+// already is). Used by pages whose first write must reach the server even if
+// the SDK CDN is slow to load — e.g. a brand-new registration. DB.init() is
+// called synchronously at db.js load, so this only ever waits a re-poll tick.
+DB.whenReady = function (cb) {
+  if (!cb) return;
+  if (DB.ready) { cb(); return; }
+  var tries = 0;
+  var t = setInterval(function () {
+    tries++;
+    if (DB.ready) { clearInterval(t); cb(); return; }
+    if (tries > 60) clearInterval(t); // 30s cap, then give up
+  }, 500);
+};
+
 // ---------------- USERS ----------------
 // Builds the full user list from localStorage (admin_users + current device).
 DB.collectUsers = function () {

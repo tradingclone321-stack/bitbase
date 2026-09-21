@@ -331,20 +331,41 @@
                   for(var i=0;i<adminUsers.length;i++){if(adminUsers[i].uid===newUID){adminUsers[i]=newUser;found=true;break;}}
                   if(!found)adminUsers.push(newUser);
                   localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
-                  // Push new user to central Supabase users table — wait for it
+                  // Push new user to central Supabase users table — wait for it.
+                  // Registered users MUST appear in the admin panel on every
+                  // device, so never skip the server push just because Supabase
+                  // hasn't initialised yet (slow CDN): retry until it is ready.
                   var upsertDone=false;
-                  if(typeof DB!=='undefined'&&DB.ready){
-                    DB.upsertUser(newUser).then(function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);},function(){upsertDone=true;setTimeout(function(){window.location.href='dashboard.html';},500);});
-                  }else{
-                    upsertDone=true;
+                  var _pushRetried=false;
+                  function _pushNewUser(){
+                    if(typeof DB==='undefined'||!DB.ready)return false;
+                    if(_pushRetried)return true;
+                    _pushRetried=true;
+                    DB.upsertUser(newUser).then(function(){upsertDone=true;},function(){upsertDone=true;});
+                    return true;
+                  }
+                  if(!_pushNewUser()){
+                    if(typeof DB!=='undefined'&&DB.whenReady){
+                      DB.whenReady(function(){
+                        if(!_pushRetried)setTimeout(_pushNewUser,0);
+                      });
+                    }
                   }
                 }catch(e){}
 
-                if(upsertDone!==false) {
-                 setTimeout(function() {
-                     window.location.href = 'dashboard.html';
-                 }, 1500);
+                // Go to the dashboard once the server push has settled; the
+                // background retry (DB.whenReady) keeps pushing meanwhile, and
+                // dashboard.html will sync the account anyway.
+                var _navTimer=null;
+                function _goDash(){
+                  if(_navTimer)clearTimeout(_navTimer);
+                  _navTimer=null;
+                  window.location.href='dashboard.html';
                 }
+                var _pushProbe=setInterval(function(){
+                  if(upsertDone){clearInterval(_pushProbe);_goDash();}
+                },100);
+                setTimeout(function(){if(_navTimer===null){_goDash();}},4000);
                 });
             }, 2000);
         });
