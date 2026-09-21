@@ -212,6 +212,41 @@ DB.pullUsers = function () {
   });
 };
 
+// Cached copy of the users list (from the last successful pull).
+DB.cachedUsers = function () {
+  var list = [];
+  try { list = JSON.parse(localStorage.getItem('bb_admin_users') || '[]'); } catch (e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  return list;
+};
+
+// Live read of the central users table, sorted newest-first (created_at DESC)
+// so a brand-new registration appears at the TOP of the admin list instead of
+// hiding at the bottom. Falls back to the cached list when the server (or the
+// Supabase client) is unavailable so the UI never blanks out.
+DB.fetchUsersLive = function () {
+  if (!DB.ready || !DB.client || !DB.client.from) return Promise.resolve(DB.cachedUsers());
+  return DB.client.from('users').select('*').order('created_at', { ascending: false }).then(function (res) {
+    var rows = (res && res.data) ? res.data : [];
+    var list = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      list.push({
+        uid: String(r.uid),
+        name: r.name || 'User',
+        email: r.email || '',
+        cashBalance: parseFloat(r.cash_balance) || 0,
+        assetBalances: r.asset_balances || {},
+        kycStatus: r.kyc_status || 'none'
+      });
+    }
+    return list;
+  }, function (e) {
+    console.warn('[DB] fetchUsersLive failed', e);
+    return DB.cachedUsers();
+  });
+};
+
 DB.updateUser = function (uid, patch) {
   if (!DB.ready) return Promise.resolve();
   return DB.client.from('users').update(patch).eq('uid', Number(uid)).then(DB._ok, DB._ok);

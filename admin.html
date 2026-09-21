@@ -292,6 +292,10 @@
       <div class="admin-header">
         <h1>User Management</h1>
       </div>
+      <div id="usersSyncStatus" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;font-size:12px;color:rgba(255,255,255,0.55);">
+        <span><span id="usersSyncDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:6px;"></span><span id="usersSyncText">Loading live user list…</span></span>
+        <button class="btn-sm btn-primary" onclick="manualRefreshUsers()">Refresh now</button>
+      </div>
       <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
         <table class="data-table">
           <thead><tr><th>UID</th><th>Name</th><th>Email</th><th>Cash Balance</th><th>Locked</th><th>Total Assets</th><th>Admin</th><th>Profit</th><th>KYC</th><th>Status</th><th>Actions</th></tr></thead>
@@ -767,10 +771,9 @@ function switchTab(tab){
   if(tab!=='support')stopAdminSupportPoll();
   if(tab==='dashboard')refreshDashboard();
   if(tab==='users'){
-    // Fresh pull so a newly-registered user shows the moment this tab opens,
-    // not just on the next 5s poll tick.
-    if(typeof DB!=='undefined'&&DB.ready&&DB.pullUsers){DB.pullUsers().then(function(){refreshUsers();});}
-    else refreshUsers();
+    // refreshUsers() now queries the live Supabase users table directly, so a
+    // newly-registered user shows the moment this tab opens — no poll needed.
+    refreshUsers();
   }
   if(tab==='support')refreshTickets();
   if(tab==='trades')refreshTrades();
@@ -947,10 +950,21 @@ function refreshDashboard(){
 }
 
 // ===== USERS =====
-function refreshUsers(){
-  var users=getAllUsers();
+// Live-driven: queries the central Supabase users table DIRECTLY on every
+// refresh and renders whatever the server returns (newest first). This removes
+// the pull->localStorage->render indirection that allowed stale local copies to
+// hide brand-new registrations. Falls back to the cached list if the server or
+// client is unavailable, and always shows a visible live/offline indicator.
+function renderUsers(users){
   var body=document.getElementById('usersBody');
+  var statusEl=document.getElementById('usersSyncText');
+  var dot=document.getElementById('usersSyncDot');
+  var live=arguments[1]===true;
+  if(live&&dot)dot.style.background='#16c784';
+  if(live&&statusEl)statusEl.textContent=(users.length>0?users.length+' users':'0 users')+' loaded live from server — newest first';
+  if(!live&&statusEl)statusEl.textContent=(users.length>0?users.length+' users':'0 users')+' (offline cache)';
   if(users.length===0){body.innerHTML='<tr><td colspan="11" class="empty-state">No registered users</td></tr>';return;}
+  var p1=document.getElementById('dashUsers');if(p1)p1.textContent=users.length;
   var adminList=getAdminAccessList();
   var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
   // Calculate locked amounts from AI Quant + Earn
@@ -1005,6 +1019,29 @@ function refreshUsers(){
   }
   body.innerHTML=html;
 }
+// Render the users tab straight from the server. Refreshing strictly live means
+// a user registered moments ago on any device shows up on the next refresh —
+// no dependence on the localStorage sync chain or its success.
+function refreshUsers(){
+  var dot=document.getElementById('usersSyncDot');
+  var statusEl=document.getElementById('usersSyncText');
+  if(typeof DB==='undefined'||!DB.ready||!DB.fetchUsersLive){
+    if(dot)dot.style.background='#ef4444';
+    if(statusEl)statusEl.textContent='Supabase offline — showing cached list';
+    renderUsers(getAllUsers(),false);
+    return;
+  }
+  if(dot)dot.style.background='#f59e0b';
+  DB.fetchUsersLive().then(function(users){
+    renderUsers(users,true);
+    // Keep the cached list in sync so dashboard/balance tabs agree.
+    try{localStorage.setItem('bb_admin_users',JSON.stringify(users));}catch(e){}
+  },function(){
+    if(dot)dot.style.background='#ef4444';
+    renderUsers(getAllUsers(),false);
+  });
+}
+function manualRefreshUsers(){refreshUsers();}
 var LIVE_PRICES={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1};
 function fetchLivePrices(){
   fetch('https://api.binance.com/api/v3/ticker/price').then(function(r){return r.json();}).then(function(data){
@@ -1456,7 +1493,9 @@ if(typeof DB!=='undefined'&&DB.ready){
       if(payload&&(payload.new||payload.old)){
         // Refresh the users list so new registrations (INSERT) and updated
         // rows (UPDATE) appear immediately instead of waiting for the poll.
-        DB.pullUsers().then(function(){refreshUsers();});
+        // refreshUsers() queries the live users table directly, so this renders
+        // the freshly-registered user without any localStorage round-trip.
+        refreshUsers();
         // Refresh balance display if the admin is on the balances tab.
         var active=document.querySelector('.nav-item.active');
         if(active&&active.getAttribute('data-tab')==='balances')refreshBalances();
