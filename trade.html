@@ -9,9 +9,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=20261017-instant-v2"></script>
-<script src="db.js?v=20261017-instant-v2"></script>
-<script src="finance-ui.js?v=20261017-instant-v2"></script>
+<script src="supabase-config.js?v=20261017-instant-v5"></script>
+<script src="db.js?v=20261017-instant-v5"></script>
+<script src="finance-ui.js?v=20261017-instant-v5"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -54,8 +54,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);overflo
 .market-bar .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;margin-right:4px;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
 
-.chart-wrap{flex:1;display:flex;flex-direction:column;background:var(--bg);min-height:400px;}
-#tvChartContainer{flex:1;width:100%;min-height:300px;position:relative;}
+.chart-wrap{flex:1;display:flex;flex-direction:column;background:var(--bg);min-height:560px;}
+#tvChartContainer{flex:1;width:100%;min-height:520px;position:relative;}
 #tvChartContainer .tradingview-widget-container{height:100%;width:100%;}
 #tvChartContainer .tradingview-widget-container__widget{height:100%;width:100%;}
 
@@ -63,9 +63,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);overflo
 .positions-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);}
 .positions-header h3{font-size:14px;font-weight:600;}
 .positions-count{font-size:11px;color:var(--t3);background:var(--bg4);padding:1px 8px;border-radius:5px;margin-left:8px;}
-.pos-table{width:100%;overflow-x:auto;}
+/* The positions list scrolls inside its own box, so a long list can never
+   squeeze the chart or stretch the page. The header row stays pinned. */
+.pos-table{width:100%;overflow:auto;max-height:min(44vh,430px);overscroll-behavior:contain;}
 .pos-table table{width:100%;border-collapse:collapse;min-width:600px;}
-.pos-table th{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+.pos-table th{position:sticky;top:0;z-index:2;background:var(--bg2);font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
 .pos-table td{font-size:12px;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;font-family:'IBM Plex Mono',monospace;}
 .pos-table .dir-up{color:var(--green);font-weight:600;}
 .pos-table .dir-down{color:var(--red);font-weight:600;}
@@ -141,6 +143,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);overflo
   .trading-main{height:auto;overflow:visible;}
   .chart-wrap{min-height:420px;}
   #tvChartContainer{min-height:380px;}
+  .pos-table{max-height:60vh;}
   .market-bar{gap:10px;padding:8px 10px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .market-bar::-webkit-scrollbar{display:none;}
   .market-bar .mb-item{flex-shrink:0;}
@@ -285,7 +288,7 @@ try {
       <div class="positions-header">
         <div style="display:flex;align-items:center;"><h3>Open Positions</h3><span class="positions-count" id="posCount">0</span></div>
       </div>
-      <div class="pos-table" style="overflow-x:auto;">
+      <div class="pos-table">
         <table>
           <thead><tr>
             <th>Trade ID</th><th>Pair</th><th>Direction</th><th>Amount</th><th>Duration</th><th>Time Left</th><th>Potential Profit</th><th>Status</th><th>Action</th>
@@ -323,7 +326,6 @@ try {
       <div class="balance-amount">$<span id="balance">0.00</span> <span style="font-size:14px;color:var(--t3);font-weight:400;">USDT</span></div>
     </div>
 
-    <div class="tp-section" style="font-size:11px;color:var(--t2)">Internal price-direction contract. At expiry: win returns stake + shown profit; loss returns stake − shown profit; equal price returns stake. Early close returns 50%. Prices settle from the server feed. These are not exchange-executed futures.</div>
     <!-- Trade Duration -->
     <div class="tp-section">
       <div class="tp-label">Trade Duration</div>
@@ -480,7 +482,15 @@ positions = loadPositions();
 function parseNum(s){return parseFloat(String(s).replace(/[^0-9.\-]/g,''))||0;}
 function fmtP(n,d){d=d||currentPair.dec;return n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function fmtD(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function durLabel(s){if(s>=86400)return(s/86400)+'d';if(s>=3600)return(s/3600)+'h';if(s>=60)return(s/60)+'m';return s+'s';}
+function durLabel(s){s=Number(s);if(!Number.isFinite(s)||s<=0)return '—';if(s>=86400)return(s/86400)+'d';if(s>=3600)return(s/3600)+'h';if(s>=60)return(s/60)+'m';return s+'s';}
+// Older orders stored the direction as Buy/Sell instead of UP/DOWN. Normalise so
+// the table never shows "undefined".
+function posDirection(p){
+ var dir=String(p.dir||p.direction||p.side||'').trim();
+ if(dir==='UP'||dir==='Buy'||dir==='BUY'||dir==='Long')return 'UP';
+ if(dir==='DOWN'||dir==='Sell'||dir==='SELL'||dir==='Short')return 'DOWN';
+ return dir||'—';
+}
 
 // ===== TRADINGVIEW WIDGET =====
 let tvWidgetIframe=null;
@@ -858,18 +868,21 @@ function renderPositions(){
   count.textContent=positions.length;
   if(positions.length===0){body.innerHTML='<tr><td colspan="9" class="pos-empty">No open positions</td></tr>';return;}
   body.innerHTML=positions.map(p=>{
-    const elapsed=(Date.now()-p.startTime)/1000;
-    const left=Math.max(0,p.dur-elapsed);
-    const dirCls=p.dir==='UP'?'dir-up':'dir-down';
+    const elapsed=(Date.now()-Number(p.startTime))/1000;
+    const dur=Number(p.dur)||0;
+    const left=dur>0?Math.max(0,dur-elapsed):0;
+    const direction=posDirection(p);
+    const dirCls=direction==='UP'?'dir-up':direction==='DOWN'?'dir-down':'';
     const statusCls=p.status==='Active'?'status-active':p.status==='Won'?'status-won':'status-lost';
+    const profit=Number(p.profit)||0;
     return `<tr>
       <td>${p.id}</td>
       <td>${p.pair}</td>
-      <td class="${dirCls}">${p.dir}</td>
+      <td class="${dirCls}">${direction}</td>
       <td>${fmtD(p.amt)}</td>
-      <td>${durLabel(p.dur)}</td>
-      <td>${p.status==='Active'?(left>0?Math.ceil(left)+'s':'Awaiting settlement'):'—'}</td>
-      <td style="color:var(--green);">+${fmtD(p.profit)}</td>
+      <td>${durLabel(dur||p.dur)}</td>
+      <td>${p.status==='Active'?(dur>0&&left>0?Math.ceil(left)+'s':'Awaiting settlement'):'—'}</td>
+      <td style="color:${profit>=0?'var(--green)':'var(--red)'};">${profit>=0?'+':'-'}${fmtD(Math.abs(profit))}</td>
       <td><span class="${statusCls}">${p.status}</span></td>
       <td>${p.status==='Active'?'<button onclick="closePos(\''+p.id+'\')" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;">Close</button>':'—'}</td>
     </tr>`;
