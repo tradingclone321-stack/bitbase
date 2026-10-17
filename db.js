@@ -1,6 +1,6 @@
 /* BitBase v2: server owns balances, orders, permissions, and durable records.
  * Browser storage is a replaceable cache. No cached balance is ever uploaded. */
-var DB = {VERSION:'2026-10-17-instant-v2',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
+var DB = {VERSION:'2026-10-17-instant-v3',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
 DB.get=function(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
 DB.set=function(k,v){localStorage.setItem(k,JSON.stringify(v));};
 DB.safeParse=function(s){try{return JSON.parse(s);}catch(e){return s;}};
@@ -136,7 +136,9 @@ DB.pushCollection=function(key){
  };
  var p=(DB._pushChains[key]||Promise.resolve()).catch(function(){}).then(run);DB._pushChains[key]=p;return p.catch(async function(e){await DB.pullCollection(key).catch(function(){});throw e;});
 };
-DB.saveRecord=async function(key,item){var result=await DB.rpc('bb_save_record',{p_token:DB.token(),p_collection:key,p_record:item});try{await DB.pullCollection(key);}catch(e){DB._lastSyncError='Saved; refresh pending. '+DB.describeUserError(e);}return result;};
+// Returns the saved record without waiting for the collection re-read; the
+// caller renders from `result` and the next refresh brings the cache level.
+DB.saveRecord=async function(key,item){var result=await DB.rpc('bb_save_record',{p_token:DB.token(),p_collection:key,p_record:item});DB.pullCollection(key).catch(function(e){DB._lastSyncError='Saved; refresh pending. '+DB.describeUserError(e);});return result;};
 DB.pullAll=function(){var tasks=[DB.pullLocalUser()];if(DB.me&&DB.me.is_admin)tasks.push(DB.fetchUsersLive());DB.COLLECTIONS.forEach(function(k){tasks.push(DB.pullCollection(k));});return Promise.all(tasks);};
 DB.TAB_MAP={deposits:['bb_deposit_requests','bb_deposit_addresses'],withdrawals:['bb_withdrawal_requests'],loans:['bb_loans'],kyc:['bb_kyc_submissions'],trades:['bb_trades_history'],earn:['bb_earn_positions'],aiquants:['bb_ai_quants'],support:['bb_support_tickets'],balances:['bb_balance_history'],analytics:['bb_trades_history','bb_earn_positions','bb_ai_quants'],dashboard:['bb_trades_history']};
 DB.pullTab=function(tab){return Promise.all((DB.TAB_MAP[tab]||[]).map(DB.pullCollection));};

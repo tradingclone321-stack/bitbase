@@ -9,9 +9,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v2"></script>
-  <script src="db.js?v=20261017-instant-v2"></script>
-<script src="finance-ui.js?v=20261017-instant-v2"></script>
+  <script src="supabase-config.js?v=20261017-instant-v3"></script>
+  <script src="db.js?v=20261017-instant-v3"></script>
+<script src="finance-ui.js?v=20261017-instant-v3"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -159,7 +159,7 @@
       <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
     <button id="adminSignIn" onclick="adminLogin()">Sign In</button>
     <div id="adminLoginError" role="alert" style="display:none;margin-top:12px;padding:12px;background:#391c21;border:1px solid #a64855;border-radius:8px;font-size:12px;line-height:1.6;text-align:left;color:#ffd6dc;"></div>
-    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v2</span> · Sign in with your account email and password.</div>
+    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v3</span> · Sign in with your account email and password.</div>
   </div>
 </div>
 
@@ -695,7 +695,7 @@ var currentTradeFilter='all';
 var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
-var ADMIN_BUILD='2026-10-17-instant-v2';
+var ADMIN_BUILD='2026-10-17-instant-v3';
 
 function adminLoginError(message){var box=document.getElementById('adminLoginError');box.textContent=message||'';box.style.display=message?'block':'none';}
 // Only a script that genuinely failed to load can block the panel. A version
@@ -1352,19 +1352,36 @@ function openAttModal(idx){
   }
   document.body.appendChild(overlay);
 }
+// Ticket writes are queued and each one starts from the newest server copy, so
+// two quick replies can never overwrite each other.
+var _ticketSaveChain=Promise.resolve();
+function saveTicketRecord(build){
+ _ticketSaveChain=_ticketSaveChain.catch(function(){}).then(function(){
+  var latest=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});
+  var record=build(latest);
+  return DB.saveRecord('bb_support_tickets',record).then(function(saved){
+   if(currentTicketId===record.id)renderChatMessages(saved);
+   return saved;
+  });
+ });
+ return _ticketSaveChain;
+}
 function replyToTicket(){
  var input=document.getElementById('ticketReplyInput'),text=input.value.trim();
- var ticket=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!ticket||!text)return;
- ticket=Object.assign({},ticket,{lastAdminReply:Date.now(),messages:(ticket.messages||[]).concat([{id:DB.newId(),from:'admin',text:text,time:Date.now()}])});
- return FinanceUI.do('support-reply',async function(){var r=await DB.saveRecord('bb_support_tickets',ticket);input.value='';renderChatMessages(r);return r;},'Reply saved.');
+ var base=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!base||!text)return;
+ var message={id:DB.newId(),from:'admin',text:text,time:Date.now()};
+ var withMessage=function(src){var s=src||base;return Object.assign({},s,{lastAdminReply:message.time,messages:(s.messages||[]).concat([message])});};
+ // Draw the reply on the same click, then let the queued write confirm it.
+ input.value='';renderChatMessages(withMessage(base));
+ return FinanceUI.do('support-reply-'+message.id,function(){return saveTicketRecord(withMessage);},'Reply sent.');
 }
 function resolveTicket(){
- var ticket=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!ticket)return;
- return FinanceUI.do('support-status',function(){return DB.saveRecord('bb_support_tickets',Object.assign({},ticket,{status:'resolved'}));},'Conversation status saved.');
+ var base=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!base)return;
+ return FinanceUI.do('support-resolve-'+base.id+'-'+Date.now(),function(){return saveTicketRecord(function(src){return Object.assign({},src||base,{status:'resolved'});});},'Conversation status saved.');
 }
 function deleteTicket(){
- var ticket=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!ticket)return;
- return FinanceUI.do('support-status',function(){return DB.saveRecord('bb_support_tickets',Object.assign({},ticket,{status:'deleted'}));},'Conversation status saved.');
+ var base=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!base)return;
+ return FinanceUI.do('support-delete-'+base.id+'-'+Date.now(),function(){return saveTicketRecord(function(src){return Object.assign({},src||base,{status:'deleted'});});},'Conversation status saved.');
 }
 // ===== TRADES =====
 function refreshTrades(){
