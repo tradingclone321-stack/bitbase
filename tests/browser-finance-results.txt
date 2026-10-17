@@ -1,0 +1,27 @@
+PASS real login form creates server session without caching password
+PASS administrator email/password login is verified on server
+PASS admin table renders every registered account through the protected RPC
+PASS legacy direct-table request reproduces 42501 while the current admin API succeeds
+PASS actual trade page debits 100 from 1000 after confirmed placement
+PASS active trade appears in a separate admin browser
+PASS actual price worker settles once with every browser closed
+PASS fresh device restores settled trade and 1020 balance
+PASS lost response and same-form retry do not debit twice
+PASS price-provider outage changes no funds and recovers on retry
+PASS scheduler requires private secret
+PASS stale or edited local balances are overwritten from server, never uploaded
+PASS all eight account pages load and refresh against real SQL responses
+PASS demo trades use separate durable funds and cannot double-refund
+PASS fresh administrator device restores all tabs and durable audit history
+PASS registration confirms server account and appears in separate admin device
+PASS temporary user-list failure preserves confirmed cache and recovers on refresh
+PASS missing database RPC produces a specific installation instruction
+PASS revoked administrator access removes cached users; restoring the role and signing in recovers
+PASS late admin user-list response cannot overwrite a newly signed-in regular account
+PASS mixed old/new admin scripts stop with a clear redeployment instruction
+PASS legacy browser login flags cannot reveal an admin registry or create a fake single-user list
+PASS missing database SDK displays a persistent login error without opening admin
+PASS all normal admin and account screens avoid direct user-table reads
+PASS no uncaught page JavaScript errors during complete browser run
+
+25 browser/worker integration checks passed. All remote calls were intercepted; no live service was touched.

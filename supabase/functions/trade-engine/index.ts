@@ -18,7 +18,13 @@ export async function handle(request: Request){
   const d=await request.json();
   if(d.action==='settle'){
    const secret=env('BITBASE_ENGINE_SECRET');
-   if(!secret||request.headers.get('x-engine-secret')!==secret)return respond({error:'Unauthorized scheduler'},401);
+   const scheduler=!!secret&&request.headers.get('x-engine-secret')===secret;
+   if(!scheduler){
+    // A signed-in client may also drive a settlement pass. Prices are fetched
+    // here, never supplied by the caller, so this cannot choose an outcome.
+    if(typeof d.token!=='string'||d.token.length!==64)return respond({error:'Unauthorized scheduler'},401);
+    try{await rpc('bb_read',{p_token:d.token,p_resource:'me'},false);}catch{return respond({error:'Sign in required',code:'28000'},401);}
+   }
    let settled=0;const errors:string[]=[];
    const due=await rpc('bb_due_trades',{});
    // Four bounded workers. One unavailable symbol never blocks other accounts.

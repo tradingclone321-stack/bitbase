@@ -1,6 +1,6 @@
 # Verification results — 17 October 2026
 
-The uploaded project has been repaired and tested locally. **38 financial integration checks, 15 browser/worker checks, and 3 schema compatibility checks passed.** This report supersedes the previous registration-only report.
+The uploaded project has been repaired and tested locally. **38 financial integration checks, 25 browser/worker checks, and 3 schema compatibility checks passed.** The financial and browser suites were rerun after the admin update 20261017.3; the unchanged schema checks retain their earlier passing result. This report supersedes the previous registration-only report.
 
 ## What was repaired
 
@@ -27,7 +27,7 @@ Executed against actual PostgreSQL functions using PGlite and synthetic accounts
 
 PGlite serializes queries. Simultaneously submitted requests here verify transactional and idempotency behavior; they are **not** a true multi-connection PostgreSQL lock/load test.
 
-## Browser and worker integration — 15 checks passed
+## Browser and worker integration — 25 checks passed
 
 Executed in headless Chromium with the actual HTML pages, real Supabase JavaScript SDK, migrated SQL API and the actual Edge Function handler. All remote requests were intercepted. Prices were controlled test fixtures, not live market data.
 
@@ -46,6 +46,24 @@ Executed in headless Chromium with the actual HTML pages, real Supabase JavaScri
 13. A fresh administrator browser restores all tabs and durable audit history.
 14. Registration creates a confirmed server account visible on a separate admin device.
 15. No uncaught page JavaScript errors occur during the complete run.
+16. The actual admin table renders all accounts through the protected RPC.
+17. The old direct-table request reproduces error 42501, while the current admin API succeeds against the same migrated database.
+18. Temporary list-read failure preserves confirmed cached users and recovers after refresh.
+19. A missing RPC produces the specific database-installation instruction.
+20. Revoking admin access removes the cached list; restoring the role and signing in recovers access.
+21. A delayed admin response cannot populate another account's cache after switching accounts.
+22. A new admin page with a legacy client script stops and displays redeployment instructions.
+23. Legacy browser login flags cannot authorize access or turn one cached profile into a registry.
+24. A missing database SDK produces a persistent login error.
+25. Normal account and admin flows make no direct user-table reads; only the intentional legacy reproduction does so.
+
+Full output is in `tests/browser-finance-results.txt`. Legacy-browser test data is injected only on the local test origin, not into blank or third-party frames.
+
+## Admin deployment diagnosis
+
+The screenshot's full error wording matches the original September `db.js`, which used direct table reads. The finance SQL intentionally revokes that route and instead exposes the session-checked `bb_read` API. The configured project's live API was probed once with an intentionally invalid session and returned PostgreSQL 28000, confirming that this endpoint is installed and callable. No live account data was retrieved or changed; a real administrator login could not be verified without the user's session.
+
+The update changes frontend version identifiers, prevents incompatible admin scripts from running the panel, tightens session/cache handling, removes obsolete raw-table realtime subscriptions, and supplies Vercel cache headers. No financial SQL permission was widened. See `ADMIN_USER_LIST_FIX.md` for the deployment fix and `CHECK_ADMIN_ACCESS.sql` for read-only checks.
 
 ## Schema and static checks
 

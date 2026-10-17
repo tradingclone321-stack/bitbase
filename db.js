@@ -60,15 +60,24 @@ DB.edge=function(action,data){return DB.operation(action,data,async function(id)
  try{var r=await fetch(SUPABASE_URL+'/functions/v1/trade-engine',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify(Object.assign({},data,{action:action,requestId:id,token:DB.token()})),signal:controller.signal});var body=await r.json();if(!r.ok||body.error){var e=new Error(body.error||'Trade service unavailable');e.code=body.code;throw e;}return body;}
  finally{clearTimeout(timer);}
 });};
-DB.settleDue=function(){
+DB.settleDue=function(force){
  // Ask the trusted worker to settle expired orders now. Idempotent and safe to
- // retry; it never supplies a price and is throttled so pages cannot spam it.
+ // retry; it never supplies a price. Non-forced calls are throttled; a forced
+ // call (used the instant an order expires) skips the throttle but never runs
+ // two settlement passes at once. When anything settles, refresh trades and
+ // notify the page so the result appears immediately.
  var now=Date.now();
- if(DB._settleAt&&now-DB._settleAt<8000)return Promise.resolve(null);
+ if(DB._settling)return DB._settling;
+ if(!force&&DB._settleAt&&now-DB._settleAt<8000)return Promise.resolve(null);
  DB._settleAt=now;
  try{DB.requireUserConnection();}catch(e){return Promise.resolve(null);}
  var token;try{token=DB.token();}catch(e){return Promise.resolve(null);}
- return fetch(SUPABASE_URL+'/functions/v1/trade-engine',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify({action:'settle',token:token})}).then(function(r){return r.json();}).catch(function(){return null;});
+ var ctl=new AbortController();var timer=setTimeout(function(){ctl.abort();},15000);
+ DB._settling=fetch(SUPABASE_URL+'/functions/v1/trade-engine',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify({action:'settle',token:token}),signal:ctl.signal}).then(function(r){return r.json();}).then(function(res){
+  if(force||(res&&Number(res.settled)>0))return DB.pullCollection('bb_trades_history').catch(function(){}).then(function(){try{window.dispatchEvent(new CustomEvent('bb:updated'));}catch(e){}return res;});
+  return res;
+ }).catch(function(){return null;}).then(function(res){clearTimeout();DB._settling=null;return res;},function(e){clearTimeout();DB._settling=null;throw e;});
+ return DB._settling;
 };
 DB.cachedUsers=function(){return DB.me&&DB.me.is_admin&&localStorage.getItem('bb_session_token')?DB.get('bb_admin_users')||[]:[];};
 DB.fetchUsersLive=function(){
