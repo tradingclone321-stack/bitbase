@@ -9,9 +9,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=20261017-instant-v6"></script>
-<script src="db.js?v=20261017-instant-v6"></script>
-<script src="finance-ui.js?v=20261017-instant-v6"></script>
+<script src="supabase-config.js?v=20261017-instant-v7"></script>
+<script src="db.js?v=20261017-instant-v7"></script>
+<script src="finance-ui.js?v=20261017-instant-v7"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -41,11 +41,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);overflo
 .nav-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:transparent;border:none;color:var(--t3);transition:all 0.15s;}
 .nav-icon:hover{background:rgba(255,255,255,0.06);color:var(--t2);}
 
-/* Two fixed bars (site header + trading nav) occupy the top 120px on desktop,
-   so the working area is exactly the remaining viewport height. The chart takes
-   everything that is left after the positions panel, and the positions list
-   scrolls inside its own box all the way down to the bottom edge. */
-.trading-layout{display:grid;grid-template-columns:1fr 300px;height:100vh;padding-top:120px;overflow:hidden;}
+/* The two fixed bars (site header + trading nav) are cleared by the 120px
+   margin-top this block already inherits from styles.css. The grid therefore
+   has to be exactly the rest of the viewport: no padding (that would double the
+   offset) and no 100vh (that would overflow and get clipped). The chart absorbs
+   the leftover space and the positions list scrolls inside its own box. */
+.trading-layout{display:grid;grid-template-columns:1fr 300px;height:calc(100vh - 120px);padding-top:0;overflow:hidden;}
 @media(max-width:1024px){.trading-layout{grid-template-columns:1fr;}.trading-panel{max-height:none!important;}}
 .trading-main{display:flex;flex-direction:column;min-width:0;height:100%;overflow:hidden;}
 
@@ -58,8 +59,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);overflo
 .market-bar .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;margin-right:4px;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
 
-.chart-wrap{flex:1 1 auto;display:flex;flex-direction:column;background:var(--bg);min-height:300px;}
-#tvChartContainer{flex:1;width:100%;min-height:280px;position:relative;}
+.chart-wrap{flex:1 1 auto;display:flex;flex-direction:column;background:var(--bg);min-height:160px;}
+#tvChartContainer{flex:1 1 0%;width:100%;min-height:140px;position:relative;}
 #tvChartContainer .tradingview-widget-container{height:100%;width:100%;}
 #tvChartContainer .tradingview-widget-container__widget{height:100%;width:100%;}
 
@@ -145,7 +146,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);overflo
   .nav-icon svg{width:14px;height:14px;}
   .trading-layout{grid-template-columns:1fr!important;height:auto!important;padding-top:0;overflow:visible;}
   .trading-main{height:auto;overflow:visible;}
-  .positions-section{max-height:none;}
+  .positions-section{max-height:none;min-height:0;}
   .chart-wrap{min-height:420px;}
   #tvChartContainer{min-height:380px;}
   .pos-table{max-height:60vh;}
