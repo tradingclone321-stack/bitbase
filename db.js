@@ -1,6 +1,6 @@
 /* BitBase v2: server owns balances, orders, permissions, and durable records.
  * Browser storage is a replaceable cache. No cached balance is ever uploaded. */
-var DB = {VERSION:'2026-10-17-instant-v4',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
+var DB = {VERSION:'2026-10-17-instant-v9',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
 DB.get=function(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
 DB.set=function(k,v){localStorage.setItem(k,JSON.stringify(v));};
 DB.safeParse=function(s){try{return JSON.parse(s);}catch(e){return s;}};

@@ -9,9 +9,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v4"></script>
-  <script src="db.js?v=20261017-instant-v4"></script>
-<script src="finance-ui.js?v=20261017-instant-v4"></script>
+  <script src="supabase-config.js?v=20261017-instant-v9"></script>
+  <script src="db.js?v=20261017-instant-v9"></script>
+<script src="finance-ui.js?v=20261017-instant-v9"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -159,7 +159,7 @@
       <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
     <button id="adminSignIn" onclick="adminLogin()">Sign In</button>
     <div id="adminLoginError" role="alert" style="display:none;margin-top:12px;padding:12px;background:#391c21;border:1px solid #a64855;border-radius:8px;font-size:12px;line-height:1.6;text-align:left;color:#ffd6dc;"></div>
-    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v4</span> · Sign in with your account email and password.</div>
+    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v9</span> · Sign in with your account email and password.</div>
   </div>
 </div>
 
@@ -186,9 +186,6 @@
     </div>
     <div class="nav-item" data-tab="trades" onclick="switchTab('trades')">
       <i data-lucide="activity"></i><span>Trades</span>
-    </div>
-    <div class="nav-item" data-tab="earn" onclick="switchTab('earn')">
-      <i data-lucide="badge-percent"></i><span>Earn</span>
     </div>
     <div class="nav-item" data-tab="aiquants" onclick="switchTab('aiquants')">
       <i data-lucide="cpu"></i><span>AI Quants</span>
@@ -603,30 +600,6 @@
       </div>
     </div>
 
-    <!-- ===== EARN TAB ===== -->
-    <div id="tab-earn" class="tab-content" style="display:none;">
-      <div class="admin-header">
-        <h1>Earn / Staking Positions</h1>
-        <div class="filter-row" style="display:flex;gap:8px;">
-          <button class="btn-sm btn-primary" onclick="filterEarn('all')" id="earnAll">All</button>
-          <button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="filterEarn('flexible')" id="earnFlexible">Flexible</button>
-          <button class="btn-sm" style="background:rgba(247,147,26,0.12);color:#f7931a;" onclick="filterEarn('locked')" id="earnLocked">Locked</button>
-          <button class="btn-sm" style="background:rgba(65,105,225,0.12);color:#4169e1;" onclick="filterEarn('defi')" id="earnDefi">DeFi</button>
-        </div>
-      </div>
-      <div class="admin-stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
-        <div class="stat-card"><div class="stat-value" id="earnTotalStaked">$0</div><div class="stat-label">Total Staked</div></div>
-        <div class="stat-card"><div class="stat-value" id="earnTotalEarned">$0</div><div class="stat-label">Total Earnings</div></div>
-        <div class="stat-card"><div class="stat-value" id="earnActiveCount">0</div><div class="stat-label">Active Positions</div></div>
-        <div class="stat-card"><div class="stat-value" id="earnAvgApy">0%</div><div class="stat-label">Average APY</div></div>
-      </div>
-      <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
-        <table class="data-table">
-          <thead><tr>            <th>Type</th><th>User</th><th>Coin</th><th>Amount</th><th>APY</th><th>Earned</th><th>Started</th><th>End Date</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody id="earnBody"><tr><td colspan="9" class="empty-state">No staking positions</td></tr></tbody>
-        </table>
-      </div>
-    </div>
 
     <div id="tab-aiquants" class="tab-content" style="display:none;">
       <div class="admin-header">
@@ -695,7 +668,7 @@ var currentTradeFilter='all';
 var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
-var ADMIN_BUILD='2026-10-17-instant-v4';
+var ADMIN_BUILD='2026-10-17-instant-v9';
 
 function adminLoginError(message){var box=document.getElementById('adminLoginError');box.textContent=message||'';box.style.display=message?'block':'none';}
 // Only a script that genuinely failed to load can block the panel. A version
@@ -774,7 +747,6 @@ function switchTab(tab){
   if(tab==='balances')refreshBalances();
   if(tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
   if(tab==='analytics')refreshAnalytics();
-  if(tab==='earn')refreshEarn();
   if(tab==='aiquants')refreshAiQuants();
 }
 
@@ -2087,78 +2059,6 @@ function refreshAnalytics(){
   document.getElementById('anaStatus').innerHTML=statusHtml||'<div class="empty-state">No data</div>';
 }
 
-// ===== EARN / STAKING =====
-var currentEarnFilter='all';
-function getEarnPositions(){
-  try{return JSON.parse(localStorage.getItem('bb_earn_positions'))||[];}catch(e){return[];}
-}
-function saveEarnPositions(arr){localStorage.setItem('bb_earn_positions',JSON.stringify(arr));if(typeof DB!=='undefined')DB.pushCollection('bb_earn_positions');}
-function filterEarn(f){
-  currentEarnFilter=f;
-  document.querySelectorAll('#tab-earn .filter-row .btn-sm').forEach(function(el){el.className='btn-sm';});
-  var btn=document.getElementById('earn'+f.charAt(0).toUpperCase()+f.slice(1));
-  if(btn)btn.className='btn-sm btn-primary';
-  refreshEarn();
-}
-function refreshEarn(){
-  var positions=getEarnPositions().filter(function(p){return p.status!=='deleted';});
-  var filtered=positions;
-  if(currentEarnFilter!=='all')filtered=positions.filter(function(p){return p.type===currentEarnFilter;});
-  filtered=filtered.slice().sort(function(a,b){return new Date(b.started)-new Date(a.started);});
-
-  // Stats
-  var totalStaked=0,totalEarnedNum=0,activeCount=0,apySum=0;
-  var now=Date.now();
-  for(var i=0;i<positions.length;i++){
-    var p=positions[i];
-    totalStaked+=p.amount||0;
-    var elapsed=(now-new Date(p.started).getTime())/(1000*86400*365);
-    if(elapsed<0)elapsed=0;
-    var earned=p.amount*p.apy/100*elapsed;
-    totalEarnedNum+=earned;
-    apySum+=p.apy||0;
-    if(!p.endDate||new Date(p.endDate).getTime()>now)activeCount++;
-  }
-  var prices={BTC:64464,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.165,DOGE:0.07243,XRP:1.1006,DOT:0.816,USDT:1,DAI:1};
-  document.getElementById('earnTotalStaked').textContent='$'+totalStaked.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  document.getElementById('earnTotalEarned').textContent='$'+totalEarnedNum.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  document.getElementById('earnActiveCount').textContent=activeCount;
-  document.getElementById('earnAvgApy').textContent=(positions.length?(apySum/positions.length).toFixed(2):'0')+'%';
-
-  // Table
-  var body=document.getElementById('earnBody');
-  if(filtered.length===0){body.innerHTML='<tr><td colspan="10" class="empty-state">No staking positions</td></tr>';return;}
-  var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-  var userMap={};
-  for(var u=0;u<adminUsers.length;u++)userMap[adminUsers[u].uid]=adminUsers[u].name||'User';
-  var html='';
-  var typeLabels={flexible:'Flexible',locked:'Locked',defi:'DeFi'};
-  var typeColors={flexible:'#16c784',locked:'#f7931a',defi:'#4169E1'};
-  for(var i=0;i<filtered.length;i++){
-    var p=filtered[i];
-    var elapsed=(now-new Date(p.started).getTime())/(1000*86400*365);
-    if(elapsed<0)elapsed=0;
-    var earned=p.amount*p.apy/100*elapsed;
-    var isActive=!p.endDate||new Date(p.endDate).getTime()>now;
-    var statusHtml=isActive?'<span class="badge-yellow">Active</span>':'<span class="badge-green">Completed</span>';
-    var endDateHtml=p.endDate?new Date(p.endDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
-    var extra=p.type==='defi'?' · '+p.protocol:'';
-    html+='<tr>'+
-      '<td><span style="color:'+(typeColors[p.type]||'#666')+';font-weight:600;">'+(typeLabels[p.type]||p.type)+'</span>'+extra+'</td>'+
-      '<td style="font-size:12px;">'+ (p.userName||userMap[p.uid]||'User') + '<br><span style="color:rgba(255,255,255,0.4);">'+(p.uid||'')+'</span></td>'+
-      '<td><strong>'+p.coin+'</strong></td>'+
-      '<td style="font-family:monospace;">'+Number(p.amount).toFixed(4)+'</td>'+
-      '<td style="font-family:monospace;color:'+(p.apy>=5?'#16c784':'rgba(255,255,255,0.6)')+';">'+p.apy+'%</td>'+
-      '<td style="font-family:monospace;color:#16c784;">+'+earned.toFixed(4)+'</td>'+
-      '<td style="font-size:12px;">'+new Date(p.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</td>'+
-      '<td style="font-size:12px;">'+endDateHtml+'</td>'+
-      '<td>'+statusHtml+'</td>'+
-      '<td><button class="btn-sm btn-danger" onclick="deleteEarnPosition('+i+')">Delete</button></td>'+
-    '</tr>';
-  }
-  body.innerHTML=html;
-}
-function deleteEarnPosition(){FinanceUI.message('Financial records are retained. Complete or reject the request instead.',true);}
 // ===== AI QUANTS =====
 var currentAiQuantsFilter='all';
 function getAiQuants(){
@@ -2295,7 +2195,6 @@ function _adminRefreshTab(){
   if(tab==='balances')refreshBalances();
   if(tab==='deposits'){refreshDepositList();refreshDepositRequests();}
   if(tab==='analytics')refreshAnalytics();
-  if(tab==='earn')refreshEarn();
   if(tab==='aiquants')refreshAiQuants();
   if(tab==='dashboard')refreshDashboard();
 }

@@ -2,7 +2,7 @@
 
 This package fixes the uploaded HTML project. It is not yet installed in your hosted Supabase database or website. Uploading HTML alone cannot enable settlement when all browsers are closed.
 
-**Admin user-list error 42501:** see `ADMIN_USER_LIST_FIX.md`. Release 20261017.3 adds a frontend version check, safer admin session/cache handling, and Vercel cache headers. If the finance migration already succeeded, deploy all updated frontend files together and sign in with an account that has `users.is_admin = true`; no additional migration is needed for this frontend update.
+**Admin user-list error 42501:** see `ADMIN_USER_LIST_FIX.md`. Release 2026-10-17-instant-v9 keeps the safer admin session/cache handling and Vercel cache headers. The admin panel is no longer locked out by a build-string mismatch, so a stale file reports the problem instead of blocking sign-in. If the finance migration already succeeded, deploy all updated frontend files together and sign in with an account that has `users.is_admin = true`; no additional migration is needed for this frontend update.
 
 ## Install in this order
 

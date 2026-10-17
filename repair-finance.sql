@@ -212,7 +212,11 @@ begin
  end if;
  if p_resource='health' then return coalesce((select to_jsonb(h) from public.bb_engine_health h),'{}'); end if;
  if p_resource in ('bb_trade_positions','bb_trades_history','bb_ai_quants','bb_earn_positions') then
-  select coalesce(jsonb_agg(payload||jsonb_build_object('_version',version) order by created_at desc,id),'[]') into result from public.bb_orders where (u.is_admin or uid=u.uid) and kind=case p_resource when 'bb_ai_quants' then 'quant' when 'bb_earn_positions' then 'earn' else 'trade' end; return result;
+  -- Administrators also get the owner's name/email so every order can be traced
+  -- back to a person; regular members only ever receive their own rows.
+  select coalesce(jsonb_agg(o.payload||jsonb_build_object('_version',o.version,'uid',o.uid::text,'userId',o.uid::text,'userName',usr.name,'userEmail',usr.email) order by o.created_at desc,o.id),'[]') into result
+   from public.bb_orders o left join public.users usr on usr.uid=o.uid
+   where (u.is_admin or o.uid=u.uid) and o.kind=case p_resource when 'bb_ai_quants' then 'quant' when 'bb_earn_positions' then 'earn' else 'trade' end; return result;
  end if;
  if p_resource='bb_profit_modules' then return '{}'::jsonb; end if;
  if p_resource='bb_deposit_addresses' then return coalesce((select payload||jsonb_build_object('_version',version) from public.bb_records where collection=p_resource and id='config'),'{}'); end if;
@@ -288,11 +292,26 @@ begin
   elsif p_action='logout_all' then delete from bb_private.sessions where uid=u.uid;
   else delete from bb_private.sessions where token_hash=encode(digest(p_token,'sha256'),'hex'); end if;
   res:=jsonb_build_object('ok',true);
- elsif p_action in ('admin_adjust','admin_user','profit_module') then
+ elsif p_action in ('admin_adjust','admin_user','profit_module','admin_delete_user') then
   if not u.is_admin then raise exception 'Administrator access required' using errcode='42501'; end if;
   select * into target from public.users where uid=(p_data->>'uid')::integer for update;
   if not found then raise exception 'Account not found'; end if;
-  if p_action='profit_module' then
+  if p_action='admin_delete_user' then
+   -- Delete destroys the person's identity, never their financial history.
+   -- public.bb_orders references public.users, so the row itself must stay:
+   -- trades, ledger entries and audit rows keep the uid, while the name, email,
+   -- phone, username, country, credentials, sessions and preferences are wiped.
+   if target.uid=u.uid then raise exception 'You cannot delete your own account.'; end if;
+   if target.is_admin and (select count(*) from public.users where is_admin and not is_deactivated)<=1 then raise exception 'Cannot delete the last remaining administrator.'; end if;
+   perform pg_advisory_xact_lock(hashtext('user:'||target.uid));
+   delete from bb_private.sessions where uid=target.uid;
+   delete from bb_private.credentials where uid=target.uid;
+   delete from bb_private.requests where uid=target.uid;
+   update public.users set name='Deleted user',email='deleted+'||target.uid::text||'@deleted.invalid',phone=null,username=null,country=null,
+    is_admin=false,is_deactivated=true,kyc_status='none',preferences='{}'::jsonb,demo_positions='[]'::jsonb,updated_at=now()
+    where uid=target.uid returning * into updated;
+   res:=jsonb_build_object('ok',true,'deletedUid',target.uid,'deletedEmail',updated.email);
+  elsif p_action='profit_module' then
    -- Dedicated administrator switch: while on, this account's settled trades always win.
    update public.users set profit_module=coalesce((p_data->>'enabled')::boolean,false),updated_at=now() where uid=target.uid returning * into updated;
    res:=bb_private.public_user(updated);
