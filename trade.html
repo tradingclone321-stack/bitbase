@@ -9,9 +9,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=20260922v2"></script>
-<script src="db.js?v=20261017-finance-v2"></script>
-<script src="finance-ui.js?v=20261017-finance-v2"></script>
+<script src="supabase-config.js?v=20261017-admin-v3"></script>
+<script src="db.js?v=20261017-admin-v3"></script>
+<script src="finance-ui.js?v=20261017-admin-v3"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -443,6 +443,8 @@ window.addEventListener('resize',updateLayoutMargin);
 setTimeout(updateLayoutMargin,100);
 setTimeout(updateLayoutMargin,500);
 // ===== DATA =====
+// Only pairs with a configured settlement feed are tradable here; the server
+// rejects anything else, so showing unsupported markets only produced errors.
 const PAIRS = [
   {sym:'BTC/USDT',price:64464.00,dec:2,tvSymbol:'BINANCE:BTCUSDT'},
   {sym:'ETH/USDT',price:1880.96,dec:2,tvSymbol:'BINANCE:ETHUSDT'},
@@ -454,15 +456,7 @@ const PAIRS = [
   {sym:'DOT/USDT',price:0.816,dec:3,tvSymbol:'BINANCE:DOTUSDT'},
   {sym:'AVAX/USDT',price:38.56,dec:2,tvSymbol:'BINANCE:AVAXUSDT'},
   {sym:'LINK/USDT',price:14.23,dec:2,tvSymbol:'BINANCE:LINKUSDT'},
-  {sym:'MATIC/USDT',price:0.8912,dec:4,tvSymbol:'BINANCE:MATICUSDT'},
   {sym:'UNI/USDT',price:7.45,dec:2,tvSymbol:'BINANCE:UNIUSDT'},
-  {sym:'XAU/USD',price:4055.47,dec:2,tvSymbol:'OANDA:XAUUSD'},
-  {sym:'XAG/USD',price:28.45,dec:2,tvSymbol:'OANDA:XAGUSD'},
-  {sym:'EUR/USD',price:1.0842,dec:4,tvSymbol:'FX:EURUSD'},
-  {sym:'GBP/USD',price:1.2645,dec:4,tvSymbol:'FX:GBPUSD'},
-  {sym:'USD/JPY',price:154.23,dec:2,tvSymbol:'FX:USDJPY'},
-  {sym:'USD/CHF',price:0.8834,dec:4,tvSymbol:'FX:USDCHF'},
-  {sym:'AUD/USD',price:0.6512,dec:4,tvSymbol:'FX:AUDUSD'},
 ];
 let currentPair = PAIRS[0];
 let currentPrice = currentPair.price;
@@ -879,10 +873,10 @@ function settleExpiredPositions(){
   renderPositions();
   if(activeTradePanel){var p=positions.find(function(x){return x.id===activeTradePanel.id;});if(p&&p.status!=='Active')showTradeResult(p);}
 }
-setInterval(function(){if(positions.some(function(p){return p.status==='Active';}))renderPositions();updateTradeTimer();},1000);
+  DB.settleDue();
 window.addEventListener('bb:updated',settleExpiredPositions);
 settleExpiredPositions();
-
+setInterval(function(){DB.settleDue();if(positions.some(function(p){return p.status==='Active';}))renderPositions();updateTradeTimer();},1000);
 // ===== COIN BALANCES (shared with assets page) =====
 const QS_PRICES={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.1650,DOGE:0.07243,XRP:1.1006,DOT:0.816};
 let COINS=(function(){

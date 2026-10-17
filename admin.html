@@ -9,9 +9,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20261017-finance-v2"></script>
-<script src="finance-ui.js?v=20261017-finance-v2"></script>
+  <script src="supabase-config.js?v=20261017-admin-v3"></script>
+  <script src="db.js?v=20261017-admin-v3"></script>
+<script src="finance-ui.js?v=20261017-admin-v3"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -157,8 +157,9 @@
     <div class="sub">Restricted access. Unauthorized entry prohibited.</div>
     <input type="email" id="adminEmail" placeholder="Admin account email" autocomplete="username" style="width:100%;padding:12px;margin-bottom:12px;background:#222;color:#fff;border:1px solid #444;border-radius:8px;">
       <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
-    <button onclick="adminLogin()">Sign In</button>
-    <div id="adminAccessNote" style="display:none;margin-top:12px;padding:10px;background:rgba(22,199,132,0.08);border:1px solid rgba(22,199,132,0.2);border-radius:8px;font-size:11px;color:#16c784;">You have admin access. You can sign in without a password.</div>
+    <button id="adminSignIn" onclick="adminLogin()">Sign In</button>
+    <div id="adminLoginError" role="alert" style="display:none;margin-top:12px;padding:12px;background:#391c21;border:1px solid #a64855;border-radius:8px;font-size:12px;line-height:1.6;text-align:left;color:#ffd6dc;"></div>
+    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update 20261017.3 · Sign in with your account email and password.</div>
   </div>
 </div>
 
@@ -302,7 +303,7 @@
       </div>
       <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
         <table class="data-table">
-          <thead><tr><th>UID</th><th>Name</th><th>Email</th><th>Cash Balance</th><th>Locked</th><th>Total Assets</th><th>Admin</th><th>Profit</th><th>KYC</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>UID</th><th>Name</th><th>Email</th><th>Cash Balance</th><th>Locked</th><th>Total Assets</th><th>Admin</th><th>Profit Mode</th><th>KYC</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="usersBody"><tr><td colspan="11" class="empty-state">No registered users</td></tr></tbody>
         </table>
       </div>
@@ -694,22 +695,32 @@ var currentTradeFilter='all';
 var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
+var ADMIN_BUILD='2026-10-17-admin-v3';
+
+function adminLoginError(message){var box=document.getElementById('adminLoginError');box.textContent=message||'';box.style.display=message?'block':'none';}
+function adminBuildReady(){
+ var ready=typeof DB!=='undefined'&&DB.VERSION===ADMIN_BUILD&&typeof DB.read==='function'&&typeof DB.loginUser==='function'&&typeof FinanceUI!=='undefined';
+ if(!ready){
+  document.getElementById('adminPanel').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('adminSignIn').disabled=true;
+  adminLoginError('The admin page and scripts are from different updates, or a script did not load. Upload all files from the latest ZIP together, redeploy, then press Ctrl+F5. See ADMIN_USER_LIST_FIX.md in the ZIP.');
+ }
+ return ready;
+}
 
 function getAdminPass(){return null;}
-function isLoggedIn(){return localStorage.getItem(ADMIN_KEY)==='1';}
+function isLoggedIn(){return typeof DB!=='undefined'&&DB.VERSION===ADMIN_BUILD&&!!localStorage.getItem('bb_session_token')&&!!(DB.me&&DB.me.is_admin)&&localStorage.getItem(ADMIN_KEY)==='1';}
 function currentUserHasAdminAccess(){
-  var uid=localStorage.getItem('bb_uid');
-  if(!uid)return false;
-  var list=getAdminAccessList();
-  return list.indexOf(uid)>=0;
+  return isLoggedIn();
 }
 
 function adminLogin(){
- return FinanceUI.do('admin-login',async function(){
+ if(!adminBuildReady())return Promise.resolve();
+ adminLoginError('');
+ return FinanceUI.run('admin-login',async function(){
   var u=await DB.loginUser(document.getElementById('adminEmail').value.trim(),document.getElementById('adminPassword').value);
   if(!u.is_admin)throw new Error('This account does not have administrator access.');
   localStorage.setItem(ADMIN_KEY,'1');showAdminPanel();return u;
- },'Signed in.');
+ },'Signed in.').catch(function(error){adminLoginError(DB.describeUserError(error));});
 }
 function doAdminLogin(){return adminLogin();}
 function adminLogout(){DB.action('logout',{}).finally(function(){DB.clearSession();location.href='login.html';});}
@@ -725,6 +736,7 @@ function toggleAdminSidebar(){
   ov.classList.toggle('open');
 }
 function showAdminPanel(){
+  if(!adminBuildReady()||!isLoggedIn())return;
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('adminPanel').style.display='flex';
   if(window.lucide)lucide.createIcons();
@@ -761,37 +773,8 @@ function switchTab(tab){
 // ===== DATA HELPERS =====
 function getCashBalance(){try{return parseFloat(localStorage.getItem('bb_cash_balance'))||0;}catch(e){return 0;}}
 function getAllUsers(){
-  // A successful central read, including an empty list, is authoritative.
-  // Do not prepend a stale account from this browser to the server cache.
-  try{
-    var cached=JSON.parse(localStorage.getItem('bb_admin_users')||'null');
-    if(Array.isArray(cached))return cached;
-  }catch(e){}
-  var users=[];
-  // Get single user from localStorage
-  var name=localStorage.getItem('bb_name');
-  var email=localStorage.getItem('bb_email');
-  var uid=localStorage.getItem('bb_uid');
-  if(name||email||uid){
-    users.push({
-      uid:uid||'000000',
-      name:name||'User',
-      email:email||'user@email.com',
-      cashBalance:getCashBalance(),
-      assetBalances:getAssetBalances(),
-      kycStatus:localStorage.getItem('bb_kyc_status')||'none'
-    });
-  }
-  // Also check for multi-user data
-  try{
-    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-    for(var i=0;i<multi.length;i++){
-      var exists=false;
-      for(var j=0;j<users.length;j++){if(users[j].uid===multi[i].uid){exists=true;break;}}
-      if(!exists)users.push(multi[i]);
-    }
-  }catch(e){}
-  return users;
+  // Only a confirmed admin list is a cache; one local profile is not a registry.
+  return isLoggedIn()&&DB.cachedUsers?DB.cachedUsers():[];
 }
 function getAssetBalances(){
   try{
@@ -968,7 +951,7 @@ function renderUsers(users,live,errorMessage){
   for(var i=0;i<users.length;i++){
     var u=users[i];
     var pmMap={};try{pmMap=JSON.parse(localStorage.getItem('bb_profit_modules')||'{}');}catch(e){}
-    var pmOn=(u.uid in pmMap)?!!pmMap[u.uid]:(localStorage.getItem('bb_profit_module_'+u.uid)==='true');
+    var pmOn=(u.profitModule!=null)?!!u.profitModule:((u.uid in pmMap)?!!pmMap[u.uid]:(localStorage.getItem('bb_profit_module_'+u.uid)==='true'));
     var isDeactivated=deactivated.indexOf(u.uid)>=0;
     var totalAssets=parseFloat(u.cashBalance)||0;
     if(u.assetBalances){
@@ -984,6 +967,7 @@ function renderUsers(users,live,errorMessage){
     var adminBadge=isUserAdmin?'<span class="badge-green" style="font-size:10px;">Admin</span>':'<span style="font-size:10px;color:rgba(255,255,255,0.3);">—</span>';
     var statusBadge=isDeactivated?'<span style="font-size:10px;color:#ef4444;font-weight:600;">Deactivated</span>':'<span style="font-size:10px;color:#16c784;font-weight:600;">Active</span>';
     var toggleBtn=isDeactivated?'<button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="reactivateUser(\''+u.uid+'\')">Reactivate</button>':'<button class="btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;" onclick="deactivateUser(\''+u.uid+'\')">Deactivate</button>';
+    var pmToggle='<button class="btn-sm" title="When ON, every settled trade for this user wins." style="'+(pmOn?'background:rgba(22,199,132,0.18);color:#16c784;font-weight:700;':'background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.55);')+'" onclick="toggleProfitModule(\''+u.uid+'\','+(pmOn?'false':'true')+')">'+(pmOn?'ON':'OFF')+'</button>';
     html+='<tr style="'+(isDeactivated?'opacity:0.5;':'')+'">'+
       '<td style="font-family:monospace;font-weight:600;color:#f7931a;">'+u.uid+'</td>'+
       '<td>'+escapeUserText(u.name)+'</td>'+
@@ -992,7 +976,7 @@ function renderUsers(users,live,errorMessage){
       '<td style="font-family:monospace;color:'+(lockedAmt>0?'#f59e0b':'rgba(255,255,255,0.3)')+';">'+(lockedAmt>0?fmtUSD(lockedAmt):'<span style="font-size:10px;">—</span>')+'</td>'+
       '<td style="font-family:monospace;">'+fmtUSD(totalAssets)+'</td>'+
       '<td>'+adminBadge+'</td>'+
-      '<td>Market prices</td>'+
+      '<td>'+pmToggle+'</td>'+
       '<td><span class="'+(u.kycStatus==='approved'?'badge-green':u.kycStatus==='rejected'?'badge-red':'badge-yellow')+'" style="font-size:10px;">'+(u.kycStatus==='approved'?'Verified':u.kycStatus==='rejected'?'Rejected':'None')+'</span></td>'+
       '<td>'+statusBadge+'</td>'+
       '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'<button class="btn-sm btn-danger" onclick="deleteUserAccount(\''+u.uid+'\')">Deactivate</button></div></td>'+
@@ -1006,8 +990,9 @@ function renderUsers(users,live,errorMessage){
 function refreshUsers(){
   var dot=document.getElementById('usersSyncDot');
   var statusEl=document.getElementById('usersSyncText');
-  if(typeof DB==='undefined'||!DB.fetchUsersLive){
-    renderUsers(getAllUsers(),false,'Database scripts did not load. Check db.js and supabase-config.js.');
+  if(!adminBuildReady())return Promise.resolve();
+  if(!isLoggedIn()){
+    renderUsers([],false,'Sign in with your administrator account to load users.');
     return Promise.resolve();
   }
   if(dot)dot.style.background='#f59e0b';
@@ -1041,7 +1026,11 @@ setInterval(fetchLivePrices,30000);
 function getCoinPrice(sym){
   return LIVE_PRICES[sym]||0;
 }
-function toggleProfitModule(){FinanceUI.message('Trade outcomes are determined by market prices.',true);}
+function toggleProfitModule(uid,enabled){
+  return FinanceUI.do('profit-'+uid,function(){
+    return DB.action('profit_module',{uid:Number(uid),enabled:!!enabled});
+  },enabled?'Profit module ON for user '+uid+' — trades will always win.':'Profit module OFF for user '+uid+' — normal market outcome.');
+}
 function manualKYC(uid){
  var user=getAllUsers().find(function(x){return String(x.uid)===String(uid);});if(!user)return;
  var status=user.kycStatus==='approved'?'none':'approved';
@@ -1280,50 +1269,14 @@ function renderSupportLive(){
   }catch(e){}
 }
 var _supportBcApplied=false;
-if(typeof DB!=='undefined'&&DB.ready){
+if(typeof DB!=='undefined'&&DB.VERSION===ADMIN_BUILD&&DB.ready){
   DB.subscribe('bb_support_tickets',function(key,payload){
     if(payload && Array.isArray(payload)){
       _supportBcApplied=true;
     }
     refreshSupportLive(key,payload);
   });
-  // Supabase Realtime: listen for row changes on app_collections for
-  // cross-device instant updates (BroadcastChannel only covers same browser).
-  try{
-    DB.client.channel('admin-pg-realtime').on('postgres_changes',{event:'*',schema:'public',table:'app_collections'},function(payload){
-      var key=payload&&payload.new&&payload.new.key;
-      if(!key)return;
-      if(key==='bb_support_tickets'&&_supportBcApplied){_supportBcApplied=false;refreshSupportLive();return;}
-      DB.pullCollection(key).then(function(){
-        var active=document.querySelector('.nav-item.active');
-        var tab=active?active.getAttribute('data-tab'):'';
-        if(key==='bb_support_tickets')refreshSupportLive();
-        if(key==='bb_deposit_requests'&&tab==='deposits'){loadDepositAddress();refreshDepositList();refreshDepositRequests();}
-        if(key==='bb_withdrawal_requests'&&tab==='withdrawals')refreshWithdrawals();
-        if(key==='bb_loans'&&tab==='loans')refreshLoans();
-        if(key==='bb_kyc_submissions'&&tab==='kyc')refreshKYC();
-        if(key==='bb_trades_history'&&tab==='trades')refreshTrades();
-        if(key==='bb_earn_positions'&&tab==='earn')refreshEarn();
-        if(key==='bb_ai_quants'&&tab==='aiquants')refreshAiQuants();
-        if(key==='bb_profit_modules')refreshDashboard();
-      });
-    })
-    // Also watch the users table so balance / payout changes from the server
-    // (settlement cron, other device) appear instantly instead of waiting for
-    // the next poll tick.
-    .on('postgres_changes',{event:'*',schema:'public',table:'users'},function(payload){
-      if(payload&&(payload.new||payload.old)){
-        // Refresh the users list so new registrations (INSERT) and updated
-        // rows (UPDATE) appear immediately instead of waiting for the poll.
-        // refreshUsers() queries the live users table directly, so this renders
-        // the freshly-registered user without any localStorage round-trip.
-        refreshUsers().then(function(){
-          var active=document.querySelector('.nav-item.active');
-          if(active&&active.getAttribute('data-tab')==='balances')refreshBalances();
-        });
-      }
-    }).subscribe();
-  }catch(e){}
+  // Protected records refresh through authenticated RPC polling.
 }
 // Fallback poll for support tickets (BroadcastChannel + Realtime may miss).
 setInterval(function(){
@@ -2245,7 +2198,7 @@ function showToast(msg,type){
 
 // ===== INIT =====
 function syncFromServer(cb){
-  if(typeof DB==='undefined'||!DB.ready){ if(cb)cb(); return; }
+  if(!isLoggedIn()||!DB.ready){ if(cb)cb(); return; }
   var done=false;
   function finish(){
     if(done)return;
@@ -2260,8 +2213,8 @@ function syncFromServer(cb){
   // Safety: if a single pull stalls forever, still refresh rather than block.
   setTimeout(finish, 2000);
 }
-if(localStorage.getItem('bb_session_token')){
- DB.pullLocalUser().then(function(){if(DB.me&&DB.me.is_admin){localStorage.setItem(ADMIN_KEY,'1');showAdminPanel();syncFromServer();}else{localStorage.removeItem(ADMIN_KEY);}}).catch(function(){localStorage.removeItem(ADMIN_KEY);});
+if(adminBuildReady()&&localStorage.getItem('bb_session_token')){
+ DB.pullLocalUser().then(function(){if(DB.me&&DB.me.is_admin){localStorage.setItem(ADMIN_KEY,'1');showAdminPanel();syncFromServer();}else{localStorage.removeItem(ADMIN_KEY);adminLoginError('This account does not have administrator access. Sign in with your admin account.');}}).catch(function(error){localStorage.removeItem(ADMIN_KEY);adminLoginError(DB.describeUserError(error));});
 }
 window.addEventListener('storage',function(e){
   if(e.key==='bb_trades_history'||e.key==='bb_demo_trades_hist'){
@@ -2310,7 +2263,7 @@ setInterval(function(){
 // wait up to a minute to appear.
 document.addEventListener('visibilitychange',function(){
   if(!document.hidden&&isLoggedIn())refreshUsers();
-  if(!document.hidden&&typeof DB!=='undefined'&&DB.ready){
+  if(!document.hidden&&isLoggedIn()&&DB.ready){
     DB.pullAll().then(function(){_adminRefreshTab();},function(){_adminRefreshTab();});
   }
 });

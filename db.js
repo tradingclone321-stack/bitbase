@@ -1,11 +1,17 @@
 /* BitBase v2: server owns balances, orders, permissions, and durable records.
  * Browser storage is a replaceable cache. No cached balance is ever uploaded. */
-var DB = {VERSION:'2026-10-17-finance-v2',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
+var DB = {VERSION:'2026-10-17-admin-v3',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
 DB.get=function(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
 DB.set=function(k,v){localStorage.setItem(k,JSON.stringify(v));};
 DB.safeParse=function(s){try{return JSON.parse(s);}catch(e){return s;}};
 DB.userError=function(code,msg){var e=new Error(msg);e.code=code;return e;};
-DB.describeUserError=function(e){return e&&e.message||'Connection unavailable. Try again.';};
+DB.describeUserError=function(e){
+ var code=String(e&&e.code||''),message=e&&e.message||'Connection unavailable. Try again.';
+ if(code==='42501')return /Administrator access required/i.test(message)?'This account is not an administrator. Sign in with your admin account. The project owner can verify users.is_admin for your account.':'Database API permission denied (42501). Verify repair-finance.sql completed in the Supabase project configured in supabase-config.js. Keep direct user-table access private.';
+ if(['PGRST202','42883','42P01','42703'].indexOf(code)>=0)return 'The finance database update is missing or incomplete ('+code+'). Run repair-finance.sql in the Supabase project configured in supabase-config.js, then sign in again.';
+ if(['PGRST301','PGRST303'].indexOf(code)>=0)return 'The project API key was rejected. Check the public project URL and key in supabase-config.js.';
+ return message;
+};
 DB.init=function(){if(DB.ready)return;try{if(window.supabase&&typeof SUPABASE_URL!=='undefined'&&SUPABASE_URL){DB.client=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);DB.ready=true;}}catch(e){DB._lastSyncError=e.message;}};
 DB.requireUserConnection=function(){DB.init();if(!DB.ready)throw new Error('Database unavailable. Reload and try again.');};
 DB.userRequestTimeout=20000;
@@ -14,9 +20,9 @@ DB.userRequest=async function(query){
  try{var r=await Promise.race([query,new Promise(function(_,reject){timer=setTimeout(function(){ctl.abort();reject(DB.userError('DB_TIMEOUT','Response not confirmed. Retry the same operation; its request ID prevents duplicates.'));},DB.userRequestTimeout);})]);if(!r||r.error)throw r&&r.error||new Error('No server response');if(r.data&&r.data.error)throw new Error(r.data.error);return r;}
  finally{clearTimeout(timer);}
 };
-DB.rpc=async function(name,args){DB.requireUserConnection();try{var r=await DB.userRequest(DB.client.rpc(name,args));DB._lastSyncError='';return r.data;}catch(e){DB._lastSyncError=DB.describeUserError(e);if(e.code==='28000'){DB.clearSession();}throw e;}};
+DB.rpc=async function(name,args){DB.requireUserConnection();try{var r=await DB.userRequest(DB.client.rpc(name,args));DB._lastSyncError='';return r.data;}catch(e){DB._lastSyncError=DB.describeUserError(e);if(e.code==='28000'&&(!args||!args.p_token||args.p_token===localStorage.getItem('bb_session_token'))){DB.clearSession();}throw e;}};
 DB.token=function(){var t=localStorage.getItem('bb_session_token');if(!t)throw DB.userError('28000','Please sign in again after the database update.');return t;};
-DB.clearSession=function(){Object.keys(localStorage).filter(function(k){return k.indexOf('bb_')===0;}).forEach(function(k){localStorage.removeItem(k);});DB._snapshot={};};
+DB.clearSession=function(){Object.keys(localStorage).filter(function(k){return k.indexOf('bb_')===0;}).forEach(function(k){localStorage.removeItem(k);});DB._snapshot={};DB.me=null;DB._userRows=[];DB._usersFetchPromise=null;DB._usersFetchToken=null;};
 DB.cacheUser=function(u){
  if(!u)return;var old=localStorage.getItem('bb_uid');if(old&&old!==String(u.uid))DB.clearSession();
  localStorage.setItem('bb_uid',String(u.uid));localStorage.setItem('bb_name',u.name||'User');localStorage.setItem('bb_email',u.email||'');
@@ -26,6 +32,7 @@ DB.cacheUser=function(u){
  if(u.demo_balance!=null)DB.set('bb_demo_trades_bal',u.demo_balance);else localStorage.removeItem('bb_demo_trades_bal');
  if(u.demo_positions!=null)DB.set('bb_demo_trades_pos',u.demo_positions);else localStorage.removeItem('bb_demo_trades_pos');
  DB.set('bb_admin_access_list',u.is_admin?[String(u.uid)]:[]);DB.set('bb_deactivated_accounts',u.is_deactivated?[String(u.uid)]:[]);
+ if(!u.is_admin){localStorage.removeItem('bb_admin_users');localStorage.removeItem('bb_admin_logged_in');DB._userRows=[];}
  localStorage.removeItem('bb_password');DB.me=u;DB._localDirty=false;
 };
 DB.acceptSession=function(result){DB.clearSession();DB.cacheUser(result.user);localStorage.setItem('bb_session_token',result.token);localStorage.setItem('bb_login_time',String(Date.now()));return result.user;};
@@ -53,10 +60,37 @@ DB.edge=function(action,data){return DB.operation(action,data,async function(id)
  try{var r=await fetch(SUPABASE_URL+'/functions/v1/trade-engine',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify(Object.assign({},data,{action:action,requestId:id,token:DB.token()})),signal:controller.signal});var body=await r.json();if(!r.ok||body.error){var e=new Error(body.error||'Trade service unavailable');e.code=body.code;throw e;}return body;}
  finally{clearTimeout(timer);}
 });};
-DB.cachedUsers=function(){return DB.get('bb_admin_users')||[];};
+DB.settleDue=function(){
+ // Ask the trusted worker to settle expired orders now. Idempotent and safe to
+ // retry; it never supplies a price and is throttled so pages cannot spam it.
+ var now=Date.now();
+ if(DB._settleAt&&now-DB._settleAt<8000)return Promise.resolve(null);
+ DB._settleAt=now;
+ try{DB.requireUserConnection();}catch(e){return Promise.resolve(null);}
+ var token;try{token=DB.token();}catch(e){return Promise.resolve(null);}
+ return fetch(SUPABASE_URL+'/functions/v1/trade-engine',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify({action:'settle',token:token})}).then(function(r){return r.json();}).catch(function(){return null;});
+};
+DB.cachedUsers=function(){return DB.me&&DB.me.is_admin&&localStorage.getItem('bb_session_token')?DB.get('bb_admin_users')||[]:[];};
 DB.fetchUsersLive=function(){
- if(DB._usersFetchPromise)return DB._usersFetchPromise;
- DB._usersFetchPromise=DB.read('users').then(function(rows){DB._userRows=rows;var list=rows.map(function(r){return{uid:String(r.uid),name:r.name,email:r.email,cashBalance:Number(r.cash_balance),assetBalances:r.asset_balances||{},kycStatus:r.kyc_status,createdAt:r.created_at,updatedAt:r.updated_at,isAdmin:r.is_admin};});DB.set('bb_admin_users',list);DB.set('bb_admin_access_list',rows.filter(function(r){return r.is_admin;}).map(function(r){return String(r.uid);}));DB.set('bb_deactivated_accounts',rows.filter(function(r){return r.is_deactivated;}).map(function(r){return String(r.uid);}));DB._lastUsersError='';return list;}).catch(function(e){DB._lastUsersError=DB.describeUserError(e);throw e;}).finally(function(){DB._usersFetchPromise=null;});return DB._usersFetchPromise;
+ var token;try{token=DB.token();}catch(e){return Promise.reject(e);}
+ if(DB._usersFetchPromise&&DB._usersFetchToken===token)return DB._usersFetchPromise;
+ DB._usersFetchToken=token;
+ var task=DB.rpc('bb_read',{p_token:token,p_resource:'users'}).then(function(rows){
+  if(token!==localStorage.getItem('bb_session_token'))throw DB.userError('SESSION_CHANGED','The account changed while users were loading. Sign in to the administrator account again.');
+  if(!Array.isArray(rows))throw DB.userError('INVALID_RESPONSE','The server did not return a valid user list.');
+  DB._userRows=rows;var list=rows.map(function(r){return{uid:String(r.uid),name:r.name,email:r.email,cashBalance:Number(r.cash_balance),assetBalances:r.asset_balances||{},kycStatus:r.kyc_status,createdAt:r.created_at,updatedAt:r.updated_at,isAdmin:r.is_admin,profitModule:!!r.profit_module};});
+  DB.set('bb_admin_users',list);DB.set('bb_admin_access_list',rows.filter(function(r){return r.is_admin;}).map(function(r){return String(r.uid);}));DB.set('bb_deactivated_accounts',rows.filter(function(r){return r.is_deactivated;}).map(function(r){return String(r.uid);}));DB._lastUsersError='';return list;
+ }).catch(function(e){
+  if(token===localStorage.getItem('bb_session_token')){
+   DB._lastUsersError=DB.describeUserError(e);
+   if(e.code==='42501'||e.code==='28000'){
+    localStorage.removeItem('bb_admin_users');DB._userRows=[];
+    if(e.code==='28000'||/Administrator access required/i.test(e.message||'')){localStorage.removeItem('bb_admin_logged_in');localStorage.removeItem('bb_admin_access_list');if(DB.me)DB.me.is_admin=false;}
+   }
+  }
+  throw e;
+ }).finally(function(){if(DB._usersFetchPromise===task){DB._usersFetchPromise=null;DB._usersFetchToken=null;}});
+ DB._usersFetchPromise=task;return task;
 };
 DB.pullUsers=function(){return DB.fetchUsersLive().then(function(data){return {data:data,error:null};},function(error){return{data:null,error:error};});};
 DB.pullLocalUser=async function(){if(!localStorage.getItem('bb_session_token'))return false;var before=localStorage.getItem('bb_cash_balance')+localStorage.getItem('bb_asset_balances');var token=DB.token(),row=await DB.read('me');if(token!==localStorage.getItem('bb_session_token'))return false;DB.cacheUser(row);return before!==localStorage.getItem('bb_cash_balance')+localStorage.getItem('bb_asset_balances');};
@@ -103,7 +137,7 @@ DB.broadcastUpdate=function(){};DB.subscribe=function(k,cb){DB._subscribers[k]=c
 DB.whenReady=function(cb){DB.init();if(DB.ready)cb();};
 DB.startLocalPolling=function(interval){
  if(DB._pollTimer)return;
- async function poll(){if(document.hidden||!localStorage.getItem('bb_session_token')||DB._polling)return;DB._polling=true;try{await DB.pullLocalUser();await Promise.all(DB.COLLECTIONS.map(DB.pullCollection));window.dispatchEvent(new CustomEvent('bb:updated'));}catch(e){DB._lastSyncError=DB.describeUserError(e);window.dispatchEvent(new CustomEvent('bb:sync-error',{detail:DB._lastSyncError}));}finally{DB._polling=false;}}
+ async function poll(){if(document.hidden||!localStorage.getItem('bb_session_token')||DB._polling)return;DB._polling=true;try{DB.settleDue();await DB.pullLocalUser();await Promise.all(DB.COLLECTIONS.map(DB.pullCollection));window.dispatchEvent(new CustomEvent('bb:updated'));}catch(e){DB._lastSyncError=DB.describeUserError(e);window.dispatchEvent(new CustomEvent('bb:sync-error',{detail:DB._lastSyncError}));}finally{DB._polling=false;}}
  DB._pollTimer=setInterval(poll,interval||5000);poll();window.addEventListener('online',poll);document.addEventListener('visibilitychange',poll);
 };
 DB.diagnose=function(){return{version:DB.VERSION,ready:DB.ready,lastError:DB._lastSyncError,lastPullAgoSec:DB._lastPullTime?Math.round((Date.now()-DB._lastPullTime)/1000):-1,realtime:false,serverTickets:(DB.get('bb_support_tickets')||[]).length};};
