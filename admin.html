@@ -10,7 +10,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922-users-fix3"></script>
+  <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -154,7 +155,8 @@
     </div>
     <h2>Admin Panel</h2>
     <div class="sub">Restricted access. Unauthorized entry prohibited.</div>
-    <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
+    <input type="email" id="adminEmail" placeholder="Admin account email" autocomplete="username" style="width:100%;padding:12px;margin-bottom:12px;background:#222;color:#fff;border:1px solid #444;border-radius:8px;">
+      <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
     <button onclick="adminLogin()">Sign In</button>
     <div id="adminAccessNote" style="display:none;margin-top:12px;padding:10px;background:rgba(22,199,132,0.08);border:1px solid rgba(22,199,132,0.2);border-radius:8px;font-size:11px;color:#16c784;">You have admin access. You can sign in without a password.</div>
   </div>
@@ -174,6 +176,7 @@
     <div class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
       <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
     </div>
+    <div class="nav-item" data-tab="activity" onclick="switchTab('activity');refreshActivity();"><i data-lucide="list"></i><span>Activity log</span></div>
     <div class="nav-item" data-tab="users" onclick="switchTab('users')">
       <i data-lucide="users"></i><span>Users</span>
     </div>
@@ -288,7 +291,8 @@
     </div>
 
     <!-- ===== USERS TAB ===== -->
-    <div id="tab-users" class="tab-content" style="display:none;">
+    <div id="tab-activity" class="tab-content"><h2>Activity log</h2><p>Confirmed server actions, balance movements, and settlements.</p><div id="activityRows"></div></div>
+      <div id="tab-users" class="tab-content" style="display:none;">
       <div class="admin-header">
         <h1>User Management</h1>
       </div>
@@ -664,7 +668,7 @@
       <label class="form-label">Email</label>
       <input type="text" id="editUserEmail" class="form-input">
       <label class="form-label">Cash Balance (USDT)</label>
-      <input type="text" id="editUserBalance" class="form-input">
+      <input type="text" id="editUserBalance" readonly title="Use Balance Management to change funds" class="form-input">
       <label class="form-label">Admin Access</label>
       <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;" onclick="toggleAdminAccess()">
         <div id="adminAccessToggle" style="width:44px;height:24px;border-radius:12px;position:relative;transition:background 0.3s;background:rgba(255,255,255,0.15);flex-shrink:0;">
@@ -691,10 +695,7 @@ var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
 
-function getAdminPass(){
-  if(typeof DB!=='undefined'&&DB._remoteAdminPass!==null)return DB._remoteAdminPass;
-  return localStorage.getItem(ADMIN_PASS_KEY)||'admin123';
-}
+function getAdminPass(){return null;}
 function isLoggedIn(){return localStorage.getItem(ADMIN_KEY)==='1';}
 function currentUserHasAdminAccess(){
   var uid=localStorage.getItem('bb_uid');
@@ -704,48 +705,18 @@ function currentUserHasAdminAccess(){
 }
 
 function adminLogin(){
-  var pw=document.getElementById('adminPassword').value;
-  if(typeof DB!=='undefined'&&DB.ready){
-    DB.getAdminPassword().then(function(){
-      doAdminLogin(pw);
-    });
-  }else{
-    doAdminLogin(pw);
-  }
+ return FinanceUI.do('admin-login',async function(){
+  var u=await DB.loginUser(document.getElementById('adminEmail').value.trim(),document.getElementById('adminPassword').value);
+  if(!u.is_admin)throw new Error('This account does not have administrator access.');
+  localStorage.setItem(ADMIN_KEY,'1');showAdminPanel();return u;
+ },'Signed in.');
 }
-function doAdminLogin(pw){
-  if(pw===getAdminPass()){
-    localStorage.setItem(ADMIN_KEY,'1');
-    showAdminPanel();
-    syncFromServer();
-  }else if(currentUserHasAdminAccess()){
-    localStorage.setItem(ADMIN_KEY,'1');
-    showAdminPanel();
-    syncFromServer();
-  }else{
-    showToast('Invalid password','error');
-  }
-}
-function adminLogout(){
-  localStorage.removeItem(ADMIN_KEY);
-  document.getElementById('adminPanel').style.display='none';
-  document.getElementById('loginScreen').style.display='flex';
-  document.getElementById('adminPassword').value='';
-}
+function doAdminLogin(){return adminLogin();}
+function adminLogout(){DB.action('logout',{}).finally(function(){DB.clearSession();location.href='login.html';});}
 function changeAdminPassword(){
-  var current=document.getElementById('adminCurrentPass').value;
-  var newPass=document.getElementById('adminNewPass').value;
-  var confirm=document.getElementById('adminConfirmPass').value;
-  if(!current||!newPass||!confirm){showToast('Please fill in all fields','error');return;}
-  if(current!==getAdminPass()){showToast('Current password is incorrect','error');return;}
-  if(newPass.length<6){showToast('New password must be at least 6 characters','error');return;}
-  if(newPass!==confirm){showToast('New passwords do not match','error');return;}
-  localStorage.setItem(ADMIN_PASS_KEY,newPass);
-  if(typeof DB!=='undefined'&&DB.ready){DB.saveAdminPassword(newPass);}
-  document.getElementById('adminCurrentPass').value='';
-  document.getElementById('adminNewPass').value='';
-  document.getElementById('adminConfirmPass').value='';
-  showToast('Admin password updated successfully!','success');
+ var password=document.getElementById('adminNewPass').value;
+ if(password!==document.getElementById('adminConfirmPass').value){FinanceUI.message('Passwords do not match.',true);return;}
+ return FinanceUI.do('password',function(){return DB.action('password',{current:document.getElementById('adminCurrentPass').value,password:password});},'Password updated; other sessions revoked.');
 }
 function toggleAdminSidebar(){
   var sb=document.getElementById('adminSidebar');
@@ -1021,10 +992,10 @@ function renderUsers(users,live,errorMessage){
       '<td style="font-family:monospace;color:'+(lockedAmt>0?'#f59e0b':'rgba(255,255,255,0.3)')+';">'+(lockedAmt>0?fmtUSD(lockedAmt):'<span style="font-size:10px;">—</span>')+'</td>'+
       '<td style="font-family:monospace;">'+fmtUSD(totalAssets)+'</td>'+
       '<td>'+adminBadge+'</td>'+
-      '<td><div style="display:flex;align-items:center;gap:8px;"><div onclick="toggleProfitModule(\''+u.uid+'\')" style="width:38px;height:20px;border-radius:10px;cursor:pointer;position:relative;transition:background 0.3s;background:'+(pmOn?'#16c784':'rgba(255,255,255,0.15)')+';flex-shrink:0;"><div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;transition:left 0.3s;left:'+(pmOn?'20px':'2px')+';"></div></div><span style="font-size:11px;font-weight:600;color:'+(pmOn?'#16c784':'rgba(255,255,255,0.4)')+';">'+(pmOn?'ON':'OFF')+'</span></div></td>'+
+      '<td>Market prices</td>'+
       '<td><span class="'+(u.kycStatus==='approved'?'badge-green':u.kycStatus==='rejected'?'badge-red':'badge-yellow')+'" style="font-size:10px;">'+(u.kycStatus==='approved'?'Verified':u.kycStatus==='rejected'?'Rejected':'None')+'</span></td>'+
       '<td>'+statusBadge+'</td>'+
-      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'<button class="btn-sm btn-danger" onclick="deleteUserAccount(\''+u.uid+'\')">Delete</button></div></td>'+
+      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'<button class="btn-sm btn-danger" onclick="deleteUserAccount(\''+u.uid+'\')">Deactivate</button></div></td>'+
     '</tr>';
   }
   body.innerHTML=html;
@@ -1070,45 +1041,11 @@ setInterval(fetchLivePrices,30000);
 function getCoinPrice(sym){
   return LIVE_PRICES[sym]||0;
 }
-function toggleProfitModule(uid){
-  var key='bb_profit_module_'+uid;
-  var current=localStorage.getItem(key)==='true';
-  var next=!current;
-  localStorage.setItem(key,next?'true':'false');
-  localStorage.removeItem('bb_profit_module');
-  // Record in the shared profit-modules map (synced to all devices)
-  try{
-    var map=JSON.parse(localStorage.getItem('bb_profit_modules')||'{}');
-    map[uid]=next;
-    localStorage.setItem('bb_profit_modules',JSON.stringify(map));
-  }catch(e){}
-  if(typeof DB!=='undefined'){
-    DB.updateUser(uid,{profit_module:next});
-    DB.pushCollection('bb_profit_modules');
-  }
-  refreshUsers();
-}
+function toggleProfitModule(){FinanceUI.message('Trade outcomes are determined by market prices.',true);}
 function manualKYC(uid){
-  var users=getAllUsers();
-  var user=null;
-  for(var i=0;i<users.length;i++){if(String(users[i].uid)===String(uid)){user=users[i];break;}}
-  var kycStatus=user&&user.kycStatus?user.kycStatus:'none';
-  var next=kycStatus==='approved'?'none':'approved';
-  // Update in the multi-user list so the admin table reflects it
-  try{
-    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-    for(var j=0;j<multi.length;j++){
-      if(String(multi[j].uid)===String(uid)){multi[j].kycStatus=next;break;}
-    }
-    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-  }catch(e){}
-  if(String(localStorage.getItem('bb_uid'))===String(uid)){
-    try{localStorage.setItem('bb_kyc_status',next);}catch(e){}
-  }
-  // Push to the central users table so the user's device picks it up
-  if(typeof DB!=='undefined'){DB.updateUser(uid,{kyc_status:next});}
-  refreshUsers();
-  showToast('KYC '+(next==='approved'?'verified':'unverified')+' for user '+uid,'success');
+ var user=getAllUsers().find(function(x){return String(x.uid)===String(uid);});if(!user)return;
+ var status=user.kycStatus==='approved'?'none':'approved';
+ return FinanceUI.do('kyc-'+uid,function(){return DB.updateUser(uid,{kyc_status:status});},'KYC status saved.');
 }
 function openUserEdit(uid){
   var users=getAllUsers();
@@ -1126,88 +1063,9 @@ function openUserEdit(uid){
   if(window.lucide)lucide.createIcons();
 }
 function closeUserEditModal(){document.getElementById('userEditModal').classList.remove('open');}
-function deactivateUser(uid){
-  if(!confirm('Deactivate user '+uid+'? They will not be able to log in.'))return;
-  var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
-  if(deactivated.indexOf(uid)<0)deactivated.push(uid);
-  localStorage.setItem('bb_deactivated_accounts',JSON.stringify(deactivated));
-  if(typeof DB!=='undefined'){DB.updateUser(uid,{is_deactivated:true});}
-  refreshUsers();
-  showToast('User '+uid+' deactivated','error');
-}
-function reactivateUser(uid){
-  var deactivated=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
-  var idx=deactivated.indexOf(uid);
-  if(idx>=0)deactivated.splice(idx,1);
-  localStorage.setItem('bb_deactivated_accounts',JSON.stringify(deactivated));
-  if(typeof DB!=='undefined'){DB.updateUser(uid,{is_deactivated:false});}
-  refreshUsers();
-  showToast('User '+uid+' reactivated','success');
-}
-function deleteUserAccount(uid){
-  var users=getAllUsers();
-  var user=null;
-  for(var i=0;i<users.length;i++){if(String(users[i].uid)===String(uid)){user=users[i];break;}}
-  if(!user)return;
-  if(!confirm('PERMANENTLY DELETE account '+uid+' ('+(user.name||'User')+')?\n\nAll their balances, orders and records will be removed. This cannot be undone.'))return;
-  if(!confirm('Are you absolutely sure? Type CONFIRM to proceed.'))return;
-  // Remove from the multi-user store
-  try{
-    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-    multi=multi.filter(function(m){return String(m.uid)!==String(uid);});
-    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-  }catch(e){}
-  // Remove from admin access + deactivated lists
-  try{
-    var aList=JSON.parse(localStorage.getItem('bb_admin_access_list')||'[]');
-    aList=aList.filter(function(a){return String(a)!==String(uid);});
-    localStorage.setItem('bb_admin_access_list',JSON.stringify(aList));
-  }catch(e){}
-  try{
-    var dList=JSON.parse(localStorage.getItem('bb_deactivated_accounts')||'[]');
-    dList=dList.filter(function(d){return String(d)!==String(uid);});
-    localStorage.setItem('bb_deactivated_accounts',JSON.stringify(dList));
-  }catch(e){}
-  // Clean up the user's records in shared collections
-  var collections={
-    'bb_ai_quants':['uid','userName'],
-    'bb_loans':['userId','uid'],
-    'bb_deposit_requests':['userId','uid'],
-    'bb_withdrawal_requests':['userId','uid'],
-    'bb_earn_positions':['uid','userId'],
-    'bb_kyc_submissions':['userId','uid'],
-    'bb_profit_modules':null,
-    'bb_trades_history':['uid','userId'],
-    'bb_balance_history':['uid','userId']
-  };
-  for(var key in collections){
-    try{
-      if(key==='bb_profit_modules'){
-        var map=JSON.parse(localStorage.getItem('bb_profit_modules')||'{}');
-        if(map[uid]!=null){delete map[uid];localStorage.setItem('bb_profit_modules',JSON.stringify(map));if(typeof DB!=='undefined')DB.pushCollection('bb_profit_modules');}
-        continue;
-      }
-      var arr=JSON.parse(localStorage.getItem(key)||'[]');
-      if(!Array.isArray(arr))arr=[];
-      var fields=collections[key];
-      var filtered=arr.filter(function(item){
-        for(var f=0;f<fields.length;f++){
-          if(item[fields[f]]!=null&&String(item[fields[f]])===String(uid))return false;
-        }
-        return true;
-      });
-      if(filtered.length!==arr.length){
-        localStorage.setItem(key,JSON.stringify(filtered));
-        if(typeof DB!=='undefined')DB.pushCollection(key);
-      }
-    }catch(e){}
-  }
-  localStorage.removeItem('bb_profit_module_'+uid);
-  // Remove from the central users table
-  if(typeof DB!=='undefined'){DB.deleteUser(uid);}
-  refreshUsers();
-  showToast('Account '+uid+' permanently deleted','success');
-}
+function deactivateUser(uid){return FinanceUI.do('access-'+uid,function(){return DB.updateUser(uid,{is_deactivated:true});},'Account status saved.');}
+function reactivateUser(uid){return FinanceUI.do('access-'+uid,function(){return DB.updateUser(uid,{is_deactivated:false});},'Account status saved.');}
+function deleteUserAccount(uid){if(confirm('Deactivate this account and preserve its financial records?'))return deactivateUser(uid);}
 var adminAccessState=false;
 function getAdminAccessList(){
   try{return JSON.parse(localStorage.getItem('bb_admin_access_list')||'[]');}catch(e){return[];}
@@ -1233,55 +1091,13 @@ function toggleAdminAccess(){
   setAdminAccessUI(!adminAccessState);
 }
 function saveUserEdit(){
-  var uid=document.getElementById('editUserUid').value;
-  var name=document.getElementById('editUserName').value.trim();
-  var email=document.getElementById('editUserEmail').value.trim();
-  var balance=parseFloat(document.getElementById('editUserBalance').value)||0;
-  // Update admin access list
-  var adminList=getAdminAccessList();
-  var idx=adminList.indexOf(uid);
-  if(adminAccessState&&idx<0){adminList.push(uid);}
-  else if(!adminAccessState&&idx>=0){adminList.splice(idx,1);}
-  localStorage.setItem('bb_admin_access_list',JSON.stringify(adminList));
-  if(typeof DB!=='undefined'){DB.updateUser(uid,{is_admin:adminAccessState});}
-  // Update localStorage (single user)
-  if(localStorage.getItem('bb_uid')===uid){
-    localStorage.setItem('bb_name',name);
-    localStorage.setItem('bb_email',email);
-    localStorage.setItem('bb_cash_balance',balance);
-    // Also update asset Balances USDT
-    try{
-      var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-      if(ab.USDT){ab.USDT.balance=balance;ab.USDT.qty=balance;}
-      localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-    }catch(e){}
-  }
-  // Update multi-user store
-  try{
-    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-    for(var i=0;i<multi.length;i++){
-      if(multi[i].uid===uid){multi[i].name=name;multi[i].email=email;multi[i].cashBalance=balance;break;}
-    }
-    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-    if(typeof DB!=='undefined'){DB.pushUsers();}
-  }catch(e){}
-  // Explicitly push the balance to the users row so it persists to the server
-  // regardless of the (possibly racy) full pushUsers() re-upload, and so other
-  // admin devices receive it via Realtime immediately.
-  if(typeof DB!=='undefined'){
-    DB.updateUser(uid,{cash_balance:balance});
-    // Sync USDT asset balance to match (admin edits the cash balance).
-    try{
-      var uAbs=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-      if(uAbs.USDT){uAbs.USDT.balance=balance;uAbs.USDT.qty=balance;}
-      localStorage.setItem('bb_asset_balances',JSON.stringify(uAbs));
-    }catch(e){}
-  }
-  closeUserEditModal();
-  refreshUsers();
-  showToast('User updated successfully','success');
+ var uid=document.getElementById('editUserUid').value;
+ return FinanceUI.do('edit-'+uid,async function(){
+  var row=(DB._userRows||[]).find(function(x){return String(x.uid)===String(uid);});
+  var r=await DB.action('admin_user',{uid:Number(uid),name:document.getElementById('editUserName').value.trim(),email:document.getElementById('editUserEmail').value.trim(),is_admin:adminAccessState,expected_updated_at:row&&row.updated_at});
+  closeUserEditModal();return r;
+ },'User updated. Use Balance Management for recorded balance adjustments.');
 }
-
 // ===== SUPPORT TICKETS =====
 function refreshTickets(){
   var tickets=getAllTickets();
@@ -1309,7 +1125,7 @@ function refreshTickets(){
     var prevStyle=unseen>0?'font-weight:700;color:rgba(255,255,255,0.9);':'';
     html+='<div class="ticket-item '+activeClass+'" style="'+rowStyle+'" onclick="openTicket(\''+t.id+'\')">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
-        '<span class="name" style="'+nameStyle+'">'+t.userName+' ('+t.userId+')</span>'+badge+
+        '<span class="name" style="'+nameStyle+'">'+escapeUserText(t.userName)+' ('+t.userId+')</span>'+badge+
         '<span class="time">'+fmtTime(t.createdAt)+'</span>'+
       '</div>'+
       '<div style="display:flex;align-items:center;gap:6px;">'+
@@ -1531,8 +1347,8 @@ function renderChatMessages(ticket){
       var bg=isUser?'background:rgba(247,147,26,0.12);border:1px solid rgba(247,147,26,0.2);border-bottom-left-radius:4px;':'background:rgba(65,105,225,0.12);border:1px solid rgba(65,105,225,0.2);border-bottom-right-radius:4px;';
       if(isNew)bg='background:rgba(247,147,26,0.24);border:2px solid #f7931a;border-bottom-left-radius:4px;';
       html+='<div style="'+align+bg+(isUser?'width:100%;':'max-width:75%;')+'padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;">';
-      html+='<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:'+(isUser?'#f7931a':'#4169E1')+';">'+(isUser?(ticket.userName||'User')+' ('+ticket.userId+')':'Admin')+(isNew?' <span style="background:#f7931a;color:#fff;border-radius:8px;padding:0 6px;font-size:9px;font-weight:800;">NEW</span>':'')+'</div>';
-      if(m.text)html+='<div style="'+(isNew?'font-weight:800;':'')+'">'+m.text+'</div>';
+      html+='<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:'+(isUser?'#f7931a':'#4169E1')+';">'+(isUser?escapeUserText(ticket.userName||'User')+' ('+ticket.userId+')':'Admin')+(isNew?' <span style="background:#f7931a;color:#fff;border-radius:8px;padding:0 6px;font-size:9px;font-weight:800;">NEW</span>':'')+'</div>';
+      if(m.text)html+='<div style="'+(isNew?'font-weight:800;':'')+'">'+escapeUserText(m.text)+'</div>';
       if(m.attachment){
         var attIdx=chatAttachments.length;
         chatAttachments.push(m.attachment);
@@ -1541,7 +1357,7 @@ function renderChatMessages(ticket){
         }else{
           html+='<div style="margin-top:8px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;" onclick="openAttModal('+attIdx+')">'+
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'+
-            '<span style="font-size:12px;color:rgba(255,255,255,0.7);'+(isNew?'font-weight:700;':'')+'">'+m.attachment.name+'</span>'+
+            '<span style="font-size:12px;color:rgba(255,255,255,0.7);'+(isNew?'font-weight:700;':'')+'">'+escapeUserText(m.attachment.name)+'</span>'+
             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16c784" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'+
           '</div>';
         }
@@ -1576,71 +1392,19 @@ function openAttModal(idx){
   document.body.appendChild(overlay);
 }
 function replyToTicket(){
-  if(!currentTicketId){showToast('No conversation selected','error');return;}
-  var input=document.getElementById('ticketReplyInput');
-  var text=input.value.trim();
-  if(!text)return;
-  try{
-    var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
-    var found=false;
-    for(var i=0;i<tickets.length;i++){
-      if(tickets[i].id===currentTicketId){
-        if(!tickets[i].messages)tickets[i].messages=[];
-        tickets[i].messages.push({from:'admin',text:text,time:Date.now()});
-        tickets[i].lastAdminReply=Date.now();
-        found=true;
-        saveTickets(tickets);
-        input.value='';
-        renderChatMessages(tickets[i]);
-        adminLastMsgCount=tickets[i].messages.length;
-        setTicketSeenCount(currentTicketId,countUserMsgs(tickets[i]));
-        refreshTickets();
-        showToast('Reply sent','success');
-        break;
-      }
-    }
-    if(!found){showToast('Ticket not found','error');}
-  }catch(e){showToast('Error sending reply','error');}
+ var input=document.getElementById('ticketReplyInput'),text=input.value.trim();
+ var ticket=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!ticket||!text)return;
+ ticket=Object.assign({},ticket,{lastAdminReply:Date.now(),messages:(ticket.messages||[]).concat([{id:DB.newId(),from:'admin',text:text,time:Date.now()}])});
+ return FinanceUI.do('support-reply',async function(){var r=await DB.saveRecord('bb_support_tickets',ticket);input.value='';renderChatMessages(r);return r;},'Reply saved.');
 }
 function resolveTicket(){
-  if(!currentTicketId)return;
-  var tickets=getAllTicketsRaw();
-  for(var i=0;i<tickets.length;i++){
-    if(tickets[i].id===currentTicketId){tickets[i].status='resolved';break;}
-  }
-  saveTickets(tickets);
-  stopAdminSupportPoll();
-  document.getElementById('chatEmpty').style.display='flex';
-  document.getElementById('chatActive').style.display='none';
-  document.getElementById('chatPanel').classList.remove('open');
-  currentTicketId=null;
-  refreshTickets();
-  showToast('Ticket resolved','success');
+ var ticket=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!ticket)return;
+ return FinanceUI.do('support-status',function(){return DB.saveRecord('bb_support_tickets',Object.assign({},ticket,{status:'resolved'}));},'Conversation status saved.');
 }
 function deleteTicket(){
-  if(!currentTicketId)return;
-  if(!confirm('Delete this conversation?'))return;
-  // Turn the ticket into a deletion tombstone that wins the merge on every
-  // device, instead of just dropping it locally (which the sync re-adds).
-  var raw=getAllTicketsRaw();
-  for(var i=0;i<raw.length;i++){
-    if(raw[i].id===currentTicketId){
-      raw[i].status='deleted';
-      raw[i]._deletedAt=Date.now();
-      raw[i].messages=[];
-      break;
-    }
-  }
-  saveTickets(raw);
-  stopAdminSupportPoll();
-  document.getElementById('chatEmpty').style.display='flex';
-  document.getElementById('chatActive').style.display='none';
-  document.getElementById('chatPanel').classList.remove('open');
-  currentTicketId=null;
-  refreshTickets();
-  showToast('Conversation deleted','success');
+ var ticket=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!ticket)return;
+ return FinanceUI.do('support-status',function(){return DB.saveRecord('bb_support_tickets',Object.assign({},ticket,{status:'deleted'}));},'Conversation status saved.');
 }
-
 // ===== TRADES =====
 function refreshTrades(){
   var trades=getAllTrades();
@@ -1665,44 +1429,15 @@ function refreshTrades(){
       '<td>'+(t.source||'real')+'</td>'+
       '<td>'+fmtTime(t.time)+'</td>'+
       '<td>'+
-        (t.status==='Active'||t.status==='active'?
-          '<button class="btn-sm btn-success" onclick="forceTradeResult(\''+t.id+'\',\'Won\')" style="margin-right:4px;">Force Profit</button>'+
-          '<button class="btn-sm btn-danger" onclick="forceTradeResult(\''+t.id+'\',\'Lost\')" style="margin-right:4px;">Force Loss</button>'
-        :'')+
-        '<button class="btn-sm btn-danger" onclick="deleteTrade(\''+t.id+'\')">Delete</button>'+
+        '<span>Server settlement</span>'+
       '</td>'+
     '</tr>';
   }
   body.innerHTML=html;
 }
 function filterTrades(f){currentTradeFilter=f;refreshTrades();}
-function deleteTrade(id){
-  if(!confirm('Delete trade '+id+'?'))return;
-  var trades=getAllTrades();
-  trades=trades.filter(function(t){return t.id!==id;});
-  localStorage.setItem('bb_trades_history',JSON.stringify(trades));
-  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
-  refreshTrades();
-  showToast('Trade deleted','success');
-}
-function forceTradeResult(id,result){
-  if(!confirm('Force trade '+id+' as '+result+'?'))return;
-  localStorage.setItem('bb_force_resolve_'+id,result);
-  var trades=getAllTrades();
-  for(var i=0;i<trades.length;i++){
-    if(trades[i].id===id){
-      trades[i].status=result;
-      trades[i].resolvedTime=Date.now();
-      if(!trades[i].exitPrice)trades[i].exitPrice=trades[i].price||0;
-      break;
-    }
-  }
-  localStorage.setItem('bb_trades_history',JSON.stringify(trades));
-  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
-  refreshTrades();
-  showToast('Trade '+id+' will resolve as '+result+' on next tick','success');
-}
-
+function deleteTrade(){FinanceUI.message('Financial records are retained for reconciliation.',true);}
+function forceTradeResult(){FinanceUI.message('Trade results are settled from the market feed.',true);}
 // ===== WITHDRAWALS =====
 function getAllWithdrawals(){
   try{
@@ -1733,12 +1468,12 @@ function refreshWithdrawals(){
     }
     html+='<tr>'+
       '<td style="font-family:monospace;">'+r.id+'</td>'+
-      '<td>'+(r.userName||'User')+' ('+r.userId+')</td>'+
-      '<td><strong>'+r.coin+'</strong></td>'+
+      '<td>'+(r.userName||'User')+' ('+escapeUserText(r.userId)+')</td>'+
+      '<td><strong>'+escapeUserText(r.coin)+'</strong></td>'+
       '<td style="font-family:monospace;">'+Number(r.amount).toFixed(4)+'</td>'+
       '<td style="font-family:monospace;">'+Number(r.fee).toFixed(4)+'</td>'+
-      '<td>'+r.network+'</td>'+
-      '<td style="font-family:monospace;font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+r.address+'">'+r.address+'</td>'+
+      '<td>'+escapeUserText(r.network)+'</td>'+
+      '<td style="font-family:monospace;font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeUserText(r.address)+'">'+escapeUserText(r.address)+'</td>'+
       '<td>'+statusBadge+'</td>'+
       '<td>'+fmtTime(r.createdAt)+'</td>'+
       '<td>'+actions+'</td>'+
@@ -1756,118 +1491,13 @@ function filterWithdrawals(f){
   refreshWithdrawals();
 }
 function approveWithdrawal(id){
-  var requests=getAllWithdrawals();
-  for(var i=0;i<requests.length;i++){
-    if(requests[i].id===id){
-      if(requests[i].status!=='pending'){showToast('Request already processed','error');return;}
-      requests[i].status='approved';
-      requests[i].resolvedAt=Date.now();
-      // Deduct from the TARGET user's balance
-      var coin=requests[i].coin;
-      var totalDeduct=requests[i].amount+requests[i].fee;
-      var reqUid=requests[i].userId;
-      try{
-        if(coin==='USDT'){
-          var bal=getUserCashInList(reqUid)-totalDeduct;
-          if(bal<0)bal=0;
-          setUserCashInList(reqUid,bal);
-          if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
-            localStorage.setItem('bb_cash_balance',bal);
-            var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-            if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-            localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-          }
-        }else{
-          // Deduct from the target user's coin asset balance. The old code used
-          // THIS device's cached asset_balances (often empty or stale on another
-          // admin machine) and wrote the result back ABSOLUTELY with
-          // DB.updateUser({asset_balances:tab}) — silently dropping the user's
-          // other coins and/or not deducting at all. Now the deduction is
-          // server-relative via the adjust_user_asset RPC, so the user's real
-          // balances are the ones modified.
-          var legacyCoinDeduct=function(){
-            var tab={};
-            try{
-              var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-              for(var m=0;m<multi.length;m++){
-                if(String(multi[m].uid)===String(reqUid)){tab=multi[m].assetBalances||{};break;}
-              }
-            }catch(e){}
-            if(tab[coin]){
-              tab[coin].balance=(tab[coin].balance||0)-totalDeduct;
-              tab[coin].qty=(tab[coin].qty||0)-totalDeduct;
-              if(tab[coin].balance<0)tab[coin].balance=0;
-              if(tab[coin].qty<0)tab[coin].qty=0;
-            }
-            try{
-              var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-              for(var m=0;m<multi.length;m++){
-                if(String(multi[m].uid)===String(reqUid)){multi[m].assetBalances=tab;break;}
-              }
-              localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-            }catch(e){}
-            if(reqUid&&typeof DB!=='undefined'){DB.updateUser(reqUid,{asset_balances:tab});}
-            if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
-              localStorage.setItem('bb_asset_balances',JSON.stringify(tab));
-            }
-          };
-          var deductCoin=function(){
-            if(reqUid&&typeof DB!=='undefined'&&DB.client&&DB.client.rpc){
-              DB.client.rpc('adjust_user_asset',{p_uid:Number(reqUid),p_coin:coin,p_delta:-totalDeduct}).then(function(r){
-                var nb=(r&&r.data!=null)?parseFloat(r.data):null;
-                if(nb==null){legacyCoinDeduct();return;}
-                // Update only this admin device's display cache from the server.
-                try{
-                  var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-                  for(var m=0;m<multi.length;m++){
-                    if(String(multi[m].uid)===String(reqUid)){
-                      var ab=(multi[m].assetBalances)||{};
-                      if(!ab[coin]||typeof ab[coin]!=='object')ab[coin]={};
-                      ab[coin].balance=nb;ab[coin].qty=nb;
-                      multi[m].assetBalances=ab;
-                      break;
-                    }
-                  }
-                  localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-                }catch(e){}
-                if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
-                  try{
-                    var lab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-                    if(!lab[coin]||typeof lab[coin]!=='object')lab[coin]={};
-                    lab[coin].balance=nb;lab[coin].qty=nb;
-                    localStorage.setItem('bb_asset_balances',JSON.stringify(lab));
-                  }catch(e){}
-                }
-              },function(){legacyCoinDeduct();});
-              return;
-            }
-            legacyCoinDeduct();
-          };
-          deductCoin();
-        }
-      }catch(e){}
-      saveWithdrawals(requests);
-      refreshWithdrawals();
-      showToast('Withdrawal approved & user balance deducted','success');
-      break;
-    }
-  }
+ var reference=prompt('Enter the confirmed external transaction or repayment reference:');if(!reference)return;
+ return FinanceUI.do('resolve-'+id,function(){return DB.action('resolve_request',{collection:'bb_withdrawal_requests',id:id,status:'approved',reference:reference});},'Request saved with its balance transaction.');
 }
 function rejectWithdrawal(id){
-  var requests=getAllWithdrawals();
-  for(var i=0;i<requests.length;i++){
-    if(requests[i].id===id){
-      if(requests[i].status!=='pending'){showToast('Request already processed','error');return;}
-      requests[i].status='rejected';
-      requests[i].resolvedAt=Date.now();
-      saveWithdrawals(requests);
-      refreshWithdrawals();
-      showToast('Withdrawal rejected','success');
-      break;
-    }
-  }
+ var reference='';
+ return FinanceUI.do('resolve-'+id,function(){return DB.action('resolve_request',{collection:'bb_withdrawal_requests',id:id,status:'rejected',reference:reference});},'Request saved with its balance transaction.');
 }
-
 // ===== LOANS =====
 var currentLoanFilter='all';
 var LOAN_RATES_ADMIN={7:5,30:7,90:9,180:12,365:15};
@@ -1948,9 +1578,9 @@ function viewLoanProof(id){
   if(loan.proofType&&loan.proofType.indexOf('image')===0){
     content+='<img src="'+loan.proofDataUrl+'" style="max-width:100%;max-height:400px;border-radius:8px;display:block;margin:0 auto;">';
   }else{
-    content+='<a href="'+loan.proofDataUrl+'" download="'+loan.proofName+'" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-radius:10px;color:#fff;font-weight:600;text-decoration:none;">Download '+loan.proofName+'</a>';
+    content+='<a href="'+loan.proofDataUrl+'" download="'+escapeUserText(loan.proofName)+'" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-radius:10px;color:#fff;font-weight:600;text-decoration:none;">Download '+escapeUserText(loan.proofName)+'</a>';
   }
-  content+='<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:12px;">'+loan.proofName+'</div>';
+  content+='<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:12px;">'+escapeUserText(loan.proofName)+'</div>';
   content+='</div>';
   var overlay=document.createElement('div');
   overlay.className='modal-overlay open';
@@ -1969,78 +1599,18 @@ function filterLoans(f){
   refreshLoans();
 }
 function approveLoan(id){
-  var loans=getAllLoansRaw();
-  for(var i=0;i<loans.length;i++){
-    if(loans[i].id===id){
-      if(loans[i].status!=='pending'){showToast('Loan already processed','error');return;}
-      loans[i].status='active';
-      loans[i].approvedAt=Date.now();
-      loans[i].resolvedAt=Date.now();
-      // Credit USDT to the TARGET user
-      var uid=loans[i].userId;
-      try{
-        var bal=getUserCashInList(uid)+loans[i].borrowAmt;
-        setUserCashInList(uid,bal);
-        if(uid&&localStorage.getItem('bb_uid')===uid){
-          localStorage.setItem('bb_cash_balance',bal);
-          var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-          if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-          else{ab.USDT={qty:bal,balance:bal};}
-          localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-        }
-      }catch(e){}
-      saveLoans(loans);
-      refreshLoans();
-      showToast('Loan approved & $'+loans[i].borrowAmt.toFixed(2)+' USDT credited','success');
-      break;
-    }
-  }
+ var reference='';
+ return FinanceUI.do('resolve-'+id,function(){return DB.action('resolve_request',{collection:'bb_loans',id:id,status:'approved',reference:reference});},'Request saved with its balance transaction.');
 }
 function rejectLoan(id){
-  var loans=getAllLoansRaw();
-  for(var i=0;i<loans.length;i++){
-    if(loans[i].id===id){
-      if(loans[i].status!=='pending'){showToast('Loan already processed','error');return;}
-      loans[i].status='rejected';
-      loans[i].resolvedAt=Date.now();
-      saveLoans(loans);
-      refreshLoans();
-      showToast('Loan rejected','success');
-      break;
-    }
-  }
+ var reference='';
+ return FinanceUI.do('resolve-'+id,function(){return DB.action('resolve_request',{collection:'bb_loans',id:id,status:'rejected',reference:reference});},'Request saved with its balance transaction.');
 }
 function markLoanPaid(id){
-  var loans=getAllLoansRaw();
-  for(var i=0;i<loans.length;i++){
-    if(loans[i].id===id){
-      if(loans[i].status!=='active'){showToast('Loan is not active','error');return;}
-      loans[i].status='paid';
-      loans[i].paidAt=Date.now();
-      loans[i].resolvedAt=Date.now();
-      loans[i].updatedAt=Date.now();
-      saveLoans(loans);
-      refreshLoans();
-      showToast('Loan marked as paid','success');
-      break;
-    }
-  }
+ var reference=prompt('Enter the confirmed external transaction or repayment reference:');if(!reference)return;
+ return FinanceUI.do('resolve-'+id,function(){return DB.action('resolve_request',{collection:'bb_loans',id:id,status:'paid',reference:reference});},'Request saved with its balance transaction.');
 }
-function deleteLoan(id){
-  if(!confirm('Delete this loan record?'))return;
-  var loans=getAllLoansRaw();
-  for(var i=0;i<loans.length;i++){
-    if(loans[i].id===id){
-      loans[i].status='deleted';
-      loans[i]._deletedAt=Date.now();
-      break;
-    }
-  }
-  saveLoans(loans);
-  refreshLoans();
-  showToast('Loan deleted','success');
-}
-
+function deleteLoan(){FinanceUI.message('Financial records are retained. Complete or reject the request instead.',true);}
 // ===== KYC =====
 var currentKYCFilter='all';
 function getAllKYC(){
@@ -2097,37 +1667,12 @@ function filterKYC(f){
   refreshKYC();
 }
 function approveKYC(id){
-  var subs=getAllKYC();
-  for(var i=0;i<subs.length;i++){
-    if(subs[i].id===id){
-      if(subs[i].status!=='pending'){showToast('Already processed','error');return;}
-      subs[i].status='approved';
-      subs[i].resolvedAt=Date.now();
-      // Update user's KYC status in their localStorage
-      try{localStorage.setItem('bb_kyc_status','approved');}catch(e){}
-      if(typeof DB!=='undefined'&&subs[i].userId){DB.updateUser(subs[i].userId,{kyc_status:'approved'});}
-      saveKYC(subs);
-      refreshKYC();
-      showToast('KYC approved','success');
-      break;
-    }
-  }
+ var r=getAllKYC().find(function(x){return x.id===id;});if(!r)return;
+ return FinanceUI.do('kyc-'+id,function(){return DB.saveRecord('bb_kyc_submissions',Object.assign({},r,{status:'approved'}));},'KYC decision saved.');
 }
 function rejectKYC(id){
-  var subs=getAllKYC();
-  for(var i=0;i<subs.length;i++){
-    if(subs[i].id===id){
-      if(subs[i].status!=='pending'){showToast('Already processed','error');return;}
-      subs[i].status='rejected';
-      subs[i].resolvedAt=Date.now();
-      try{localStorage.setItem('bb_kyc_status','rejected');}catch(e){}
-      if(typeof DB!=='undefined'&&subs[i].userId){DB.updateUser(subs[i].userId,{kyc_status:'rejected'});}
-      saveKYC(subs);
-      refreshKYC();
-      showToast('KYC rejected','success');
-      break;
-    }
-  }
+ var r=getAllKYC().find(function(x){return x.id===id;});if(!r)return;
+ return FinanceUI.do('kyc-'+id,function(){return DB.saveRecord('bb_kyc_submissions',Object.assign({},r,{status:'rejected'}));},'KYC decision saved.');
 }
 function viewKYCDocuments(id){
   var subs=getAllKYC();
@@ -2243,92 +1788,22 @@ function getSelectedUserBal(){
   }
   return {uid:uid,bal:0};
 }
-function setUserBalance(uid,newBal){
-  if(newBal<0)newBal=0;
-  var newAb=null;
-  // Update main user
-  if(localStorage.getItem('bb_uid')===uid){
-    localStorage.setItem('bb_cash_balance',newBal);
-    try{
-      var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-      if(ab.USDT){ab.USDT.balance=newBal;ab.USDT.qty=newBal;}
-      else{ab.USDT={balance:newBal,qty:newBal};}
-      localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-      newAb=ab;
-    }catch(e){}
-  }
-  // Update multi-user store
-  try{
-    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-    for(var i=0;i<multi.length;i++){
-      if(String(multi[i].uid)===String(uid)){
-        multi[i].cashBalance=newBal;
-        if(!newAb){
-          newAb=multi[i].assetBalances||{};
-          if(newAb.USDT){newAb.USDT.balance=newBal;newAb.USDT.qty=newBal;}
-          else{newAb.USDT={balance:newBal,qty:newBal};}
-        }
-        multi[i].assetBalances=newAb;
-        break;
-      }
-    }
-    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-    // Push BOTH cash_balance and asset_balances so the user's device
-    // picks up the new USDT balance in bb_asset_balances as well.
-    if(typeof DB!=='undefined'){
-      DB.updateUser(uid,{cash_balance:newBal,asset_balances:newAb||{USDT:{balance:newBal,qty:newBal}}});
-    }
-  }catch(e){}
-  return newBal;
-}
-function logBalanceChange(uid,type,amount,newBal,reason){
-  try{
-    var hist=JSON.parse(localStorage.getItem('bb_balance_history')||'[]');
-    hist.unshift({uid:uid,type:type,amount:amount,newBalance:newBal,reason:reason||'Manual adjustment',time:Date.now()});
-    if(hist.length>50)hist=hist.slice(0,50);
-    localStorage.setItem('bb_balance_history',JSON.stringify(hist));
-    if(typeof DB!=='undefined'){DB.pushCollection('bb_balance_history');}
-  }catch(e){}
-}
+function setUserBalance(){throw new Error('Use the transactional balance action.');}
+function logBalanceChange(){throw new Error('Use the transactional balance action.');}
 function creditBalance(){
-  var sel=getSelectedUserBal();
-  var amount=parseFloat(document.getElementById('balAmount').value);
-  var reason=document.getElementById('balReason').value.trim();
-  if(isNaN(amount)||amount<=0){showToast('Enter a valid amount','error');return;}
-  if(!confirm('Credit +'+fmtUSD(amount)+' to '+sel.uid+'?'))return;
-  var newBal=setUserBalance(sel.uid,sel.bal+amount);
-  logBalanceChange(sel.uid,'credit',amount,newBal,reason);
-  document.getElementById('balAmount').value='';
-  document.getElementById('balReason').value='';
-  refreshBalances();
-  showToast('Credited +'+fmtUSD(amount)+' to '+sel.uid+' (new balance '+fmtUSD(newBal)+')','success');
+ var selected=getSelectedUserBal();
+ var data={uid:Number(selected.uid),mode:'credit',amount:document.getElementById('balAmount').value,expected:selected.bal,reason:document.getElementById('balReason').value.trim()};
+ return FinanceUI.do('admin-adjust',function(){return DB.action('admin_adjust',data);},function(r){return 'Saved. Available balance: '+fmtUSD(r.balance);});
 }
 function debitBalance(){
-  var sel=getSelectedUserBal();
-  var amount=parseFloat(document.getElementById('balAmount').value);
-  var reason=document.getElementById('balReason').value.trim();
-  if(isNaN(amount)||amount<=0){showToast('Enter a valid amount','error');return;}
-  if(amount>sel.bal){showToast('Cannot debit more than current balance ('+fmtUSD(sel.bal)+')','error');return;}
-  if(!confirm('Debit −'+fmtUSD(amount)+' from '+sel.uid+'?'))return;
-  var newBal=setUserBalance(sel.uid,sel.bal-amount);
-  logBalanceChange(sel.uid,'debit',amount,newBal,reason);
-  document.getElementById('balAmount').value='';
-  document.getElementById('balReason').value='';
-  refreshBalances();
-  showToast('Debited −'+fmtUSD(amount)+' from '+sel.uid+' (new balance '+fmtUSD(newBal)+')','success');
+ var selected=getSelectedUserBal();
+ var data={uid:Number(selected.uid),mode:'debit',amount:document.getElementById('balAmount').value,expected:selected.bal,reason:document.getElementById('balReason').value.trim()};
+ return FinanceUI.do('admin-adjust',function(){return DB.action('admin_adjust',data);},function(r){return 'Saved. Available balance: '+fmtUSD(r.balance);});
 }
 function adjustBalance(){
-  var sel=getSelectedUserBal();
-  var newBal=parseFloat(document.getElementById('balAmount').value);
-  var reason=document.getElementById('balReason').value.trim();
-  if(isNaN(newBal)||newBal<0){showToast('Enter a valid amount','error');return;}
-  if(!confirm('Set balance of '+sel.uid+' to '+fmtUSD(newBal)+'?'))return;
-  var bal=setUserBalance(sel.uid,newBal);
-  logBalanceChange(sel.uid,'set',newBal,bal,reason);
-  document.getElementById('balAmount').value='';
-  document.getElementById('balReason').value='';
-  refreshBalances();
-  showToast('Balance set to '+fmtUSD(bal),'success');
+ var selected=getSelectedUserBal();
+ var data={uid:Number(selected.uid),mode:'set',amount:document.getElementById('balAmount').value,expected:selected.bal,reason:document.getElementById('balReason').value.trim()};
+ return FinanceUI.do('admin-adjust',function(){return DB.action('admin_adjust',data);},function(r){return 'Saved. Available balance: '+fmtUSD(r.balance);});
 }
 function renderBalanceHistory(){
   var container=document.getElementById('balanceHistory');
@@ -2354,14 +1829,7 @@ function renderBalanceHistory(){
 
 // ===== DEPOSITS =====
 var depQRData=null;
-var DEPOSIT_DEFAULTS={
-  USDT:{address:'0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',network:'ERC20'},
-  BTC:{address:'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',network:'Bitcoin'},
-  ETH:{address:'0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',network:'ERC20'},
-  SOL:{address:'7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',network:'Solana'},
-  XRP:{address:'rN7PbqX2RPjxfn5RfKE1RMpDqGzRGQ3q5e',network:'XRPL'},
-  DOGE:{address:'DFundmtrigzA6E25Swr2pRe4Eb79bGP8G1',network:'Dogecoin'}
-};
+var DEPOSIT_DEFAULTS={USDT:{address:'',network:'ERC20'},BTC:{address:'',network:'Bitcoin'},ETH:{address:'',network:'ERC20'},SOL:{address:'',network:'Solana'},XRP:{address:'',network:'XRPL'},DOGE:{address:'',network:'Dogecoin'}};
 function getDepositAddresses(){
   try{
     var raw=localStorage.getItem('bb_deposit_addresses');
@@ -2400,44 +1868,12 @@ function removeDepQR(){
   document.getElementById('depQRInput').value='';
   showToast('QR code removed','success');
 }
-function generateDepQR(){
-  var addr=document.getElementById('depAddress').value.trim();
-  if(!addr){showToast('Enter an address first','error');return;}
-  try{
-    var canvas=document.createElement('canvas');
-    // Use simple QR generation via API URL (data URI)
-    var size=120;
-    canvas.width=size;canvas.height=size;
-    var ctx=canvas.getContext('2d');
-    // Build a simple QR-like pattern from address hash
-    var cellSize=4;var grid=Math.floor(size/cellSize);
-    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,size,size);
-    ctx.fillStyle='#000000';
-    var hash=0;for(var i=0;i<addr.length;i++){hash=((hash<<5)-hash)+addr.charCodeAt(i);hash|=0;}
-    var seed=Math.abs(hash);
-    for(var y=0;y<grid;y++){
-      for(var x=0;x<grid;x++){
-        seed=(seed*16807+0)%2147483647;
-        if(seed%3===0||(x<7&&y<7)||(x>=grid-7&&y<7)||(x<7&&y>=grid-7)){
-          ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
-        }
-      }
-    }
-    depQRData=canvas.toDataURL();
-    document.getElementById('depQRPreview').innerHTML='<img src="'+depQRData+'" style="width:100%;height:100%;object-fit:contain;">';
-    showToast('QR generated from address','success');
-  }catch(e){showToast('Error generating QR','error');}
-}
+function generateDepQR(){FinanceUI.message('Upload a verified QR code from your wallet. The old generated pattern was not a valid QR code.',true);}
 function saveDepositAddress(){
-  var coin=document.getElementById('depCoinSelect').value;
-  var network=document.getElementById('depNetwork').value.trim();
-  var address=document.getElementById('depAddress').value.trim();
-  if(!address){showToast('Address is required','error');return;}
-  var addrs=getDepositAddresses();
-  addrs[coin]={address:address,network:network||addrs[coin].network,qrData:depQRData};
-  saveDepositAddresses(addrs);
-  refreshDepositList();
-  showToast(coin+' deposit address saved','success');
+ var coin=document.getElementById('depCoinSelect').value,network=document.getElementById('depNetwork').value.trim(),address=document.getElementById('depAddress').value.trim();
+ if(!address){FinanceUI.message('Address is required.',true);return;}
+ var addrs=getDepositAddresses();addrs[coin]={address:address,network:network,qrData:depQRData};
+ return FinanceUI.do('deposit-address',function(){return DB.saveRecord('bb_deposit_addresses',Object.assign({},addrs,{_version:DB._addressVersion||0}));},'Deposit address saved.');
 }
 function refreshDepositList(){
   var addrs=getDepositAddresses();
@@ -2446,7 +1882,7 @@ function refreshDepositList(){
   var coins=['USDT','BTC','ETH','SOL','XRP','DOGE'];
   for(var i=0;i<coins.length;i++){
     var c=coins[i];
-    var d=addrs[c];
+    var d=addrs[c]||{network:'',address:'Not configured'};
     html+='<div style="padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:10px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'+
         '<div style="font-weight:600;font-size:14px;">'+c+'</div>'+
@@ -2501,11 +1937,11 @@ function refreshDepositRequests(){
     actions+='<button class="btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;" onclick="deleteDepositRequest(\''+r.id+'\')">Delete</button>';
     html+='<tr>'+
       '<td style="font-family:monospace;">'+r.id+'</td>'+
-      '<td>'+(r.userName||'User')+' ('+r.userId+')</td>'+
-      '<td><strong>'+r.coin+'</strong></td>'+
+      '<td>'+(r.userName||'User')+' ('+escapeUserText(r.userId)+')</td>'+
+      '<td><strong>'+escapeUserText(r.coin)+'</strong></td>'+
       '<td style="font-family:monospace;">'+Number(r.amount).toFixed(4)+'</td>'+
       '<td style="font-family:monospace;color:#16c784;">'+usdVal+'</td>'+
-      '<td>'+r.network+'</td>'+
+      '<td>'+escapeUserText(r.network)+'</td>'+
       '<td>'+proofBtn+'</td>'+
       '<td>'+statusBadge+'</td>'+
       '<td>'+fmtTime(r.createdAt)+'</td>'+
@@ -2532,106 +1968,16 @@ function getUserCashInList(uid){
   }catch(e){}
   return 0;
 }
-function setUserCashInList(uid,newBal,userName,userEmail){
-  // Update the admin's local cache for the UI.
-  try{
-    var multi=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-    var found=false;
-    for(var j=0;j<multi.length;j++){
-      if(String(multi[j].uid)===String(uid)){multi[j].cashBalance=newBal;found=true;break;}
-    }
-    if(!found){
-      multi.push({uid:uid,name:userName||'User',email:userEmail||'',cashBalance:newBal,assetBalances:{USDT:{balance:newBal,qty:newBal}}});
-    }
-    localStorage.setItem('bb_admin_users',JSON.stringify(multi));
-  }catch(e){}
-  if(!uid||typeof DB==='undefined')return;
-  // Write the NEW total as a DELTA against the user's live SERVER balance
-  // (via the relative credit_user RPC) instead of an absolute value derived
-  // from this admin device's possibly-stale cache. The old code wrote
-  // cash_balance = (getUserCashInList(...) which returns 0 when the user
-  // isn't cached locally) + delta — clobbering the user's real balance with
-  // a tiny or zero-based number. credit_user just ADDS, so it never overwrites.
-  var setAbs=function(){DB.updateUser(uid,{cash_balance:newBal});};
-  try{
-    if(!DB.client||!DB.client.rpc){setAbs();return;}
-    DB.client.from('users').select('cash_balance').eq('uid',Number(uid)).limit(1).single().then(function(res){
-      var cur=(res&&res.data&&res.data.cash_balance!=null)?parseFloat(res.data.cash_balance):null;
-      if(cur==null){setAbs();return;}
-      var delta=newBal-cur;
-      if(Math.abs(delta)<0.0000001)return;
-      DB.client.rpc('credit_user',{p_uid:Number(uid),p_amount:delta}).then(function(r){
-        var nb=(r&&r.data!=null&&!isNaN(parseFloat(r.data)))?parseFloat(r.data):null;
-        if(nb!=null){
-          try{
-            var ml=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-            for(var k=0;k<ml.length;k++){if(String(ml[k].uid)===String(uid)){ml[k].cashBalance=nb;break;}}
-            localStorage.setItem('bb_admin_users',JSON.stringify(ml));
-          }catch(e){}
-        }
-      },setAbs);
-    },setAbs);
-  }catch(e){setAbs();}
-}
+function setUserCashInList(){throw new Error('Use the transactional balance action.');}
 function approveDeposit(id){
-  var requests=getAllDepositRequestsRaw();
-  for(var i=0;i<requests.length;i++){
-    if(requests[i].id===id){
-      if(requests[i].status!=='pending'){showToast('Already processed','error');return;}
-      requests[i].status='approved';
-      requests[i].resolvedAt=Date.now();
-      // Credit the TARGET user's balance — convert to USDT equivalent
-      var coin=requests[i].coin;
-      var amount=requests[i].amount;
-      var reqUid=requests[i].userId;
-      try{
-        var usdtAmount=coin==='USDT'?amount:(amount*(getCoinPrice(coin)||0));
-        var bal=getUserCashInList(reqUid)+usdtAmount;
-        setUserCashInList(reqUid,bal,requests[i].userName,requests[i].userEmail);
-        // If the target is the admin's own device account, mirror locally
-        if(reqUid&&localStorage.getItem('bb_uid')===reqUid){
-          localStorage.setItem('bb_cash_balance',bal);
-          var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-          if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-          else{ab.USDT={balance:bal,qty:bal};}
-          localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-        }
-      }catch(e){}
-      saveDepositRequests(requests);
-      refreshDepositRequests();
-      showToast('Deposit approved & credited to user','success');
-      break;
-    }
-  }
+ var reference='';
+ return FinanceUI.do('resolve-'+id,function(){return DB.action('resolve_request',{collection:'bb_deposit_requests',id:id,status:'approved',reference:reference});},'Request saved with its balance transaction.');
 }
 function rejectDeposit(id){
-  var requests=getAllDepositRequestsRaw();
-  for(var i=0;i<requests.length;i++){
-    if(requests[i].id===id){
-      if(requests[i].status!=='pending'){showToast('Already processed','error');return;}
-      requests[i].status='rejected';
-      requests[i].resolvedAt=Date.now();
-      saveDepositRequests(requests);
-      refreshDepositRequests();
-      showToast('Deposit rejected','success');
-      break;
-    }
-  }
+ var reference='';
+ return FinanceUI.do('resolve-'+id,function(){return DB.action('resolve_request',{collection:'bb_deposit_requests',id:id,status:'rejected',reference:reference});},'Request saved with its balance transaction.');
 }
-function deleteDepositRequest(id){
-  if(!confirm('Delete this deposit record?'))return;
-  var requests=getAllDepositRequestsRaw();
-  for(var i=0;i<requests.length;i++){
-    if(requests[i].id===id){
-      requests[i].status='deleted';
-      requests[i]._deletedAt=Date.now();
-      break;
-    }
-  }
-  saveDepositRequests(requests);
-  refreshDepositRequests();
-  showToast('Deposit record deleted','success');
-}
+function deleteDepositRequest(){FinanceUI.message('Financial records are retained. Complete or reject the request instead.',true);}
 function viewDepProof(id){
   var requests=getAllDepositRequests();
   var req=null;
@@ -2669,7 +2015,7 @@ function refreshAnalytics(){
   for(var i=0;i<allTrades.length;i++){
     volume+=(allTrades[i].amount||0);
     if(allTrades[i].status==='Won')profit+=(allTrades[i].profit||0);
-    if(allTrades[i].status==='Lost')losses+=(allTrades[i].amount||0);
+    if(allTrades[i].status==='Lost')losses+=Math.abs(allTrades[i].profit||0);
   }
 
   document.getElementById('anaTotalTrades').textContent=totalTrades;
@@ -2803,18 +2149,7 @@ function refreshEarn(){
   }
   body.innerHTML=html;
 }
-function deleteEarnPosition(idx){
-  var positions=getEarnPositions();
-  var allFiltered=positions;
-  if(currentEarnFilter!=='all')allFiltered=positions.filter(function(p){return p.type===currentEarnFilter;});
-  var pos=allFiltered[idx];
-  if(!pos||!confirm('Delete this '+pos.type+' position of '+pos.amount+' '+pos.coin+'?'))return;
-  var realIdx=positions.indexOf(pos);
-  if(realIdx>=0){positions[realIdx]=Object.assign({},pos,{status:'deleted',_deletedAt:Date.now()});saveEarnPositions(positions);}
-  refreshEarn();
-  showToast('Position deleted','success');
-}
-
+function deleteEarnPosition(){FinanceUI.message('Financial records are retained. Complete or reject the request instead.',true);}
 // ===== AI QUANTS =====
 var currentAiQuantsFilter='all';
 function getAiQuants(){
@@ -2885,93 +2220,9 @@ function refreshAiQuants(){
   }
   body.innerHTML=html;
 }
-function settleAiQuantsDay(realIdx){
-  var DAY_MS=24*60*60*1000;
-  var raw=getAiQuants();
-  var orders=raw.filter(function(x){return x&&x.status!=='deleted';});
-  var o=orders[realIdx];
-  if(!o||o.status!=='active')return;
-  var rawIdx=raw.indexOf(o);
-  if(rawIdx<0)return;
-  var settledDays=o.settledDays||0;
-  if(settledDays>=o.days){showToast('All days already settled for this plan','error');return;}
-  var dayProfit=o.amount*o.rate/100;
-  var uid=o.uid;
-  var credit=dayProfit;
-  var isLastDay=(settledDays+1>=o.days);
-  if(isLastDay)credit+=o.amount;
-  try{
-    var bal=getUserCashInList(uid)+credit;
-    setUserCashInList(uid,bal,o.userName,o.userEmail);
-    if(uid&&localStorage.getItem('bb_uid')===uid){
-      localStorage.setItem('bb_cash_balance',bal);
-      var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-      if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-      else{ab.USDT={balance:bal,qty:bal};}
-      localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-    }
-  }catch(e){}
-  o.settledDays=settledDays+1;
-  o.earned=(o.earned||0)+dayProfit;
-  o.lastPayout=(o.lastPayout||o.started)+DAY_MS;
-  o.updatedAt=Date.now();
-  if(isLastDay){
-    o.status='completed';
-    o.completedAt=Date.now();
-    o.updatedAt=Date.now();
-  }
-  raw[rawIdx]=o;
-  saveAiQuants(raw);
-  refreshAiQuants();
-  showToast('Day settled: +$'+dayProfit.toFixed(2)+' credited'+(isLastDay?' & principal $'+o.amount.toFixed(2)+' returned':'')+' to user','success');
-}
-function completeAiQuantsOrder(realIdx){
-  var raw=getAiQuants();
-  var orders=raw.filter(function(x){return x&&x.status!=='deleted';});
-  var o=orders[realIdx];
-  if(!o||o.status!=='active')return;
-  if(!confirm('Complete '+getPlanName(o.plan)+' of $'+o.amount.toFixed(2)+' for '+(o.userName||o.uid)+'?'))return;
-  var rawIdx=raw.indexOf(o);
-  if(rawIdx<0)return;
-  var uid=o.uid;
-  var fullProfit=o.amount*o.rate/100*o.days;
-  var settled=o.earned||0;
-  var remainingProfit=Math.max(0,fullProfit-settled);
-  var credit=o.amount+remainingProfit;
-  try{
-    var bal=getUserCashInList(uid)+credit;
-    setUserCashInList(uid,bal,o.userName,o.userEmail);
-    if(uid&&localStorage.getItem('bb_uid')===uid){
-      localStorage.setItem('bb_cash_balance',bal);
-      var ab=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-      if(ab.USDT){ab.USDT.balance=bal;ab.USDT.qty=bal;}
-      else{ab.USDT={balance:bal,qty:bal};}
-      localStorage.setItem('bb_asset_balances',JSON.stringify(ab));
-    }
-  }catch(e){}
-  o.status='completed';
-  o.completedAt=Date.now();
-  o.updatedAt=Date.now();
-  o.earned=fullProfit;
-  raw[rawIdx]=o;
-  saveAiQuants(raw);
-  refreshAiQuants();
-  showToast('Plan completed & $'+credit.toFixed(2)+' credited to user','success');
-}
-function deleteAiQuantsOrder(realIdx){
-  var raw=getAiQuants();
-  var orders=raw.filter(function(x){return x&&x.status!=='deleted';});
-  var o=orders[realIdx];
-  if(!o)return;
-  if(!confirm('Delete this AI quant plan for '+(o.userName||o.uid)+'?'))return;
-  var rawIdx=raw.indexOf(o);
-  if(rawIdx<0)return;
-  raw[rawIdx]=Object.assign({},o,{status:'deleted',_deletedAt:Date.now()});
-  saveAiQuants(raw);
-  refreshAiQuants();
-  showToast('Plan deleted','success');
-}
-
+function settleAiQuantsDay(){return FinanceUI.do('settle-due',function(){return DB.rpc('bb_tick',{p_token:DB.token()});},'All due accruals processed. Future earnings cannot be paid early.');}
+function completeAiQuantsOrder(){return FinanceUI.do('settle-due',function(){return DB.rpc('bb_tick',{p_token:DB.token()});},'All due accruals processed. Future earnings cannot be paid early.');}
+function deleteAiQuantsOrder(){FinanceUI.message('Financial records are retained. Complete or reject the request instead.',true);}
 // ===== AUTO SETTLE (server authority) =====
 // Settlement is done ONLY inside the database (supabase-cron.sql:
 // settle_ai_quants()). It locks the ai-quants row so concurrent callers
@@ -2981,35 +2232,7 @@ function deleteAiQuantsOrder(realIdx){
 // caused by the user page and admin page both settling the same order.
 var _aqAutoSettleBusy=false;
 var _aqSettleWarned=false;
-function autoSettleAiQuants(){
-  if(_aqAutoSettleBusy)return;
-  _aqAutoSettleBusy=true;
-  try{
-    if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.rpc){
-      refreshAiQuants();
-      return;
-    }
-    DB.client.rpc('settle_ai_quants',{}).then(function(res){
-      var settled=(res&&res.data&&res.data.settledOrders)||0;
-      if(settled>0){
-        // Server advanced lastPayout etc. — pull the freshly-updated orders
-        // and the users table, then refresh whatever the admin sees.
-        DB.pullCollection('bb_ai_quants').then(function(){refreshAiQuants();});
-        DB.pullUsers().then(function(){
-          _adminRefreshTab();
-        });
-      }
-    },function(e){
-      // RPC unavailable (function not installed yet). Show one warning.
-      if(!_aqSettleWarned){
-        _aqSettleWarned=true;
-        showToast('AI Quant settlement RPC missing — run supabase-cron.sql on Supabase','error');
-      }
-      refreshAiQuants();
-    });
-  }finally{_aqAutoSettleBusy=false;}
-}
-
+function autoSettleAiQuants(){ /* Scheduled in PostgreSQL, independent of admin browsers. */ }
 // ===== TOAST =====
 function showToast(msg,type){
   var old=document.querySelector('.toast');if(old)old.remove();
@@ -3037,20 +2260,8 @@ function syncFromServer(cb){
   // Safety: if a single pull stalls forever, still refresh rather than block.
   setTimeout(finish, 2000);
 }
-if(isLoggedIn()){
-  if(typeof DB!=='undefined'&&DB.ready){
-    DB.getAdminPassword().then(function(){showAdminPanel();syncFromServer();});
-  }else{
-    showAdminPanel();
-    syncFromServer();
-  }
-}else{
-  if(window.lucide)lucide.createIcons();
-  if(typeof DB!=='undefined'&&DB.ready){DB.getAdminPassword();}
-  if(currentUserHasAdminAccess()){
-    var note=document.getElementById('adminAccessNote');
-    if(note)note.style.display='block';
-  }
+if(localStorage.getItem('bb_session_token')){
+ DB.pullLocalUser().then(function(){if(DB.me&&DB.me.is_admin){localStorage.setItem(ADMIN_KEY,'1');showAdminPanel();syncFromServer();}else{localStorage.removeItem(ADMIN_KEY);}}).catch(function(){localStorage.removeItem(ADMIN_KEY);});
 }
 window.addEventListener('storage',function(e){
   if(e.key==='bb_trades_history'||e.key==='bb_demo_trades_hist'){
@@ -3113,6 +2324,10 @@ function refreshAll(){
   refreshDashboard();
   refreshUsers();
 }
+</script>
+<script>
+async function refreshActivity(){try{var events=await DB.read('activity');document.getElementById('activityRows').innerHTML=events.map(function(a){return '<div style="padding:12px;border-bottom:1px solid #333"><strong>'+escapeUserText(a.action)+'</strong> · user '+escapeUserText(a.subject_uid||'system')+' · actor '+escapeUserText(a.actor_uid||'system')+'<br><small>'+escapeUserText(a.created_at)+' · '+escapeUserText(a.entity_id||'')+'</small></div>';}).join('');}catch(e){FinanceUI.message(e.message,true);}}
+window.addEventListener('bb:updated',function(){if(DB.me&&DB.me.is_admin){_adminRefreshTab();var active=document.querySelector('.nav-item.active');if(active&&active.dataset.tab==='activity')refreshActivity();}});
 </script>
 </body>
 </html>

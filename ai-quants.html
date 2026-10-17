@@ -10,7 +10,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922-users-fix3"></script>
+  <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
 </head>
 <body class="page-body">
 <script>
@@ -66,7 +67,7 @@
 <div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="mobile-nav">
     <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
-    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -300,11 +301,11 @@
 <script>
 // ===== PLAN DATA =====
 var PLANS=[
-  {key:'demo',title:'AI Quant Demo',days:1,min:10,lo:0.5,hi:1.0,rate:0.75,settle:'Daily Settlement',desc:'Perfect for first-time users to experience AI quantitative trading with low risk.',cta:'Start Demo',icon:'rocket'},
-  {key:'trial',title:'AI Quant Trial',days:7,min:100,lo:0.3,hi:0.8,rate:0.55,settle:'Daily Settlement',desc:'Short-term AI strategy ideal for beginners testing market performance.',cta:'Start Trial',icon:'shield'},
-  {key:'standard',title:'AI Quant Standard',days:30,min:1000,lo:0.5,hi:1.2,rate:0.85,settle:'Daily Settlement',desc:'Balanced long-term quantitative strategy offering stable automated returns.',cta:'Invest Now',icon:'trending-up'},
-  {key:'professional',title:'AI Quant Professional',days:90,min:5000,lo:0.8,hi:1.5,rate:1.15,settle:'Daily Settlement',desc:'Professional-grade AI trading strategy optimized for experienced investors.',cta:'Go Premium',icon:'briefcase'},
-  {key:'premium',title:'AI Quant Premium',days:180,min:10000,lo:1.0,hi:2.0,rate:1.5,settle:'Daily Settlement',desc:'Highest-tier AI investment plan designed for maximum long-term growth.',cta:'Join Premium',icon:'crown'}
+  {key:'demo',title:'AI Quant Demo',days:1,min:10,lo:0.5,hi:1.0,rate:0.75,settle:'Daily Settlement',desc:'Fixed accrual plan. No external AI strategy is connected.',cta:'Start Demo',icon:'rocket'},
+  {key:'trial',title:'AI Quant Trial',days:7,min:100,lo:0.3,hi:0.8,rate:0.55,settle:'Daily Settlement',desc:'Seven-day fixed accrual plan; recorded in your account ledger.',cta:'Start Trial',icon:'shield'},
+  {key:'standard',title:'AI Quant Standard',days:30,min:1000,lo:0.5,hi:1.2,rate:0.85,settle:'Daily Settlement',desc:'Thirty-day fixed accrual plan with server-recorded daily credits.',cta:'Invest Now',icon:'trending-up'},
+  {key:'professional',title:'AI Quant Professional',days:90,min:5000,lo:0.8,hi:1.5,rate:1.15,settle:'Daily Settlement',desc:'Ninety-day fixed accrual plan; principal returns at maturity.',cta:'Go Premium',icon:'briefcase'},
+  {key:'premium',title:'AI Quant Premium',days:180,min:10000,lo:1.0,hi:2.0,rate:1.5,settle:'Daily Settlement',desc:'One-hundred-eighty-day fixed accrual plan; principal returns at maturity.',cta:'Join Premium',icon:'crown'}
 ];
 var DAY_MS=24*60*60*1000;
 var selectedKey='standard';
@@ -340,32 +341,8 @@ function saveOrders(arr){ localStorage.setItem('bb_ai_quants',JSON.stringify(arr
 function getPlan(key){ for(var i=0;i<PLANS.length;i++) if(PLANS[i].key===key) return PLANS[i]; return null; }
 
 // ===== BALANCE =====
-function getUsdtBalance(){
-  var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
-  try{
-    var raw=localStorage.getItem('bb_asset_balances');
-    if(raw){ var data=JSON.parse(raw); if(data.USDT&&data.USDT.balance!==undefined)cb=Math.max(cb,parseFloat(data.USDT.balance)||0); }
-  }catch(e){}
-  return cb;
-}
-function addUsdt(amount,deduct){
-  var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
-  cb=deduct?Math.max(0,cb-amount):cb+amount;
-  localStorage.setItem('bb_cash_balance',cb.toString());
-  try{
-    var raw=localStorage.getItem('bb_asset_balances');
-    var data=raw?JSON.parse(raw):{};
-    if(!data.USDT)data.USDT={balance:0,qty:0};
-    data.USDT.balance=deduct?Math.max(0,data.USDT.balance-amount):data.USDT.balance+amount;
-    data.USDT.qty=data.USDT.balance;
-    localStorage.setItem('bb_asset_balances',JSON.stringify(data));
-  }catch(e){}
-  if(typeof DB!=='undefined'){
-    DB._localDirty = true;
-    DB.syncLocalUser();
-  }
-}
-
+function getUsdtBalance(){return Number(localStorage.getItem('bb_cash_balance')||0);}
+function addUsdt(){throw new Error('Balances are changed by server transactions only.');}
 // ===== RENDER PLANS =====
 (function(){
   var grid=document.getElementById('plansGrid');
@@ -463,81 +440,11 @@ function setMax(){
   }
 }
 function submitPlan(){
-  var p=getPlan(selectedKey);
-  var amount=parseFloat(document.getElementById('quantAmount').value);
-  if(!amount||isNaN(amount)||amount<p.min){showToast('Minimum investment is '+p.min+' USDT','error');return;}
-  var avail=getUsdtBalance();
-  if(amount>avail){showToast('Insufficient USDT balance. Available: '+avail.toFixed(2)+' USDT','error');return;}
-  var btn=document.getElementById('submitBtn');
-  btn.disabled=true;
-  document.getElementById('submitLabel').textContent='Processing...';
-  setTimeout(function(){
-    addUsdt(amount,true);
-    var orders=getOrders();
-    var now=Date.now();
-    orders.push({
-      id:'Q'+now,
-      plan:p.key,
-      planName:p.title,
-      rate:p.rate,
-      days:p.days,
-      amount:amount,
-      started:now,
-      lastPayout:now,
-      earned:0,
-      status:'active',
-      uid:localStorage.getItem('bb_uid')||'',
-      userName:localStorage.getItem('bb_name')||'User',
-      userEmail:localStorage.getItem('bb_email')||''
-    });
-    saveOrders(orders);
-    renderOrders();
-    closeModal('quantModal');
-    document.getElementById('submitLabel').textContent=p.cta;
-    document.getElementById('quantAmount').value='';
-    showToast(p.title+' started — $'+amount.toFixed(2)+' invested. Daily settlement begins in 24h.','success');
-  },1200);
+ var data={plan:selectedKey,amount:document.getElementById('quantAmount').value};
+ return FinanceUI.do('quant-start',async function(){var r=await DB.action('quant_start',data);closeModal('quantModal');return r;},'Plan confirmed. Server settlement continues while offline.');
 }
-
 // ===== RENDER ORDERS =====
-function settleOrders(){
-  // Settlement is done ONLY on the server (settle_ai_quants RPC — see
-  // supabase-cron.sql). It locks the ai-quants row so concurrent callers
-  // serialize and can never double-credit a day. The OLD version settled
-  // this page's local copy of the order and then called credit_user with a
-  // client-computed amount — when the admin page settled the SAME order at
-  // the same time, both billed the same day -> user was credited ×2.
-  // This page is now display-only: render locally, trigger the server
-  // settlement (throttled), then pull the server's result.
-  renderOrders();
-  try{refreshOpenOrderDetails();}catch(e){}
-  if(_lastSettleCall && Date.now()-_lastSettleCall<5000)return;
-  _lastSettleCall=Date.now();
-  if(typeof DB==='undefined'||!DB.ready||!DB.client||!DB.client.rpc)return;
-  // The RPC credits the user's cash_balance on the SERVER. Until we pull it,
-  // our local bb_cash_balance is stale — and the shared startLocalPolling
-  // (sync-then-pull) would push that stale absolute value straight over the
-  // fresh credit, making it disappear permanently. Suppress the poll's push
-  // for the duration of this RPC+pull cycle so the credited balance arrives
-  // locally first. We then re-sync so the server copy is untouched.
-  DB._skipSyncUntil = Date.now() + 7000;
-  DB.client.rpc('settle_ai_quants',{}).then(function(){
-    // Refresh the order list + the user's balance from the server.
-    DB.pullCollection('bb_ai_quants').then(function(){
-      renderOrders();
-      try{refreshOpenOrderDetails();}catch(e){}
-    });
-    DB.pullLocalUser().then(function(){
-      renderOrders();
-      try{refreshOpenOrderDetails();}catch(e){}
-      // After pulling the server's fresh (credited) balance, mirror it back so
-      // a later poll push carries the correct amount rather than the stale one.
-      DB.syncLocalUser();
-    });
-  },function(){
-    // RPC unavailable — nothing can settle client-side by design.
-  });
-}
+function settleOrders(){ /* The database scheduler owns accrual settlement. */ }
 var _lastSettleCall=0;
 
 function fmtDur(ms){
@@ -706,5 +613,6 @@ if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
   <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
 </div>
 <script>lucide.createIcons();</script>
+<script>window.addEventListener('bb:updated',function(){renderOrders();refreshOpenOrderDetails();});</script>
 </body>
 </html>

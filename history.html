@@ -10,7 +10,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922-users-fix3"></script>
+  <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
   <style>
     [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
     [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
@@ -141,7 +142,7 @@
 <div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="mobile-nav">
     <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
-    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -255,7 +256,7 @@ function getTradeRecords(){
     // pushed it to Supabase — bb_trades_history is shared by all users, so it
     // permanently deleted everyone else's history. Never write back here.
     return recent.map(function(r){
-      return {type:'trade',asset:r.pair,side:r.side,amount:r.amount,price:r.price,fee:r.fee||0,time:new Date(r.time).toISOString(),status:r.status==='Won'||r.status==='Closed'?'Completed':r.status==='Lost'?'Rejected':'Pending',orderId:r.id,profit:r.profit,exitPrice:r.exitPrice,source:r.source||'real'};
+      return {type:'trade',asset:r.pair,side:r.side,amount:r.amount,price:r.price,fee:r.fee||0,time:new Date(r.time).toISOString(),status:['Won','Lost','Closed','Draw'].indexOf(r.status)>=0?'Completed':(r.status==='Review'?'Review':'Pending'),orderId:r.id,profit:r.profit,payout:r.payout,exitPrice:r.exitPrice,source:r.source||'real'};
     });
   }catch(e){return [];}
 }
@@ -459,7 +460,7 @@ function openModal(idx) {
     html += modalRow('Source', `<span class="${item.source==='demo'?'badge-demo':'badge-real'}">${item.source==='demo'?'DEMO':'REAL'}</span>`);
     html += modalRow('Price', `$${formatNumber(item.price, 2)}`);
     html += modalRow('Amount', `${formatNumber(item.amount, item.amount % 1 === 0 ? 0 : 4)} USDT`);
-    var totalVal=item.status==='Completed'?(item.amount+(item.profit||0)):0;
+    var totalVal=item.status==='Completed'?(item.payout!=null?item.payout:(item.amount+(item.profit||0))):0;
     html += modalRow('Total', `${formatNumber(totalVal, 2)} USDT`);
     html += modalRow('Fee', `$${item.fee.toFixed(2)}`);
     html += modalRow('Order ID', item.orderId);
@@ -625,5 +626,6 @@ if(typeof DB!=='undefined' && DB.settleRealTrades){
   <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
 </div>
 <script>lucide.createIcons();</script>
+<script>window.addEventListener('bb:updated',function(){renderTable();lucide.createIcons();});</script>
 </body>
 </html>

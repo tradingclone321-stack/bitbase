@@ -1,0 +1,40 @@
+PASS migration runs twice without changing cash or crypto holdings
+PASS uncertain active legacy orders quarantined and originals preserved
+PASS passwords migrated to hashes; public responses exclude passwords
+PASS direct anonymous balances, histories, private functions and quotes denied
+PASS null and incorrect credentials cannot create sessions
+PASS user cannot adjust balances, promote self, or read admin registry
+PASS invalid numeric amounts rejected without debit
+PASS missing, stale, or failing worker blocks new trades without deducting funds
+PASS placement atomically debits stake and saves order with mirrored USDT
+PASS duplicate order retries debit exactly once and changed request data rejected
+PASS stale price, unsupported pair/duration, and insufficient funds fail atomically
+PASS settlement before expiry or with wrong candle is rejected
+PASS offline settlement returns principal plus gain exactly once
+PASS UP loss returns stake minus loss with signed P&L
+PASS DOWN win and DOWN loss use direction, not randomness
+PASS equal market prices refund full stake
+PASS early close refunds 50% once; later worker cannot credit again
+PASS insufficient funds under concurrent submitted orders never overspend
+PASS concurrent administrator credits preserve both deltas; stale set rejected
+PASS duplicate admin adjustment is idempotent, conflicting input rejected
+PASS crypto deposits credit actual units; simultaneous approval credits once
+PASS withdrawal reserves amount plus fee; rejection refunds once
+PASS withdrawal approval requires payout reference and does not debit twice
+PASS withdrawal cannot reserve more than balance including fee
+PASS funding transfer credits destination; reverse restores conserved total
+PASS conversion debits and credits together; retry uses original fill
+PASS loan approval and external repayment cannot duplicate funds
+PASS quant catches up missed days and returns principal only on final day
+PASS flexible redemption credits accrued interest and principal once
+PASS locked earn rejects early redemption and settles offline at maturity
+PASS support and KYC records persist with ownership and audit trail
+PASS stale record edits rejected; no client can forge admin reply
+PASS new device login restores profile, preferences, orders, and balances
+PASS business actions and ledger are durable, append-only to clients
+PASS user deactivation revokes sessions; existing trade can still settle
+PASS practice settlement runs server-side and never changes real funds
+PASS logout all devices revokes both session tokens
+PASS all balance ledger rows reconcile from opening balance
+
+38 financial integration checks passed (local PostgreSQL/PGlite; submitted operations serialized by PGlite).

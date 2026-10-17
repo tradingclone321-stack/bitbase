@@ -10,7 +10,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922-users-fix3"></script>
+  <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
   <style>
     .toggle-switch{width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,0.1);position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;}
     .toggle-switch.on{background:var(--accent-green);}
@@ -108,7 +109,7 @@
 <div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="mobile-nav">
     <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
-    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -534,14 +535,7 @@
 lucide.createIcons();
 
 // ===== UID SYSTEM =====
-function getUID() {
-  let uid = localStorage.getItem('bb_uid');
-  if (!uid || uid.length !== 6 || isNaN(uid)) {
-    uid = String(Math.floor(100000 + Math.random() * 900000));
-    localStorage.setItem('bb_uid', uid);
-  }
-  return uid;
-}
+function getUID(){return localStorage.getItem('bb_uid')||'';}
 
 function setUIDDisplay() {
   document.getElementById('uidField').value = getUID();
@@ -664,7 +658,7 @@ function updateKYCStep() {
   lucide.createIcons();
 }
 
-function kycNextStep() {
+async function kycNextStep() {
   if (kycCurrentStep === 1) {
     const fn = document.getElementById('kycFirstName').value.trim();
     const ln = document.getElementById('kycLastName').value.trim();
@@ -682,8 +676,7 @@ function kycNextStep() {
   }
   if (kycCurrentStep === 3) {
     // Submit KYC to localStorage
-    kycCurrentStep = 4;
-    updateKYCStep();
+    // Advance only after the server confirms the submission.
     var userName=localStorage.getItem('bb_name')||'User';
     var userEmail=localStorage.getItem('bb_email')||'user@email.com';
     var uid=localStorage.getItem('bb_uid')||'000000';
@@ -703,9 +696,9 @@ function kycNextStep() {
       frontDoc:kycFrontData,backDoc:kycBackData,
       status:'pending',createdAt:Date.now(),resolvedAt:0
     });
-    localStorage.setItem('bb_kyc_submissions',JSON.stringify(submissions));
-    localStorage.setItem('bb_kyc_status','pending');
-    if(typeof DB!=='undefined'){DB.pushCollection('bb_kyc_submissions');if(typeof DB.updateUser==='function'&&uid){DB.updateUser(uid,{kyc_status:'pending'});}}
+    try{await DB.saveRecord('bb_kyc_submissions',submissions[submissions.length-1]);await DB.pullLocalUser();}
+    catch(e){FinanceUI.message(e.message,true);return;}
+    kycCurrentStep=4;updateKYCStep();
     // Update verification status on the page
     document.getElementById('kycIcon').style.background = 'rgba(247,147,26,0.1)';
     document.getElementById('kycIcon').innerHTML = '<i data-lucide="clock" style="width:18px;height:18px;color:var(--accent-orange);"></i>';
@@ -846,77 +839,23 @@ window.addEventListener('resize',function(){
 });
 
 // ===== PROFILE =====
-function saveProfile() {
-   var nameVal=document.getElementById('settingsName').value.trim();
-   var emailVal=document.querySelector('#settings-profile input[type="email"]').value.trim();
-   var phoneVal=document.getElementById('settingsPhone').value.trim();
-   var usernameVal=document.getElementById('settingsUsername').value.trim();
-   var oldUid=localStorage.getItem('bb_uid');
-   var oldName=localStorage.getItem('bb_name');
-   var oldEmail=localStorage.getItem('bb_email');
-   if(nameVal) localStorage.setItem('bb_name',nameVal);
-   if(emailVal) localStorage.setItem('bb_email',emailVal);
-   if(phoneVal) localStorage.setItem('bb_phone',phoneVal);
-   if(usernameVal) localStorage.setItem('bb_username',usernameVal);
-   // Sync to admin users list
-   try{
-     var uid=oldUid||localStorage.getItem('bb_uid');
-     var adminUsers=JSON.parse(localStorage.getItem('bb_admin_users')||'[]');
-     for(var i=0;i<adminUsers.length;i++){
-       if(adminUsers[i].uid===uid){
-         adminUsers[i].name=nameVal||oldName||adminUsers[i].name;
-         adminUsers[i].email=emailVal||oldEmail||adminUsers[i].email;
-         adminUsers[i].cashBalance=localStorage.getItem('bb_cash_balance')||adminUsers[i].cashBalance;
-         adminUsers[i].assetBalances=JSON.parse(localStorage.getItem('bb_asset_balances')||'{}');
-         break;
-       }
-     }
-     localStorage.setItem('bb_admin_users',JSON.stringify(adminUsers));
-     if(typeof DB!=='undefined'){DB.upsertUser({uid:uid,name:nameVal||oldName,email:emailVal||oldEmail,cashBalance:parseFloat(localStorage.getItem('bb_cash_balance'))||0,assetBalances:JSON.parse(localStorage.getItem('bb_asset_balances')||'{}')});}
-   }catch(e){}
-   showToast('Profile changes saved successfully!', 'var(--accent-green)');
+function saveProfile(){
+ var data={name:document.getElementById('settingsName').value.trim(),email:document.querySelector('#settings-profile input[type="email"]').value.trim(),phone:document.getElementById('settingsPhone').value.trim(),username:document.getElementById('settingsUsername').value.trim()};
+ return FinanceUI.do('profile',function(){return DB.action('profile',data);},'Profile saved across devices.');
 }
 function cancelProfile() {
   showToast('Changes discarded', 'var(--text-tertiary)');
 }
 
 // ===== SECURITY =====
-function updatePassword() {
-  var pwFields = document.querySelectorAll('#settings-security input[type="password"]');
-  var current = pwFields[0].value.trim();
-  var newPw = pwFields[1].value.trim();
-  var confirm = pwFields[2].value.trim();
-  if (!current || !newPw || !confirm) {
-    showToast('Please fill in all password fields', 'var(--accent-red)');
-    return;
-  }
-  var storedPass = localStorage.getItem('bb_password');
-  if (!storedPass || current !== storedPass) {
-    showToast('Current password is incorrect', 'var(--accent-red)');
-    return;
-  }
-  if (newPw.length < 8) {
-    showToast('New password must be at least 8 characters', 'var(--accent-red)');
-    return;
-  }
-  if (newPw !== confirm) {
-    showToast('New passwords do not match', 'var(--accent-red)');
-    return;
-  }
-  localStorage.setItem('bb_password', newPw);
-  // Persist to Supabase so pullLocalUser doesn't overwrite it
-  if(typeof DB!=='undefined'&&DB.ready){DB.updateUser(localStorage.getItem('bb_uid'),{password:newPw});}
-  pwFields[0].value = '';
-  pwFields[1].value = '';
-  pwFields[2].value = '';
-  showToast('Password updated successfully!', 'var(--accent-green)');
+function updatePassword(){
+ var f=document.querySelectorAll('#settings-security input[type="password"]');
+ if(f[1].value!==f[2].value){FinanceUI.message('Passwords do not match.',true);return;}
+ return FinanceUI.do('password',function(){return DB.action('password',{current:f[0].value,password:f[1].value});},'Password saved; other devices signed out.');
 }
-function logoutAllDevices() {
-  if (confirm('Are you sure you want to logout from all devices?')) {
-    showToast('Logged out from all devices', 'var(--accent-orange)');
-  }
+function logoutAllDevices(){
+ return DB.action('logout_all',{}).then(function(){DB.clearSession();location.href='login.html';}).catch(function(e){FinanceUI.message(e.message,true);});
 }
-
 // ===== PREFERENCES =====
 function selectRadio(groupId, el) {
   document.querySelectorAll('#' + groupId + ' .radio-option').forEach(function(r){r.classList.remove('selected');});
@@ -941,8 +880,7 @@ function savePreferences() {
     tradingView: document.querySelector('#prefTradingViewGroup .radio-option.selected').dataset.value
   };
   localStorage.setItem('bb_preferences', JSON.stringify(prefs));
-  if(typeof DB!=='undefined')DB.syncLocalUser();
-  showToast('Preferences saved successfully!', 'var(--accent-green)');
+  return FinanceUI.do('preferences',function(){return DB.action('preferences',prefs);},'Preferences saved across devices.');
 }
 
 function loadPreferences() {

@@ -11,7 +11,8 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922-users-fix3"></script>
+  <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -232,7 +233,7 @@
     <a href="settings.html">Settings</a>
 
     <a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a>
-    <a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+    <a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -679,35 +680,7 @@ loadCoinBalances();
 // demo defaults that were persisted to storage by earlier versions. Runs only
 // once per device (flag), so a real future balance is never touched. USDT is
 // excluded — it is always rebuilt from bb_cash_balance.
-function migratePhantomBalances(){
-  try{
-    if(localStorage.getItem('bb_phantom_cleaned')==='1')return;
-    var raw=localStorage.getItem('bb_asset_balances');
-    if(!raw)return;
-    var data=JSON.parse(raw);
-    var keyed={
-      BTC:{b:0.1442,q:0.1542},ETH:{b:2.041,q:2.341},
-      SOL:{b:15.2,q:15.7},BNB:{b:3.0,q:3.2},ADA:{b:15000,q:15000},
-      DOGE:{b:50000,q:50000},XRP:{b:4500,q:5000},DOT:{b:200,q:200}
-    };
-    var touched=false;
-    for(var k in keyed){
-      var d=data[k];if(!d||d.balance===undefined)continue;
-      var cfg=keyed[k];
-      var db=parseFloat(d.balance),bq=d.qty===undefined?undefined:parseFloat(d.qty);
-      if(!isFinite(db))continue;
-      var match=Math.abs(db-cfg.b)<=0.0000001;
-      if(cfg.q!==undefined){if(bq===undefined||Math.abs(bq-cfg.q)>0.0000001)match=false;}
-      if(!match)continue;
-      data[k]={balance:0,qty:0};
-      touched=true;
-    }
-    if(touched){
-      localStorage.setItem('bb_asset_balances',JSON.stringify(data));
-      localStorage.setItem('bb_phantom_cleaned','1');
-    }
-  }catch(e){}
-}
+function migratePhantomBalances(){ /* Never erase balances by matching a hardcoded number. */ }
 migratePhantomBalances();
 // Re-load after the migration
 loadCoinBalances();
@@ -815,8 +788,7 @@ function updateAssetsValues(){
           if(!t.uid)continue;
           if(String(t.uid)!==String(myUid))continue;
         }
-        if(t.status==='Won')pnlTotal+=(t.profit||0);
-        else if(t.status==='Lost')pnlTotal-=(t.profit||0);
+        if(['Won','Lost','Closed','Draw'].indexOf(t.status)>=0)pnlTotal+=Number(t.profit||0);
       }
     }
   }catch(e){}
@@ -859,14 +831,7 @@ function renderDistribution() {
 
 updateAssetsValues();
 
-const ADDRESSES = {
-  USDT: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',
-  BTC:  'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-  ETH:  '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD34',
-  SOL:  '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
-  XRP:  'rN7PbqX2RPjxfn5RfKE1RMpDqGzRGQ3q5e',
-  DOGE: 'DFundmtrigzA6E25Swr2pRe4Eb79bGP8G1',
-};
+const ADDRESSES = {USDT:'',BTC:'',ETH:'',SOL:'',XRP:'',DOGE:''};
 
 function openModal(id) {
   document.getElementById(id).classList.add('open');
@@ -901,12 +866,12 @@ function _renderDepositInfo() {
   const coin = document.getElementById('depositCoinSelect').value;
   const data = COINS[coin];
   var addrs=getDepositAddresses();
-  var coinData=addrs[coin]||ADDRESSES[coin];
+  var coinData=addrs[coin]||{address:'',network:COINS[coin].network};
   var addr=typeof coinData==='string'?coinData:coinData.address;
   var network=typeof coinData==='object'?coinData.network:data.network;
   var qrData=typeof coinData==='object'?coinData.qrData:null;
   document.getElementById('depositNetworkDisplay').textContent = network;
-  document.getElementById('depositAddressText').textContent = addr;
+  document.getElementById('depositAddressText').textContent = addr||'Deposit address not configured';
   document.getElementById('depositMinAmount').textContent = data.min + ' ' + coin;
   document.getElementById('depositWarnCoin').textContent = coin;
   document.getElementById('depositWarnNetwork').textContent = network;
@@ -923,7 +888,7 @@ function _renderDepositInfo() {
 function copyDepositAddress() {
   const coin = document.getElementById('depositCoinSelect').value;
   var addrs=getDepositAddresses();
-  var coinData=addrs[coin]||ADDRESSES[coin];
+  var coinData=addrs[coin]||{address:'',network:COINS[coin].network};
   var addr=typeof coinData==='string'?coinData:coinData.address;
   navigator.clipboard.writeText(addr).then(() => {
     const btn = event.target.closest('.copy-btn');
@@ -971,46 +936,10 @@ function removeDepositProof(){
   document.getElementById('depositProofPreview').style.display='none';
 }
 function submitDepositRequest(){
-  var coin=document.getElementById('depositCoinSelect').value;
-  var amount=parseFloat(document.getElementById('depositAmount').value);
-  if(!amount||amount<=0){showToast('Please enter a valid amount','error');return;}
-  if(!depositProofData){showToast('Please attach proof of deposit','error');return;}
-  var addrs=getDepositAddresses();
-  var coinData=addrs[coin]||ADDRESSES[coin];
-  var addr=typeof coinData==='string'?coinData:coinData.address;
-  var network=typeof coinData==='object'?coinData.network:'';
-  var btn=document.querySelector('#depositModal .submit-btn');
-  var spinner=document.getElementById('depositSpinner');
-  btn.disabled=true;spinner.style.display='inline-block';
-  try{
-    var userName=localStorage.getItem('bb_name')||'User';
-    var userEmail=localStorage.getItem('bb_email')||'user@email.com';
-    var uid=localStorage.getItem('bb_uid')||'000000';
-    var reqId='DEP-'+uid+'-'+Date.now();
-    var requests=[];
-    try{requests=JSON.parse(localStorage.getItem('bb_deposit_requests')||'[]');}catch(e){}
-    requests.push({
-      id:reqId,userId:uid,userName:userName,userEmail:userEmail,
-      coin:coin,amount:amount,network:network,address:addr,
-      proof:depositProofData,
-      status:'pending',createdAt:Date.now(),resolvedAt:0
-    });
-    for(var i=0;i<requests.length;i++){
-      if(requests[i].userId!==uid&&requests[i].proof&&requests[i].proof.dataUrl){
-        requests[i].proof={name:requests[i].proof.name,type:requests[i].proof.type,dataUrl:''};
-      }
-    }
-    localStorage.setItem('bb_deposit_requests',JSON.stringify(requests));
-    if(typeof DB!=='undefined'){DB.pushCollection('bb_deposit_requests');}
-    document.getElementById('depositAmount').value='';
-    removeDepositProof();
-    closeModal('depositModal');
-    showToast('Deposit of '+amount+' '+coin+' submitted! Awaiting admin approval.','success');
-  }catch(e){
-    showToast('Submission failed. Please try again.','error');
-  }finally{
-    btn.disabled=false;spinner.style.display='none';
-  }
+ var coin=document.getElementById('depositCoinSelect').value,amount=document.getElementById('depositAmount').value;
+ var d=getDepositAddresses()[coin]||{};
+ if(!depositProofData){FinanceUI.message('Attach proof of deposit.',true);return;}
+ return FinanceUI.do('deposit',async function(){var r=await DB.action('deposit_request',{coin:coin,amount:amount,network:d.network||'',address:d.address||'',proof:depositProofData});closeModal('depositModal');removeDepositProof();return r;},'Deposit request saved for review.');
 }
 updateDepositInfo();
 
@@ -1040,69 +969,10 @@ function setMaxWithdraw() {
   if(!data)return;
   document.getElementById('withdrawAmount').value = Math.round((parseFloat(data.balance)||0)*10000)/10000;
 }
-function submitWithdraw() {
-  var coin = document.getElementById('withdrawCoinSelect').value;
-  var addr = document.getElementById('withdrawAddress').value.trim();
-  var amount = parseFloat(document.getElementById('withdrawAmount').value);
-  var network = document.getElementById('withdrawNetworkSelect').value;
-  var data = COINS[coin];
-  if (!addr) { showToast('Please enter a recipient address', 'error'); return; }
-  if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
-  if (amount < data.min) { showToast('Minimum withdrawal is ' + data.min + ' ' + coin, 'error'); return; }
-  var avail=parseFloat(data.balance)||0;
-  if (amount > avail) { showToast('Insufficient balance — available ' + avail.toFixed(8) + ' ' + coin, 'error'); return; }
-  var myUid=localStorage.getItem('bb_uid')||'';
-  var checkLoan=function(){
-    try{
-      var loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');
-      for(var i=0;i<loans.length;i++){
-        if(String(loans[i].userId)===String(myUid)&&loans[i].status==='active'){
-          var total=loans[i].borrowAmt+(loans[i].borrowAmt*(loans[i].interestRate||5)/100);
-          showToast('You have an outstanding loan of $'+Number(loans[i].borrowAmt).toFixed(2)+' (total $'+total.toFixed(2)+'). Please repay your loan before withdrawing.','error');
-          return false;
-        }
-      }
-    }catch(e){}
-    return true;
-  };
-  var doSubmit=function(){
-    var btn = document.getElementById('withdrawSubmitBtn');
-    var spinner = document.getElementById('withdrawSpinner');
-    btn.disabled = true; spinner.style.display = 'inline-block';
-    try{
-      var userName=localStorage.getItem('bb_name')||'User';
-      var userEmail=localStorage.getItem('bb_email')||'user@email.com';
-      var uid=localStorage.getItem('bb_uid')||'000000';
-      var reqId='WD-'+uid+'-'+Date.now();
-      var requests=[];
-      try{requests=JSON.parse(localStorage.getItem('bb_withdrawal_requests')||'[]');}catch(e){}
-      requests.push({
-        id:reqId,userId:uid,userName:userName,userEmail:userEmail,
-        coin:coin,amount:amount,fee:data.fee,network:network,address:addr,
-        status:'pending',createdAt:Date.now(),resolvedAt:0
-      });
-      localStorage.setItem('bb_withdrawal_requests',JSON.stringify(requests));
-      if(typeof DB!=='undefined'){DB.pushCollection('bb_withdrawal_requests');}
-      document.getElementById('withdrawAddress').value = '';
-      document.getElementById('withdrawAmount').value = '';
-      updateWithdrawInfo();
-      closeModal('withdrawModal');
-      showToast('Withdrawal of ' + amount + ' ' + coin + ' submitted! Awaiting admin approval.','success');
-    }catch(e){
-      showToast('Submission failed. Please try again.','error');
-    }finally{
-      btn.disabled = false; spinner.style.display = 'none';
-    }
-  };
-  if(typeof DB!=='undefined'&&DB.ready){
-    DB.pullCollection('bb_loans').then(function(){
-      if(checkLoan())doSubmit();
-    },function(){if(checkLoan())doSubmit();});
-  }else{
-    if(checkLoan())doSubmit();
-  }
+function submitWithdraw(){
+ var data={coin:document.getElementById('withdrawCoinSelect').value,amount:document.getElementById('withdrawAmount').value,address:document.getElementById('withdrawAddress').value.trim(),network:document.getElementById('withdrawNetworkSelect').value};
+ return FinanceUI.do('withdraw',async function(){var r=await DB.action('withdraw_request',data);closeModal('withdrawModal');return r;},'Withdrawal saved. Amount plus fee reserved until approval or rejection.');
 }
-
 // ========== TRANSFER ==========
 function swapTransferDirection() {
   const from = document.getElementById('transferFrom');
@@ -1112,39 +982,19 @@ function swapTransferDirection() {
   to.value = tmp;
   updateTransferAvailable();
 }
-function updateTransferAvailable() {
-  const coin = document.getElementById('transferCoinSelect').value;
-  document.getElementById('transferAvailable').textContent = COINS[coin].balance + ' ' + coin;
+function updateTransferAvailable(){
+ var coin=document.getElementById('transferCoinSelect').value,from=document.getElementById('transferFrom').value;
+ var balance=from==='funding'?Number((DB.get('bb_funding_balances')||{})[coin]||0):Number(COINS[coin].balance||0);
+ document.getElementById('transferAvailable').textContent=balance+' '+coin;
 }
-function setMaxTransfer() {
-  const coin = document.getElementById('transferCoinSelect').value;
-  document.getElementById('transferAmount').value = COINS[coin].balance;
+function setMaxTransfer(){
+ var coin=document.getElementById('transferCoinSelect').value,from=document.getElementById('transferFrom').value;
+ document.getElementById('transferAmount').value=from==='funding'?Number((DB.get('bb_funding_balances')||{})[coin]||0):Number(COINS[coin].balance||0);
 }
-function submitTransfer() {
-  const coin = document.getElementById('transferCoinSelect').value;
-  const amount = parseFloat(document.getElementById('transferAmount').value);
-  const from = document.getElementById('transferFrom').value;
-  const to = document.getElementById('transferTo').value;
-  if (from === to) { showToast('Source and destination wallets must be different', 'error'); return; }
-  if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
-  if (amount > COINS[coin].balance) { showToast('Insufficient balance', 'error'); return; }
-  const btn = document.getElementById('transferSubmitBtn');
-  const spinner = document.getElementById('transferSpinner');
-  btn.disabled = true; spinner.style.display = 'inline-block';
-  setTimeout(() => {
-    COINS[coin].balance -= amount;
-    COINS[coin].qty -= amount;
-    if(coin==='USDT'){CASH_BALANCE=COINS.USDT.balance;localStorage.setItem('bb_cash_balance',CASH_BALANCE);}
-    saveCoinBalances();
-    btn.disabled = false; spinner.style.display = 'none';
-    document.getElementById('transferAmount').value = '';
-    updateTransferAvailable();
-    closeModal('transferModal');
-    updateAssetsValues();
-    showToast('Transferred ' + amount + ' ' + coin + ' from ' + (from === 'spot' ? 'Spot' : 'Funding') + ' to ' + (to === 'spot' ? 'Spot' : 'Funding'), 'success');
-  }, 2000);
+function submitTransfer(){
+ var data={coin:document.getElementById('transferCoinSelect').value,amount:document.getElementById('transferAmount').value,from:document.getElementById('transferFrom').value,to:document.getElementById('transferTo').value};
+ return FinanceUI.do('transfer',async function(){var r=await DB.action('transfer',data);closeModal('transferModal');return r;},'Transfer credited to the destination wallet.');
 }
-
 // ========== CONVERT ==========
 const RATES = {
   'BTC-USDT': 64464.00, 'ETH-USDT': 1880.96, 'SOL-USDT': 74.78, 'USDT-USDT': 1,
@@ -1182,38 +1032,10 @@ function swapConvertDirection() {
   to.value = tmp;
   updateConvertRate();
 }
-function submitConvert() {
-  const from = document.getElementById('convertFromCoin').value;
-  const to = document.getElementById('convertToCoin').value;
-  const amount = parseFloat(document.getElementById('convertFromAmount').value);
-  if (from === to) { showToast('Cannot convert to the same asset', 'error'); return; }
-  if (!amount || amount <= 0) { showToast('Please enter a valid amount', 'error'); return; }
-  if (amount > COINS[from].balance) { showToast('Insufficient ' + from + ' balance', 'error'); return; }
-  const key = from + '-' + to;
-  const rate = RATES[key] || 0;
-  if (rate <= 0) { showToast('Conversion rate unavailable for ' + from + ' to ' + to, 'error'); return; }
-  const received = amount * rate;
-  if (received <= 0) { showToast('Invalid conversion amount', 'error'); return; }
-  const btn = document.getElementById('convertSubmitBtn');
-  const spinner = document.getElementById('convertSpinner');
-  btn.disabled = true; spinner.style.display = 'inline-block';
-  setTimeout(() => {
-    COINS[from].balance -= amount;
-    COINS[from].qty -= amount;
-    COINS[to].balance += received;
-    COINS[to].qty += received;
-    if(from==='USDT'||to==='USDT'){CASH_BALANCE=COINS.USDT.balance;localStorage.setItem('bb_cash_balance',CASH_BALANCE);}
-    saveCoinBalances();
-    btn.disabled = false; spinner.style.display = 'none';
-    document.getElementById('convertFromAmount').value = '';
-    document.getElementById('convertToAmount').value = '';
-    updateConvertRate();
-    closeModal('convertModal');
-    updateAssetsValues();
-    showToast('Converted ' + amount + ' ' + from + ' to ' + received.toFixed(8) + ' ' + to, 'success');
-  }, 2000);
+function submitConvert(){
+ var data={from:document.getElementById('convertFromCoin').value,to:document.getElementById('convertToCoin').value,amount:document.getElementById('convertFromAmount').value};
+ return FinanceUI.do('convert',async function(){var r=await DB.edge('convert',data);closeModal('convertModal');return r;},function(r){return 'Conversion confirmed: '+r.received+' '+data.to;});
 }
-
 // ========== LOAN ==========
 var LOAN_RATES={7:5,30:7,90:9,180:12,365:15};
 var loanDurationDays=7;
@@ -1283,78 +1105,13 @@ function removeLoanProof(){
   document.getElementById('loanProofInput').value='';
 }
 function submitLoan(){
-  var borrowAmt=parseFloat(document.getElementById('loanBorrowAmt').value);
-  if(!borrowAmt||borrowAmt<=0){showToast('Enter a borrow amount','error');return;}
-  if(!loanProofFile){showToast('Please upload proof of income','error');return;}
-  if(!document.getElementById('loanAgreeCheck').checked){showToast('Please agree to the loan agreement','error');return;}
-  var btn=document.getElementById('loanSubmitBtn');
-  var spinner=document.getElementById('loanSpinner');
-  btn.disabled=true;spinner.style.display='inline-block';
-  var loans=[];
-  try{loans=JSON.parse(localStorage.getItem('bb_loans')||'[]');}catch(e){}
-  var uid=localStorage.getItem('bb_uid')||'';
-  var uname=localStorage.getItem('bb_name')||'User';
-  function saveLoan(dataUrl){
-    try{
-      loans.push({
-        id:'LOAN-'+Date.now(),
-        userId:uid,
-        userName:uname,
-        borrowAmt:borrowAmt,
-        durationDays:loanDurationDays,
-        interestRate:LOAN_RATES[loanDurationDays]||5,
-        proofName:loanProofFile.name,
-        proofType:loanProofFile.type,
-        proofDataUrl:dataUrl,
-        status:'pending',
-        time:Date.now()
-      });
-      for(var i=0;i<loans.length;i++){
-        if(loans[i].userId!==uid&&loans[i].proofDataUrl){
-          loans[i].proofDataUrl='';
-        }
-      }
-      localStorage.setItem('bb_loans',JSON.stringify(loans));
-      if(typeof DB!=='undefined'){DB.pushCollection('bb_loans');}
-      document.getElementById('loanBorrowAmt').value='';
-      document.getElementById('loanInterestSection').style.display='none';
-      document.getElementById('loanAgreeCheck').checked=false;
-      removeLoanProof();
-      closeModal('loanModal');
-      updateAssetsValues();
-      showToast('Loan of $'+borrowAmt.toFixed(2)+' USDT submitted for review','success');
-    }catch(e){
-      showToast('Submission failed. Please try again.','error');
-    }finally{
-      btn.disabled=false;spinner.style.display='none';
-    }
-  }
-  if(loanProofFile.type&&loanProofFile.type.indexOf('image')===0){
-    var img=new Image();
-    img.onload=function(){
-      var maxW=400,maxH=400,w=img.width,h=img.height;
-      if(w>maxW){h=h*maxW/w;w=maxW;}
-      if(h>maxH){w=w*maxH/h;h=maxH;}
-      var c=document.createElement('canvas');c.width=w;c.height=h;
-      c.getContext('2d').drawImage(img,0,0,w,h);
-      saveLoan(c.toDataURL('image/jpeg',0.3));
-    };
-    img.onerror=function(){
-      btn.disabled=false;spinner.style.display='none';
-      showToast('Failed to process image. Please try another.','error');
-    };
-    img.src=URL.createObjectURL(loanProofFile);
-  }else{
-    var reader=new FileReader();
-    reader.onload=function(ev){saveLoan(ev.target.result);};
-    reader.onerror=function(){
-      btn.disabled=false;spinner.style.display='none';
-      showToast('Failed to read file. Please try another.','error');
-    };
-    reader.readAsDataURL(loanProofFile);
-  }
+ if(!loanProofFile||!document.getElementById('loanAgreeCheck').checked){FinanceUI.message('Attach proof and accept the loan agreement.',true);return;}
+ var file=loanProofFile;
+ return FinanceUI.do('loan',async function(){
+  var proof=await new Promise(function(resolve,reject){var reader=new FileReader();reader.onload=function(){resolve(reader.result);};reader.onerror=reject;reader.readAsDataURL(file);});
+  var r=await DB.action('loan_request',{amount:document.getElementById('loanBorrowAmt').value,durationDays:loanDurationDays,proofName:file.name,proofType:file.type,proofDataUrl:proof});closeModal('loanModal');return r;
+ },'Loan request saved for review.');
 }
-
 function switchTab(btn, tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -1579,7 +1336,7 @@ function startSupportPolling(){
     // Supabase Realtime: cross-device instant delivery (admin replies from
     // another browser/device arrive via postgres_changes without waiting for poll).
     try{
-      DB.client.channel('user-support-pg').on('postgres_changes',{event:['INSERT','UPDATE'],schema:'public',table:'app_collections',filter:'key=eq.bb_support_tickets'},function(){
+      DB.client.channel('user-support-pg').on('postgres_changes',{event:'*',schema:'public',table:'app_collections',filter:'key=eq.bb_support_tickets'},function(){
         if(!supportOpen)return;
         DB.pullCollection('bb_support_tickets').then(function(){renderSupportThread(true);},function(){});
       }).subscribe();
@@ -1635,51 +1392,14 @@ function removeSupportFile(){
   document.getElementById('supportPreview').style.display='none';
 }
 function sendSupportMsg(){
-  var input=document.getElementById('supportInput');
-  var text=input.value.trim();
-  if(!text&&!supportFileAttached)return;
-  var fileName=supportFileAttached?supportFileData?supportFileData.name:'attachment':null;
-  var attachmentData=supportFileData?{name:supportFileData.name,type:supportFileData.type,dataUrl:supportFileData.dataUrl}:null;
-  input.value='';
-  removeSupportFile();
-  // Save to support tickets for admin panel
-  var userName=localStorage.getItem('bb_name')||'User';
-  var userEmail=localStorage.getItem('bb_email')||'user@email.com';
-  var uid=localStorage.getItem('bb_uid')||'000000';
-  var tickets=[];
-  try{tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');}catch(e){}
-  var ticketId='SUP-'+uid+'-'+Date.now();
-  // Check if user already has an open ticket
-  var existingTicket=null;
-  for(var i=0;i<tickets.length;i++){
-    if(tickets[i].userId===uid&&tickets[i].status==='open'){existingTicket=tickets[i];break;}
-  }
-  var userMsg={from:'user',text:text||'Sent an attachment',time:Date.now()};
-  if(attachmentData)userMsg.attachment=attachmentData;
-  if(existingTicket){
-    existingTicket.messages.push(userMsg);
-    ticketId=existingTicket.id;
-  }else{
-    tickets.push({
-      id:ticketId,
-      userId:uid,
-      userName:userName,
-      userEmail:userEmail,
-      status:'open',
-      createdAt:Date.now(),
-      messages:[userMsg]
-    });
-  }
-  localStorage.setItem('bb_support_tickets',JSON.stringify(tickets));
-  renderSupportThread(true);
-  if(typeof DB!=='undefined'){
-    // Optimistic: broadcast local state so the admin's chat renders
-    // instantly, then push to the server in the background.
-    if(DB.broadcastUpdate)DB.broadcastUpdate('bb_support_tickets',tickets);
-    DB.pushCollection('bb_support_tickets');
-  }
+ var input=document.getElementById('supportInput'),text=input.value.trim();if(!text&&!supportFileData)return;
+ var uid=localStorage.getItem('bb_uid'),all=DB.get('bb_support_tickets')||[];
+ var ticket=all.find(function(t){return String(t.userId)===uid&&t.status==='open';})||{id:'SUP-'+DB.newId(),status:'open',createdAt:Date.now(),messages:[]};
+ var message={id:DB.newId(),from:'user',text:text||'Sent an attachment',time:Date.now()};
+ if(supportFileData)message.attachment=supportFileData;
+ ticket=Object.assign({},ticket,{messages:(ticket.messages||[]).concat([message])});
+ return FinanceUI.do('support-message',async function(){var r=await DB.saveRecord('bb_support_tickets',ticket);input.value='';removeSupportFile();renderSupportThread(true);return r;},'Message saved.');
 }
-
 // ===== SERVER BALANCE SYNC =====
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
   DB.startLocalPolling(10000);
@@ -1693,5 +1413,8 @@ if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
   <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
 </div>
 <script>lucide.createIcons();</script>
+<script>
+window.addEventListener('bb:updated',function(){CASH_BALANCE=Number(localStorage.getItem('bb_cash_balance')||0);loadCoinBalances();updateAssetsValues();renderAssetsTable();updateTransferAvailable();});
+</script>
 </body>
 </html>

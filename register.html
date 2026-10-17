@@ -10,7 +10,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=20260922v2"></script>
-    <script src="db.js?v=20260922-users-fix3"></script>
+    <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -270,7 +271,7 @@
                 localStorage.setItem('bb_uid', uid);
                 localStorage.setItem('bb_name', saved.name);
                 localStorage.setItem('bb_email', saved.email);
-                localStorage.setItem('bb_password', pass);
+                localStorage.removeItem('bb_password');
                 localStorage.setItem('bb_login_time', String(Date.now()));
                 localStorage.setItem('bb_registered_at', String(Date.now()));
                 localStorage.setItem('bb_cash_balance', String(saved.cash_balance || 0));
@@ -299,7 +300,7 @@
                 } else if (error && (error.code === 'DB_TIMEOUT' || error.code === 'DB_UNCONFIRMED')) {
                     message = 'We could not confirm your registration. Try signing in before submitting again.';
                 } else {
-                    message = 'Could not save your account. Please try again or contact support.';
+                    message = DB.describeUserError(error);
                     if (error && error.code) message += ' Reference: ' + error.code;
                 }
                 document.getElementById('submitError').textContent = message;

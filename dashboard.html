@@ -10,7 +10,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922-users-fix3"></script>
+  <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
   <style>
     [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
     [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
@@ -91,7 +92,7 @@
 
     <a id="mobileAdminLink" href="admin.html" style="display:none;color:#16c784;">Admin Panel</a>
     <a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a>
-    <a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+    <a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -402,8 +403,7 @@ function getTradePnL(){
           if(!t.uid)continue;
           if(String(t.uid)!==String(myUid))continue;
         }
-        if(t.status==='Won')pnl+=(t.profit||0);
-        else if(t.status==='Lost')pnl-=(t.profit||0);
+        if(['Won','Lost','Closed','Draw'].indexOf(t.status)>=0)pnl+=Number(t.profit||0);
       }
     }
   }catch(e){}
@@ -533,8 +533,8 @@ function renderRecentActivity(){
       var color=t.status==='Won'?'var(--accent-green)':'var(--accent-red)';
       var bg=t.status==='Won'?'rgba(22,199,132,0.1)':'rgba(234,57,67,0.1)';
       var icon=t.status==='Won'?'trending-up':'trending-down';
-      var label=(t.status==='Won'?'Won ':'Lost ')+fmtAmt(t.amount)+' USDT · '+t.pair.replace('/USDT','');
-      var amt=t.status==='Won'?t.profit:-(t.amount);
+      var label=t.status+' '+fmtAmt(t.amount)+' USDT · '+t.pair.replace('/USDT','');
+      var amt=Number(t.profit||0);
       var sign=amt>=0?'+':'';
       items.push({time:t.time,label:label,icon:icon,color:color,bg:bg,amount:sign+formatUSD(Math.abs(amt))});
     }
@@ -603,7 +603,7 @@ function renderRecentActivity(){
 function fmtAmt(n){return n>=100?n.toLocaleString('en-US'):n;}
 
 // ===== LIVE BALANCE SYNC =====
-document.addEventListener('visibilitychange',function(){
+window.addEventListener('bb:updated',function(){
   if(document.hidden)return;
   var newBal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
   if(newBal!==CASH_BALANCE){

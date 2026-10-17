@@ -10,7 +10,8 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260922v2"></script>
-<script src="db.js?v=20260922-users-fix3"></script>
+<script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -224,7 +225,7 @@ try {
 <div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="mobile-nav">
     <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
-    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -421,13 +422,10 @@ setTimeout(updateLayoutMargin,500);
 // ===== DEMO STORAGE =====
 var DEMO_KEY='bb_demo_trades';
 function loadDemoBalance(){try{return JSON.parse(localStorage.getItem(DEMO_KEY+'_bal'));}catch(e){return null;}}
-function saveDemoBalance(b){localStorage.setItem(DEMO_KEY+'_bal',JSON.stringify(b));if(typeof DB!=='undefined')DB.syncLocalUser();}
 function loadDemoPositions(){try{return JSON.parse(localStorage.getItem(DEMO_KEY+'_pos'))||[];}catch(e){return [];}
 }
-function saveDemoPositions(p){localStorage.setItem(DEMO_KEY+'_pos',JSON.stringify(p));if(typeof DB!=='undefined')DB.syncLocalUser();}
 function loadDemoHistory(){try{return JSON.parse(localStorage.getItem(DEMO_KEY+'_hist'))||[];}catch(e){return [];}
 }
-function saveDemoHistory(h){localStorage.setItem(DEMO_KEY+'_hist',JSON.stringify(h));if(typeof DB!=='undefined')DB.pushCollection('bb_demo_trades_hist');}
 
 // ===== DATA =====
 const PAIRS = [
@@ -758,55 +756,9 @@ function startTimerAnim(){
 }
 
 function placeTrade(dir){
-  const amt=getAmount();
-  if(amt<=0){showToast('Please enter a valid amount','var(--red)');return;}
-  if(amt>balance){showToast('Insufficient balance','var(--red)');return;}
-  const dur=getDurInfo();
-  const profit=amt*dur.profitPct/100;
-  balance-=amt;
-  saveDemoBalance(balance);
-  document.getElementById('balance').textContent=fmtD(balance).replace('$','');
-  const id='D-'+(++tradeIdCounter);
-  localStorage.setItem('bb_demo_trade_id_counter', tradeIdCounter);
-  const pos={id,pair:currentPair.sym,dir,amt,dur:dur.seconds,profit,entryPrice:currentPrice,exitPrice:0,startTime:Date.now(),status:'Active'};
-  positions.push(pos);
-  saveDemoPositions(positions);
-  demoHistory.unshift({id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit});
-  saveDemoHistory(demoHistory);
-  var sharedTrades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
-  sharedTrades.unshift({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'demo',uid:localStorage.getItem('bb_uid')||''});
-  localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades));
-  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
-  renderPositions();
-  showTradePanel(pos);
-  showToast(`${dir} trade placed: ${fmtD(amt)} on ${currentPair.sym}`,'var(--green)');
-  document.getElementById('amtInput').value='';
-  updateSummary();
-  setTimeout(()=>{
-    var forceKey='bb_force_resolve_'+id;
-    var forced=localStorage.getItem(forceKey);
-    if(forced!==null)localStorage.removeItem(forceKey);
-    const pmOn=(localStorage.getItem('bb_profit_module_'+uid)||localStorage.getItem('bb_profit_module'))==='true';
-    const won=forced!==null?forced==='Won':(pmOn?true:Math.random()>0.7);
-    pos.status=won?'Won':'Lost';
-    pos.exitPrice=currentPrice*(1+(Math.random()*0.004-0.002));
-    balance+=won?amt+profit:amt-profit;
-    saveDemoBalance(balance);
-    document.getElementById('balance').textContent=fmtD(balance).replace('$','');
-    var histIdx=demoHistory.findIndex(function(r){return r.id===id;});
-    if(histIdx>=0){demoHistory[histIdx].status=pos.status;demoHistory[histIdx].exitPrice=pos.exitPrice;}
-    saveDemoHistory(demoHistory);
-    var sharedTrades2=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
-    var shIdx=sharedTrades2.findIndex(function(r){return r.id===id;});
-    if(shIdx>=0){sharedTrades2[shIdx].status=pos.status;sharedTrades2[shIdx].exitPrice=pos.exitPrice;}
-    localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades2));
-    if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
-    renderPositions();
-    showTradeResult(pos);
-    showToast(won?`Trade ${id} won! +${fmtD(profit)}`:`Trade ${id} lost. -${fmtD(profit)}`,won?'var(--green)':'var(--red)');
-  },dur.seconds*1000);
+ var data={pair:currentPair.sym,direction:dir,amount:document.getElementById('amtInput').value,duration:getDurInfo().seconds,price:String(currentPrice)};
+ return FinanceUI.do('demo-start',async function(){var o=await DB.demo('start',data);return o;},'Practice trade saved. Demo funds only.');
 }
-
 function renderPositions(){
   const body=document.getElementById('posBody');
   const count=document.getElementById('posCount');
@@ -830,77 +782,11 @@ function renderPositions(){
     </tr>`;
   }).join('');
 }
-function closePos(id){
-  const pos=positions.find(p=>p.id===id);
-  if(!pos||pos.status!=='Active')return;
-  pos.status='Closed';
-  pos.exitPrice=currentPrice;
-  const refund=pos.amt*0.5;
-  balance+=refund;
-  saveDemoBalance(balance);
-  var histIdx=demoHistory.findIndex(function(r){return r.id===id;});
-  if(histIdx>=0){demoHistory[histIdx].status='Closed';demoHistory[histIdx].exitPrice=pos.exitPrice;}
-  saveDemoHistory(demoHistory);
-  var sharedTrades3=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
-  var shIdx3=sharedTrades3.findIndex(function(r){return r.id===id;});
-  if(shIdx3>=0){sharedTrades3[shIdx3].status='Closed';sharedTrades3[shIdx3].exitPrice=pos.exitPrice;}
-  localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades3));
-  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
-  try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
-  renderPositions();
-  if(activeTradePanel&&activeTradePanel.id===id)removeTradePanel();
-  showToast(`Position ${id} closed. Refunded ${fmtD(refund)}`,'var(--accent)');
-}
-setInterval(()=>{
-  var hasActive=false;
-  positions.forEach(function(p){
-    if(p.status!=='Active')return;
-    var now=Date.now();
-    var end=p.startTime+p.dur*1000;
-    if(now>=end){
-      var forceKey='bb_force_resolve_'+p.id;
-      var forced=localStorage.getItem(forceKey);
-      if(forced!==null)localStorage.removeItem(forceKey);
-      var pmOn=(localStorage.getItem('bb_profit_module_'+uid)||localStorage.getItem('bb_profit_module'))==='true';
-      var won=forced!==null?forced==='Won':(pmOn?true:Math.random()>0.7);
-      p.status=won?'Won':'Lost';
-      p.exitPrice=p.entryPrice*(1+(Math.random()*0.004-0.002));
-      balance+=won?p.amt+p.profit:p.amt-p.profit;
-      saveDemoBalance(balance);
-      var histIdx=demoHistory.findIndex(function(r){return r.id===p.id;});
-      if(histIdx>=0){demoHistory[histIdx].status=p.status;demoHistory[histIdx].exitPrice=p.exitPrice;}
-      saveDemoHistory(demoHistory);
-      var sharedTrades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
-      var shIdx=sharedTrades.findIndex(function(r){return r.id===p.id;});
-      if(shIdx>=0){sharedTrades[shIdx].status=p.status;sharedTrades[shIdx].exitPrice=p.exitPrice;}
-  localStorage.setItem('bb_trades_history',JSON.stringify(sharedTrades));
-  if(typeof DB!=='undefined')DB.pushCollection('bb_trades_history');
-      try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
-      if(activeTradePanel&&activeTradePanel.id===p.id){
-        showTradeResult(p);
-        showToast(won?'Trade '+p.id+' won!':'Trade '+p.id+' lost.',won?'var(--green)':'var(--red)');
-      }
-    }else{
-      hasActive=true;
-    }
-  });
-  if(hasActive)renderPositions();
-},1000);
+function closePos(id){return FinanceUI.do('demo-close',function(){return DB.demo('close',{id:id});},'Practice position closed.');}
+setInterval(function(){if(positions.some(function(p){return p.status==='Active';}))renderPositions();},1000);
 
 // ===== RESET DEMO =====
-function resetDemo(){
-  if(!confirm('Reset demo? This will restore your balance to $100,000 and clear all demo trades.'))return;
-  balance=100000;
-  positions=[];
-  demoHistory=[];
-  saveDemoBalance(balance);
-  saveDemoPositions(positions);
-  saveDemoHistory(demoHistory);
-  document.getElementById('balance').textContent='100,000.00';
-  renderPositions();
-  showToast('Demo reset! Balance restored to $100,000','var(--green)');
-}
-
+function resetDemo(){if(confirm('Reset practice balance to 100,000? Existing records remain in your history.'))return FinanceUI.do('demo-reset',function(){return DB.demo('reset',{});},'Practice balance reset.');}
 // ===== TOAST =====
 function showToast(msg,color){
   const old=document.querySelector('.toast');if(old)old.remove();
@@ -932,5 +818,6 @@ if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
   <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
 </div>
 <script>lucide.createIcons();</script>
+<script>window.addEventListener('bb:updated',function(){balance=loadDemoBalance()??100000;positions=loadDemoPositions().map(function(p){return Object.assign({},p,{profit:p.potentialProfit});});demoHistory=loadDemoHistory();document.getElementById('balance').textContent=fmtD(balance).replace('$','');renderPositions();});</script>
 </body>
 </html>

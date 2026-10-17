@@ -1,0 +1,4 @@
+[functions.trade-engine]
+verify_jwt = false
+# Custom BitBase server session is validated inside the handler.
+# Scheduler requests require BITBASE_ENGINE_SECRET.

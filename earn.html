@@ -10,7 +10,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260922v2"></script>
-  <script src="db.js?v=20260922-users-fix3"></script>
+  <script src="db.js?v=20261017-finance-v2"></script>
+<script src="finance-ui.js?v=20261017-finance-v2"></script>
 </head>
 <body class="page-body">
 <script>
@@ -65,7 +66,7 @@
 <div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="mobile-nav">
     <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
-    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -358,7 +359,7 @@ function getMyPositions(){
   var all=getPositions();
   var mine=[];
   for(var i=0;i<all.length;i++){
-    if(all[i].status==='deleted')continue;
+    if(all[i].status==='deleted'||all[i].status==='completed')continue;
     if(all[i].uid && String(all[i].uid)===String(myUid))mine.push(all[i]);
     else if(!all[i].uid && !myUid)mine.push(all[i]);
   }
@@ -387,9 +388,9 @@ function renderPositions(){
     var p=positions[i];
     var now=Date.now();
     var start=new Date(p.started).getTime();
-    var elapsed=(now-start)/(1000*86400*365);
+    var elapsed=Math.max(0,(Math.min(now,p.endDate?new Date(p.endDate).getTime():now)-start))/(1000*86400*365);
     var earned=p.amount*p.apy/100*elapsed;
-    if(isCrypto(earned)) earned=parseFloat(earned.toFixed(8));
+    if(isCrypto(p.coin)) earned=parseFloat(earned.toFixed(8));
 
     var icon='zap',iconColor='var(--accent-green)',bgColor='rgba(22,199,132,0.1)',label='Flexible Savings';
     if(p.type==='locked'){icon='lock';iconColor='var(--accent-orange)';bgColor='rgba(247,147,26,0.1)';label='Locked Staking';}
@@ -447,59 +448,11 @@ function updateSummary(positions){
 }
 
 function removePosition(index){
-  var positions=getMyPositions();
-  var p=positions[index];
-  if(!p)return;
-  if(p.type==='locked'){showToast('Locked staking cannot be unstaked before maturity','error');return;}
-  if(!confirm('Unstake '+p.amount+' '+p.coin+' from '+p.type+'?')) return;
-  // Refund FIRST, then mark the position deleted. Identify by stable `id`:
-  // getMyPositions() and getPositions() parse localStorage separately, so
-  // reference equality (all[i]===p) NEVER matches — the old code refunded
-  // the balance but left the position active, letting users unstake forever.
-  var pid=p.id;
-  returnBalance(p.coin,p.amount);
-  var all=getPositions();
-  for(var i=0;i<all.length;i++){
-    if(all[i]&&all[i].id===pid){all[i]=Object.assign({},all[i],{status:'deleted',_deletedAt:Date.now()});break;}
-  }
-  // Safety net: if no stable id matched, fall back to index match to guarantee
-  // the position is never left earning after the refund.
-  savePositions(all);
-  renderPositions();
-  showToast(p.amount+' '+p.coin+' unstaked successfully!','success');
+ var p=getMyPositions()[index];if(!p)return;
+ return FinanceUI.do('earn-close-'+p.id,function(){return DB.action('earn_close',{id:p.id});},'Principal and accrued earnings credited.');
 }
-
-function deductBalance(coin,amount){
-  var data={};
-  try{var raw=localStorage.getItem('bb_asset_balances');if(raw)data=JSON.parse(raw);}catch(e){}
-  if(coin==='USDT'){
-    var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
-    cb=Math.max(0,cb-amount);
-    localStorage.setItem('bb_cash_balance',cb.toString());
-    FLEX_BALANCES.USDT=cb;LOCKED_BALANCES.USDT=cb;DEFI_BALANCES.USDT=cb;
-    if(data.USDT){data.USDT.balance=Math.max(0,data.USDT.balance-amount);data.USDT.qty=Math.max(0,data.USDT.qty-amount);}
-  }else{
-    if(data[coin]){data[coin].balance=Math.max(0,data[coin].balance-amount);data[coin].qty=Math.max(0,data[coin].qty-amount);}
-  }
-  localStorage.setItem('bb_asset_balances',JSON.stringify(data));
-  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
-}
-function returnBalance(coin,amount){
-  var data={};
-  try{var raw=localStorage.getItem('bb_asset_balances');if(raw)data=JSON.parse(raw);}catch(e){}
-  if(coin==='USDT'){
-    var cb=parseFloat(localStorage.getItem('bb_cash_balance')||'0');
-    cb+=amount;
-    localStorage.setItem('bb_cash_balance',cb.toString());
-    FLEX_BALANCES.USDT=cb;LOCKED_BALANCES.USDT=cb;DEFI_BALANCES.USDT=cb;
-    if(data.USDT){data.USDT.balance+=amount;data.USDT.qty+=amount;}
-  }else{
-    if(data[coin]){data[coin].balance+=amount;data[coin].qty+=amount;}
-    else{data[coin]={balance:amount,qty:amount};}
-  }
-  localStorage.setItem('bb_asset_balances',JSON.stringify(data));
-  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
-}
+function deductBalance(){throw new Error('Server transactions required');}
+function returnBalance(){throw new Error('Server transactions required');}
 // ===== FLEXIBLE SAVINGS =====
 var FLEX_RATES={USDT:{apy:3.50,min:10},BTC:{apy:1.50,min:0.001},ETH:{apy:2.00,min:0.01},SOL:{apy:2.80,min:0.1}};
 var FLEX_BALANCES={USDT:0,BTC:0,ETH:0,SOL:0};
@@ -537,32 +490,9 @@ function setMaxFlexible(){
   updateFlexibleEarnings();
 }
 function submitFlexible(){
-  var coin=document.getElementById('flexAsset').value;
-  var amount=parseFloat(document.getElementById('flexAmount').value);
-  var opt=document.getElementById('flexAsset').options[document.getElementById('flexAsset').selectedIndex];
-  var apy=parseFloat(opt.dataset.apr);
-  var min=parseFloat(opt.dataset.min);
-  if(amount<min){showToast('Minimum deposit is '+min+' '+coin,'error');return;}
-  var avail=FLEX_BALANCES[coin]||0;
-  if(amount>avail){showToast('Insufficient '+coin+' balance. Available: '+avail+' '+coin,'error');return;}
-  var btn=document.getElementById('flexSubmitBtn');
-  btn.disabled=true;btn.textContent='Processing...';
-  setTimeout(function(){
-    deductBalance(coin,amount);
-    var positions=getPositions();
-    var userUid=localStorage.getItem('bb_uid')||'';
-    var userName=localStorage.getItem('bb_name')||'User';
-    var userEmail=localStorage.getItem('bb_email')||'';
-    positions.push({id:'EP'+Date.now()+'_'+Math.random().toString(36).slice(2,6),type:'flexible',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),uid:userUid,userName:userName,userEmail:userEmail});
-    savePositions(positions);
-    renderPositions();
-    closeModal('flexibleModal');
-    btn.disabled=false;btn.textContent='Confirm Deposit';
-    document.getElementById('flexAmount').value='';
-    showToast('Flexible Savings deposit of '+amount+' '+coin+' successful!','success');
-  },1500);
+ var data={type:'flexible',coin:document.getElementById('flexAsset').value,amount:document.getElementById('flexAmount').value,days:0};
+ return FinanceUI.do('earn-start',async function(){var r=await DB.action('earn_start',data);closeModal('flexibleModal');return r;},'Position confirmed and saved.');
 }
-
 // ===== LOCKED STAKING =====
 var LOCKED_RATES={30:6.00,60:7.00,90:8.00,180:10.00,365:12.00};
 var LOCKED_MIN={USDT:100,BTC:0.01,ETH:0.1,SOL:1,BNB:0.5};
@@ -609,29 +539,9 @@ function setMaxLocked(){
   updateLockedEarnings();
 }
 function submitLocked(){
-  var coin=document.getElementById('lockedAsset').value;
-  var amount=parseFloat(document.getElementById('lockedAmount').value);
-  var apy=LOCKED_RATES[selectedLockedDays];
-  var min=LOCKED_MIN[coin];
-  if(amount<min){showToast('Minimum deposit is '+min+' '+coin,'error');return;}
-  var avail=LOCKED_BALANCES[coin]||0;
-  if(amount>avail){showToast('Insufficient '+coin+' balance. Available: '+avail+' '+coin,'error');return;}
-  var btn=document.getElementById('lockedSubmitBtn');
-  btn.disabled=true;btn.textContent='Processing...';
-  setTimeout(function(){
-    deductBalance(coin,amount);
-    var endDate=new Date(Date.now()+selectedLockedDays*86400000).toISOString();
-    var positions=getPositions();
-    positions.push({id:'EP'+Date.now()+'_'+Math.random().toString(36).slice(2,6),type:'locked',coin:coin,amount:amount,apy:apy,started:new Date().toISOString(),endDate:endDate,days:selectedLockedDays,uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
-    savePositions(positions);
-    renderPositions();
-    closeModal('lockedModal');
-    btn.disabled=false;btn.textContent='Confirm Stake';
-    document.getElementById('lockedAmount').value='';
-    showToast('Locked Staking of '+amount+' '+coin+' for '+selectedLockedDays+' days started!','success');
-  },1500);
+ var data={type:'locked',coin:document.getElementById('lockedAsset').value,amount:document.getElementById('lockedAmount').value,days:selectedLockedDays};
+ return FinanceUI.do('earn-start',async function(){var r=await DB.action('earn_start',data);closeModal('lockedModal');return r;},'Position confirmed and saved.');
 }
-
 // ===== DEFI YIELD =====
 var DEFI_RATES={USDT:{apy:8.50,protocol:'Aave V3',min:50},ETH:{apy:5.20,protocol:'Lido stETH',min:0.05},SOL:{apy:6.50,protocol:'Marinade Finance',min:1},DAI:{apy:9.00,protocol:'Curve Pool',min:50}};
 var DEFI_BALANCES={USDT:0,ETH:0,SOL:0,DAI:0};
@@ -689,27 +599,9 @@ function setMaxDefi(){
   updateDefiEarnings();
 }
 function submitDefi(){
-  var coin=document.getElementById('defiAsset').value;
-  var amount=parseFloat(document.getElementById('defiAmount').value);
-  var data=DEFI_RATES[coin];
-  if(amount<data.min){showToast('Minimum deposit is '+data.min+' '+coin,'error');return;}
-  var avail=DEFI_BALANCES[coin]||0;
-  if(amount>avail){showToast('Insufficient '+coin+' balance. Available: '+avail+' '+coin,'error');return;}
-  var btn=document.getElementById('defiSubmitBtn');
-  btn.disabled=true;btn.textContent='Processing...';
-  setTimeout(function(){
-    deductBalance(coin,amount);
-    var positions=getPositions();
-    positions.push({id:'EP'+Date.now()+'_'+Math.random().toString(36).slice(2,6),type:'defi',coin:coin,amount:amount,apy:data.apy,protocol:data.protocol,started:new Date().toISOString(),uid:localStorage.getItem('bb_uid')||'',userName:localStorage.getItem('bb_name')||'User',userEmail:localStorage.getItem('bb_email')||''});
-    savePositions(positions);
-    renderPositions();
-    closeModal('defiModal');
-    btn.disabled=false;btn.textContent='Confirm Deposit';
-    document.getElementById('defiAmount').value='';
-    showToast('DeFi Yield deposit of '+amount+' '+coin+' to '+data.protocol+' successful!','success');
-  },1500);
+ var data={type:'defi',coin:document.getElementById('defiAsset').value,amount:document.getElementById('defiAmount').value,days:0};
+ return FinanceUI.do('earn-start',async function(){var r=await DB.action('earn_start',data);closeModal('defiModal');return r;},'Position confirmed and saved.');
 }
-
 // ===== TOAST =====
 function showToast(msg,type){
   var container=document.getElementById('toastContainer');
@@ -737,5 +629,6 @@ if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
   <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
 </div>
 <script>lucide.createIcons();</script>
+<script>window.addEventListener('bb:updated',function(){refreshEarnBalances();renderPositions();});</script>
 </body>
 </html>
