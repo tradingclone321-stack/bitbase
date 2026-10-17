@@ -159,7 +159,7 @@
       <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
     <button id="adminSignIn" onclick="adminLogin()">Sign In</button>
     <div id="adminLoginError" role="alert" style="display:none;margin-top:12px;padding:12px;background:#391c21;border:1px solid #a64855;border-radius:8px;font-size:12px;line-height:1.6;text-align:left;color:#ffd6dc;"></div>
-    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update 20261017.3 · Sign in with your account email and password.</div>
+    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v2</span> · Sign in with your account email and password.</div>
   </div>
 </div>
 
@@ -695,20 +695,28 @@ var currentTradeFilter='all';
 var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
-var ADMIN_BUILD='2026-10-17-admin-v3';
+var ADMIN_BUILD='2026-10-17-instant-v2';
 
 function adminLoginError(message){var box=document.getElementById('adminLoginError');box.textContent=message||'';box.style.display=message?'block':'none';}
+// Only a script that genuinely failed to load can block the panel. A version
+// string difference between admin.html and db.js is a deployment warning, not
+// a reason to lock the operator out of the admin panel.
+function adminScriptsLoaded(){
+ return typeof DB!=='undefined'&&typeof DB.read==='function'&&typeof DB.loginUser==='function'&&typeof FinanceUI!=='undefined';
+}
 function adminBuildReady(){
- var ready=typeof DB!=='undefined'&&DB.VERSION===ADMIN_BUILD&&typeof DB.read==='function'&&typeof DB.loginUser==='function'&&typeof FinanceUI!=='undefined';
- if(!ready){
+ var loaded=adminScriptsLoaded();
+ if(loaded&&DB.VERSION!==ADMIN_BUILD)console.warn('[BitBase] Build mismatch: admin.html='+ADMIN_BUILD+' db.js='+DB.VERSION+'. Upload every file from the same release to the same folder.');
+ if(!loaded){
   document.getElementById('adminPanel').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('adminSignIn').disabled=true;
-  adminLoginError('The admin page and scripts are from different updates, or a script did not load. Upload all files from the latest ZIP together, redeploy, then press Ctrl+F5. See ADMIN_USER_LIST_FIX.md in the ZIP.');
+  adminLoginError('Admin scripts did not load. Upload db.js, finance-ui.js and supabase-config.js into the same folder as admin.html (check the browser console for a 404), then press Ctrl+F5.');
  }
- return ready;
+ return loaded;
 }
 
+(function(){var el=document.getElementById('adminReleaseLabel');if(el)el.textContent=ADMIN_BUILD;})();
 function getAdminPass(){return null;}
-function isLoggedIn(){return typeof DB!=='undefined'&&DB.VERSION===ADMIN_BUILD&&!!localStorage.getItem('bb_session_token')&&!!(DB.me&&DB.me.is_admin)&&localStorage.getItem(ADMIN_KEY)==='1';}
+function isLoggedIn(){return typeof DB!=='undefined'&&!!localStorage.getItem('bb_session_token')&&!!(DB.me&&DB.me.is_admin)&&localStorage.getItem(ADMIN_KEY)==='1';}
 function currentUserHasAdminAccess(){
   return isLoggedIn();
 }
@@ -1269,7 +1277,7 @@ function renderSupportLive(){
   }catch(e){}
 }
 var _supportBcApplied=false;
-if(typeof DB!=='undefined'&&DB.VERSION===ADMIN_BUILD&&DB.ready){
+if(typeof DB!=='undefined'&&DB.ready){
   DB.subscribe('bb_support_tickets',function(key,payload){
     if(payload && Array.isArray(payload)){
       _supportBcApplied=true;
