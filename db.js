@@ -1,162 +1,1094 @@
-/* BitBase v2: server owns balances, orders, permissions, and durable records.
- * Browser storage is a replaceable cache. No cached balance is ever uploaded. */
-var DB = {VERSION:'2026-10-17-admin-v3',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
-DB.get=function(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
-DB.set=function(k,v){localStorage.setItem(k,JSON.stringify(v));};
-DB.safeParse=function(s){try{return JSON.parse(s);}catch(e){return s;}};
-DB.userError=function(code,msg){var e=new Error(msg);e.code=code;return e;};
-DB.describeUserError=function(e){
- var code=String(e&&e.code||''),message=e&&e.message||'Connection unavailable. Try again.';
- if(code==='42501')return /Administrator access required/i.test(message)?'This account is not an administrator. Sign in with your admin account. The project owner can verify users.is_admin for your account.':'Database API permission denied (42501). Verify repair-finance.sql completed in the Supabase project configured in supabase-config.js. Keep direct user-table access private.';
- if(['PGRST202','42883','42P01','42703'].indexOf(code)>=0)return 'The finance database update is missing or incomplete ('+code+'). Run repair-finance.sql in the Supabase project configured in supabase-config.js, then sign in again.';
- if(['PGRST301','PGRST303'].indexOf(code)>=0)return 'The project API key was rejected. Check the public project URL and key in supabase-config.js.';
- return message;
-};
-DB.init=function(){if(DB.ready)return;try{if(window.supabase&&typeof SUPABASE_URL!=='undefined'&&SUPABASE_URL){DB.client=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);DB.ready=true;}}catch(e){DB._lastSyncError=e.message;}};
-DB.requireUserConnection=function(){DB.init();if(!DB.ready)throw new Error('Database unavailable. Reload and try again.');};
-DB.userRequestTimeout=20000;
-DB.userRequest=async function(query){
- var timer;var ctl=new AbortController();if(query.abortSignal)query=query.abortSignal(ctl.signal);
- try{var r=await Promise.race([query,new Promise(function(_,reject){timer=setTimeout(function(){ctl.abort();reject(DB.userError('DB_TIMEOUT','Response not confirmed. Retry the same operation; its request ID prevents duplicates.'));},DB.userRequestTimeout);})]);if(!r||r.error)throw r&&r.error||new Error('No server response');if(r.data&&r.data.error)throw new Error(r.data.error);return r;}
- finally{clearTimeout(timer);}
-};
-DB.rpc=async function(name,args){DB.requireUserConnection();try{var r=await DB.userRequest(DB.client.rpc(name,args));DB._lastSyncError='';return r.data;}catch(e){DB._lastSyncError=DB.describeUserError(e);if(e.code==='28000'&&(!args||!args.p_token||args.p_token===localStorage.getItem('bb_session_token'))){DB.clearSession();}throw e;}};
-DB.token=function(){var t=localStorage.getItem('bb_session_token');if(!t)throw DB.userError('28000','Please sign in again after the database update.');return t;};
-DB.clearSession=function(){Object.keys(localStorage).filter(function(k){return k.indexOf('bb_')===0;}).forEach(function(k){localStorage.removeItem(k);});DB._snapshot={};DB.me=null;DB._userRows=[];DB._usersFetchPromise=null;DB._usersFetchToken=null;};
-DB.cacheUser=function(u){
- if(!u)return;var old=localStorage.getItem('bb_uid');if(old&&old!==String(u.uid))DB.clearSession();
- localStorage.setItem('bb_uid',String(u.uid));localStorage.setItem('bb_name',u.name||'User');localStorage.setItem('bb_email',u.email||'');
- localStorage.setItem('bb_cash_balance',String(u.cash_balance||0));DB.set('bb_asset_balances',u.asset_balances||{});DB.set('bb_funding_balances',u.funding_balances||{});
- localStorage.setItem('bb_kyc_status',u.kyc_status||'none');DB.set('bb_preferences',u.preferences||{});
- localStorage.setItem('bb_phone',u.phone||'');localStorage.setItem('bb_username',u.username||'');
- if(u.demo_balance!=null)DB.set('bb_demo_trades_bal',u.demo_balance);else localStorage.removeItem('bb_demo_trades_bal');
- if(u.demo_positions!=null)DB.set('bb_demo_trades_pos',u.demo_positions);else localStorage.removeItem('bb_demo_trades_pos');
- DB.set('bb_admin_access_list',u.is_admin?[String(u.uid)]:[]);DB.set('bb_deactivated_accounts',u.is_deactivated?[String(u.uid)]:[]);
- if(!u.is_admin){localStorage.removeItem('bb_admin_users');localStorage.removeItem('bb_admin_logged_in');DB._userRows=[];}
- localStorage.removeItem('bb_password');DB.me=u;DB._localDirty=false;
-};
-DB.acceptSession=function(result){DB.clearSession();DB.cacheUser(result.user);localStorage.setItem('bb_session_token',result.token);localStorage.setItem('bb_login_time',String(Date.now()));return result.user;};
-DB.registerUser=async function(d){return DB.acceptSession(await DB.rpc('bb_register',{p_name:d.name,p_email:d.email,p_password:d.password}));};
-DB.loginUser=async function(email,password){return DB.acceptSession(await DB.rpc('bb_login',{p_email:email,p_password:password}));};
-DB.read=function(resource){return DB.rpc('bb_read',{p_token:DB.token(),p_resource:resource});};
-DB.newId=function(){return crypto.randomUUID();};
-// Persist one ID BEFORE sending. Retry after timeout/reload reuses that same ID.
-DB.operation=async function(action,data,runner){
- var key='bb_pending:'+localStorage.getItem('bb_uid')+':'+action;
- var input=JSON.stringify(data),pending=DB.get(key);
- if(pending&&pending.input!==input)throw new Error('A previous '+action+' request is unconfirmed. Retry its original values before starting another.');
- if(!pending){pending={id:DB.newId(),input:input};DB.set(key,pending);}
- try{var result=await runner(pending.id);localStorage.removeItem(key);return result;}
- catch(e){
-  // A PostgreSQL validation error confirms rollback. Network/timeout/5xx is ambiguous.
-  if(e.code&&/^(22|23|28|42|P0001|40001)/.test(e.code))localStorage.removeItem(key);
-  throw e;
- }
-};
-DB.action=function(action,data){return DB.operation(action,data,function(id){return DB.rpc('bb_action',{p_token:DB.token(),p_action:action,p_id:id,p_data:data});});};
-DB.demo=function(action,data){return DB.operation('demo.'+action,data,function(id){return DB.rpc('bb_demo',{p_token:DB.token(),p_action:action,p_id:id,p_data:data});});};
-DB.edge=function(action,data){return DB.operation(action,data,async function(id){
- DB.requireUserConnection();var controller=new AbortController();var timer=setTimeout(function(){controller.abort();},25000);
- try{var r=await fetch(SUPABASE_URL+'/functions/v1/trade-engine',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify(Object.assign({},data,{action:action,requestId:id,token:DB.token()})),signal:controller.signal});var body=await r.json();if(!r.ok||body.error){var e=new Error(body.error||'Trade service unavailable');e.code=body.code;throw e;}return body;}
- finally{clearTimeout(timer);}
-});};
-DB.settleDue=function(force){
- // Ask the trusted worker to settle expired orders now. Idempotent and safe to
- // retry; it never supplies a price. Non-forced calls are throttled; a forced
- // call (used the instant an order expires) skips the throttle but never runs
- // two settlement passes at once. When anything settles, refresh trades and
- // notify the page so the result appears immediately.
- var now=Date.now();
- if(DB._settling)return DB._settling;
- if(!force&&DB._settleAt&&now-DB._settleAt<8000)return Promise.resolve(null);
- DB._settleAt=now;
- try{DB.requireUserConnection();}catch(e){return Promise.resolve(null);}
- var token;try{token=DB.token();}catch(e){return Promise.resolve(null);}
- var ctl=new AbortController();var timer=setTimeout(function(){ctl.abort();},15000);
- DB._settling=fetch(SUPABASE_URL+'/functions/v1/trade-engine',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},body:JSON.stringify({action:'settle',token:token}),signal:ctl.signal}).then(function(r){return r.json();}).then(function(res){
-  if(force||(res&&Number(res.settled)>0))return DB.pullCollection('bb_trades_history').catch(function(){}).then(function(){try{window.dispatchEvent(new CustomEvent('bb:updated'));}catch(e){}return res;});
-  return res;
- }).catch(function(){return null;}).then(function(res){clearTimeout();DB._settling=null;return res;},function(e){clearTimeout();DB._settling=null;throw e;});
- return DB._settling;
-};
-DB.cachedUsers=function(){return DB.me&&DB.me.is_admin&&localStorage.getItem('bb_session_token')?DB.get('bb_admin_users')||[]:[];};
-DB.fetchUsersLive=function(){
- var token;try{token=DB.token();}catch(e){return Promise.reject(e);}
- if(DB._usersFetchPromise&&DB._usersFetchToken===token)return DB._usersFetchPromise;
- DB._usersFetchToken=token;
- var task=DB.rpc('bb_read',{p_token:token,p_resource:'users'}).then(function(rows){
-  if(token!==localStorage.getItem('bb_session_token'))throw DB.userError('SESSION_CHANGED','The account changed while users were loading. Sign in to the administrator account again.');
-  if(!Array.isArray(rows))throw DB.userError('INVALID_RESPONSE','The server did not return a valid user list.');
-  DB._userRows=rows;var list=rows.map(function(r){return{uid:String(r.uid),name:r.name,email:r.email,cashBalance:Number(r.cash_balance),assetBalances:r.asset_balances||{},kycStatus:r.kyc_status,createdAt:r.created_at,updatedAt:r.updated_at,isAdmin:r.is_admin,profitModule:!!r.profit_module};});
-  DB.set('bb_admin_users',list);DB.set('bb_admin_access_list',rows.filter(function(r){return r.is_admin;}).map(function(r){return String(r.uid);}));DB.set('bb_deactivated_accounts',rows.filter(function(r){return r.is_deactivated;}).map(function(r){return String(r.uid);}));DB._lastUsersError='';return list;
- }).catch(function(e){
-  if(token===localStorage.getItem('bb_session_token')){
-   DB._lastUsersError=DB.describeUserError(e);
-   if(e.code==='42501'||e.code==='28000'){
-    localStorage.removeItem('bb_admin_users');DB._userRows=[];
-    if(e.code==='28000'||/Administrator access required/i.test(e.message||'')){localStorage.removeItem('bb_admin_logged_in');localStorage.removeItem('bb_admin_access_list');if(DB.me)DB.me.is_admin=false;}
-   }
-  }
-  throw e;
- }).finally(function(){if(DB._usersFetchPromise===task){DB._usersFetchPromise=null;DB._usersFetchToken=null;}});
- DB._usersFetchPromise=task;return task;
-};
-DB.pullUsers=function(){return DB.fetchUsersLive().then(function(data){return {data:data,error:null};},function(error){return{data:null,error:error};});};
-DB.pullLocalUser=async function(){if(!localStorage.getItem('bb_session_token'))return false;var before=localStorage.getItem('bb_cash_balance')+localStorage.getItem('bb_asset_balances');var token=DB.token(),row=await DB.read('me');if(token!==localStorage.getItem('bb_session_token'))return false;DB.cacheUser(row);return before!==localStorage.getItem('bb_cash_balance')+localStorage.getItem('bb_asset_balances');};
-DB.syncLocalUser=function(){return DB.pullLocalUser();}; // deliberately pull-only
-DB.pushUsers=function(){return Promise.reject(new Error('Bulk browser balance uploads are disabled.'));};
-DB.upsertUser=function(u){return DB.action('profile',{name:u.name,email:u.email}).then(DB.pullLocalUser);};
-DB.updateUser=function(uid,patch){return DB.action('admin_user',Object.assign({},patch,{uid:Number(uid)})).then(function(){return DB.pullUsers();});};
-DB.deleteUser=function(uid){return DB.updateUser(uid,{is_deactivated:true});}; // retain financial records
-DB.COLLECTIONS=['bb_trades_history','bb_demo_trades_hist','bb_support_tickets','bb_deposit_requests','bb_deposit_addresses','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_earn_positions','bb_balance_history','bb_ai_quants'];
-DB.pullCollection=function(key){
- if(DB._pulls[key])return DB._pulls[key];
- var token=DB.token(),uid=localStorage.getItem('bb_uid');
- DB._pulls[key]=DB.read(key).then(function(payload){
-  if(token!==localStorage.getItem('bb_session_token')||uid!==localStorage.getItem('bb_uid'))return;
-  if(key==='bb_deposit_addresses'&&payload._version){DB._addressVersion=payload._version;delete payload._version;}DB.set(key,payload);DB._snapshot[key]=JSON.stringify(payload);DB._lastPullTime=Date.now();
-  if(key==='bb_trades_history'){
-   DB.set('bb_trade_positions',payload.filter(function(p){return String(p.uid)===uid;}).map(function(p){return Object.assign({},p,{amt:Number(p.amount||p.amt),profit:Number(p.potentialProfit||Math.abs(p.profit)||0)});}));
-   localStorage.setItem('bb_trade_pnl',String(payload.filter(function(p){return String(p.uid)===uid;}).reduce(function(sum,p){return sum+Number(p.profit||0);},0)));
-  }
-  if(DB._subscribers[key])DB._subscribers[key](key,payload);
-  return payload;
- }).finally(function(){DB._pulls[key]=null;});return DB._pulls[key];
-};
-DB.pushCollection=function(key){
- var data=DB.get(key),prior=DB._snapshot[key];
- var run=async function(){
-  if(['bb_trades_history','bb_ai_quants','bb_earn_positions','bb_balance_history','bb_profit_modules'].indexOf(key)>=0)throw new Error('Orders and balances can only be changed through server transactions.');
-  if(key==='bb_deposit_addresses'){await DB.rpc('bb_save_record',{p_token:DB.token(),p_collection:key,p_record:Object.assign({},data,{_version:DB._addressVersion||0})});}
-  else{var old=prior?JSON.parse(prior):[];for(var item of data||[]){var before=old.find(function(r){return r.id===item.id;});if(JSON.stringify(before)!==JSON.stringify(item))await DB.rpc('bb_save_record',{p_token:DB.token(),p_collection:key,p_record:item});}}
-  await DB.pullCollection(key);
- };
- var p=(DB._pushChains[key]||Promise.resolve()).catch(function(){}).then(run);DB._pushChains[key]=p;return p.catch(async function(e){await DB.pullCollection(key).catch(function(){});throw e;});
-};
-DB.saveRecord=async function(key,item){var result=await DB.rpc('bb_save_record',{p_token:DB.token(),p_collection:key,p_record:item});try{await DB.pullCollection(key);}catch(e){DB._lastSyncError='Saved; refresh pending. '+DB.describeUserError(e);}return result;};
-DB.pullAll=function(){var tasks=[DB.pullLocalUser()];if(DB.me&&DB.me.is_admin)tasks.push(DB.fetchUsersLive());DB.COLLECTIONS.forEach(function(k){tasks.push(DB.pullCollection(k));});return Promise.all(tasks);};
-DB.TAB_MAP={deposits:['bb_deposit_requests','bb_deposit_addresses'],withdrawals:['bb_withdrawal_requests'],loans:['bb_loans'],kyc:['bb_kyc_submissions'],trades:['bb_trades_history'],earn:['bb_earn_positions'],aiquants:['bb_ai_quants'],support:['bb_support_tickets'],balances:['bb_balance_history'],analytics:['bb_trades_history','bb_earn_positions','bb_ai_quants'],dashboard:['bb_trades_history']};
-DB.pullTab=function(tab){return Promise.all((DB.TAB_MAP[tab]||[]).map(DB.pullCollection));};
-DB.settleRealTrades=function(){return [];}; // pricing/settlement belongs to the scheduler
-DB.pullProfitModules=function(){return Promise.resolve();};DB.applyProfitModules=function(){};
-DB.getAdminPassword=function(){return DB.pullLocalUser().then(function(){return null;});};
-DB.saveAdminPassword=function(){return Promise.reject(new Error('Use your account password settings.'));};
-DB._ticketMerge=function(local,server){return server;};DB._cleanTickets=function(a){return a||[];};DB._mergeById=function(local,server){return server;};
-DB.broadcastUpdate=function(){};DB.subscribe=function(k,cb){DB._subscribers[k]=cb;};DB.unsubscribe=function(k){delete DB._subscribers[k];};
-DB.whenReady=function(cb){DB.init();if(DB.ready)cb();};
-DB.startLocalPolling=function(interval){
- if(DB._pollTimer)return;
- async function poll(){if(document.hidden||!localStorage.getItem('bb_session_token')||DB._polling)return;DB._polling=true;try{DB.settleDue();await DB.pullLocalUser();await Promise.all(DB.COLLECTIONS.map(DB.pullCollection));window.dispatchEvent(new CustomEvent('bb:updated'));}catch(e){DB._lastSyncError=DB.describeUserError(e);window.dispatchEvent(new CustomEvent('bb:sync-error',{detail:DB._lastSyncError}));}finally{DB._polling=false;}}
- DB._pollTimer=setInterval(poll,interval||5000);poll();window.addEventListener('online',poll);document.addEventListener('visibilitychange',poll);
-};
-DB.diagnose=function(){return{version:DB.VERSION,ready:DB.ready,lastError:DB._lastSyncError,lastPullAgoSec:DB._lastPullTime?Math.round((Date.now()-DB._lastPullTime)/1000):-1,realtime:false,serverTickets:(DB.get('bb_support_tickets')||[]).length};};
-DB.init();
-// Old browser sessions are never treated as authenticated.
-if(localStorage.getItem('bb_uid')&&!localStorage.getItem('bb_session_token')){
- var page=(location.pathname.split('/').pop()||'index.html');
- if(['index.html','login.html','register.html','admin.html'].indexOf(page)<0)location.replace('login.html');
-}
-window.addEventListener('DOMContentLoaded',function(){if(localStorage.getItem('bb_session_token'))DB.startLocalPolling(5000);});
-window.addEventListener('storage',function(e){if(e.key==='bb_session_token'&&!e.newValue&&location.pathname.indexOf('login')<0)location.replace('login.html');});
+// ============================================================
+// BitBase - Supabase sync layer (db.js)
+// Load AFTER supabase-config.js and the supabase-js CDN script.
+// localStorage stays the fast local cache (existing code keeps
+// working); this layer mirrors key data to Supabase so the
+// admin panel sees ALL devices' data, not just one browser.
+// ============================================================
+var DB = {};
+DB.ready = false;
+DB.client = null;
+DB.VERSION = '2026-08-18-pushfix';
+DB._lastPullTime = 0;
+DB._lastSyncError = '';
 
-DB.logout=async function(){try{await DB.action('logout',{});}finally{DB.clearSession();location.href='login.html';}};
+DB.init = function () {
+  try {
+    if (!window.supabase) return;
+    if (!SUPABASE_URL || SUPABASE_URL.indexOf('PASTE_') === 0) return;
+    if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.indexOf('PASTE_') === 0) return;
+    DB.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    DB.ready = true;
+    console.log('[DB] Supabase connected');
+  } catch (e) {
+    DB.ready = false;
+    console.warn('[DB] Supabase init failed', e);
+  }
+};
+
+DB.get = function (key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } };
+DB.set = function (key, val) { localStorage.setItem(key, JSON.stringify(val)); };
+DB._ok = function (r) { if (r && r.error) console.warn('[DB]', r.error.message || r.error); return r; };
+DB.safeParse = function (s) { try { return JSON.parse(s); } catch (e) { return s; } };
+
+// Runs cb as soon as the Supabase client is ready (or immediately if it
+// already is). Used by pages whose first write must reach the server even if
+// the SDK CDN is slow to load — e.g. a brand-new registration. DB.init() is
+// called synchronously at db.js load, so this only ever waits a re-poll tick.
+DB.whenReady = function (cb) {
+  if (!cb) return;
+  if (DB.ready) { cb(); return; }
+  var tries = 0;
+  var t = setInterval(function () {
+    tries++;
+    if (DB.ready) { clearInterval(t); cb(); return; }
+    if (tries > 60) clearInterval(t); // 30s cap, then give up
+  }, 500);
+};
+
+// ---------------- USERS ----------------
+// Builds the full user list from localStorage (admin_users + current device).
+DB.collectUsers = function () {
+  var list = [];
+  try { list = JSON.parse(localStorage.getItem('bb_admin_users') || '[]'); } catch (e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  var uid = localStorage.getItem('bb_uid');
+  if (uid) {
+    var exists = false;
+    for (var i = 0; i < list.length; i++) { if (String(list[i].uid) === String(uid)) { exists = true; break; } }
+    if (!exists) {
+      list.push({
+        uid: uid,
+        name: localStorage.getItem('bb_name') || 'User',
+        email: localStorage.getItem('bb_email') || '',
+        cashBalance: parseFloat(localStorage.getItem('bb_cash_balance')) || 0,
+        assetBalances: DB.get('bb_asset_balances') || {}
+      });
+    }
+  }
+  return list;
+};
+
+DB.usersToRows = function (list) {
+  var adminList = []; try { adminList = JSON.parse(localStorage.getItem('bb_admin_access_list') || '[]'); } catch (e) {}
+  var deact = []; try { deact = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]'); } catch (e) {}
+  var kyc = localStorage.getItem('bb_kyc_status') || 'none';
+  var rows = [];
+  for (var i = 0; i < list.length; i++) {
+    var u = list[i];
+    rows.push({
+      uid: Number(u.uid) || 0,
+      name: u.name || 'User',
+      email: u.email || '',
+      cash_balance: parseFloat(u.cashBalance) || 0,
+      asset_balances: u.assetBalances || {},
+      is_admin: adminList.indexOf(String(u.uid)) >= 0 || adminList.indexOf(u.uid) >= 0,
+      is_deactivated: deact.indexOf(String(u.uid)) >= 0 || deact.indexOf(u.uid) >= 0,
+      profit_module: localStorage.getItem('bb_profit_module_' + u.uid) === 'true',
+      kyc_status: u.kycStatus || kyc
+    });
+  }
+  return rows;
+};
+
+// Upsert every user from localStorage into the users table.
+// Push the current device's user (latest balances) to the central table.
+// IMPORTANT: this is a targeted UPDATE of balance/profile fields ONLY.
+// It must never re-assert is_admin / is_deactivated / kyc_status / password
+// (those are admin-controlled) and must never re-CREATE a row the admin
+// deleted — an UPDATE on a missing row is a no-op, so a deleted account stays
+// deleted and a deactivation on the server is not overwritten by this device.
+// force=true pushes cash_balance / asset_balances even when the device does not
+// think it just modified them (used by startLocalPolling's push-first branch;
+// the poll cleared _localDirty beforehand, so the flag alone is no longer set).
+DB.syncLocalUser = function (force) {
+  if (!DB.ready) return Promise.resolve();
+  var uid = localStorage.getItem('bb_uid');
+  if (!uid) return Promise.resolve();
+  var pending = localStorage.getItem('bb_pending_signup') === '1';
+  var pushBalance = force === true || !!DB._localDirty || pending;
+  var patch = {
+    name: localStorage.getItem('bb_name') || 'User',
+    email: localStorage.getItem('bb_email') || ''
+  };
+  // Balance/asset fields only travel with a balance push. A bare
+  // sanitize-style sync (settings prefs save, trade clean poll, login upsert)
+  // must NOT re-assert the device's possibly-stale absolute cash_balance, or
+  // it would overwrite an admin's server-side adjustment ("balance reverts").
+  if (pushBalance) {
+    patch.cash_balance = parseFloat(localStorage.getItem('bb_cash_balance')) || 0;
+    patch.asset_balances = DB.get('bb_asset_balances') || {};
+  }
+  var demoBal = DB.get('bb_demo_trades_bal');
+  if (demoBal != null && typeof demoBal === 'object') patch.demo_balance = demoBal;
+  var demoPos = DB.get('bb_demo_trades_pos');
+  if (demoPos != null && Array.isArray(demoPos)) patch.demo_positions = demoPos;
+  if (pending) {
+    // Brand-new signup: register.html may have redirected to the dashboard
+    // before Supabase finished initialising (4s window), so the initial
+    // upsert might never have run and the row may not exist yet. A bare
+    // UPDATE is a no-op on a missing row, which is exactly how a fresh
+    // account silently vanished from admin. Until the server row is
+    // confirmed (bb_pending_signup cleared by pullLocalUser), create it
+    // with an explicit INSERT-on-conflict so the account ALWAYS lands.
+    patch.uid = Number(uid);
+    patch.password = localStorage.getItem('bb_password') || '';
+    patch.is_admin = false;
+    patch.is_deactivated = false;
+    patch.kyc_status = localStorage.getItem('bb_kyc_status') || 'none';
+    return DB.client.from('users').upsert(patch, { onConflict: 'uid' }).then(DB._ok, DB._ok);
+  }
+  return DB.client.from('users').update(patch).eq('uid', Number(uid)).then(DB._ok, DB._ok);
+};
+
+DB.pushUsers = function () {
+  if (!DB.ready) return Promise.resolve();
+  var rows = DB.usersToRows(DB.collectUsers());
+  if (!rows.length) return Promise.resolve();
+  return DB.client.from('users').upsert(rows, { onConflict: 'uid' }).then(DB._ok, DB._ok);
+};
+
+// Upsert a single user object.
+DB.upsertUser = function (user) {
+  if (!DB.ready || !user) return Promise.resolve();
+  var adminList = []; try { adminList = JSON.parse(localStorage.getItem('bb_admin_access_list') || '[]'); } catch (e) {}
+  var deact = []; try { deact = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]'); } catch (e) {}
+  var row = {
+    uid: Number(user.uid) || 0,
+    name: user.name || localStorage.getItem('bb_name') || 'User',
+    email: user.email || localStorage.getItem('bb_email') || '',
+    password: user.password || localStorage.getItem('bb_password') || '',
+    cash_balance: parseFloat(user.cashBalance) || parseFloat(localStorage.getItem('bb_cash_balance')) || 0,
+    asset_balances: user.assetBalances || DB.get('bb_asset_balances') || {},
+    is_admin: adminList.indexOf(String(user.uid)) >= 0,
+    is_deactivated: deact.indexOf(String(user.uid)) >= 0,
+    kyc_status: localStorage.getItem('bb_kyc_status') || 'none'
+  };
+  // Only include optional columns if they have values (avoids PGRST204 if column not yet added)
+  var prefs = DB.get('bb_preferences');
+  if (prefs && Object.keys(prefs).length > 0) row.preferences = prefs;
+  var demoBal = DB.get('bb_demo_trades_bal');
+  if (demoBal != null && typeof demoBal === 'object') row.demo_balance = demoBal;
+  var demoPos = DB.get('bb_demo_trades_pos');
+  if (demoPos != null && Array.isArray(demoPos)) row.demo_positions = demoPos;
+  var uid = row.uid;
+  if (!uid) return Promise.resolve();
+  // If the server already has this user, balance is SERVER-authoritative
+  // (admin adjustments, AI-quant credits). Only push this device's absolute
+  // cash_balance / asset_balances when it just changed them locally
+  // (DB._localDirty) or the server row does not exist yet (first signup).
+  // Otherwise the login / settings upsert would push the device's stale local
+  // balance straight over the admin's adjustment — the "balance reverts to the
+  // old value when the user opens their account" bug.
+  var dirty = !!DB._localDirty;
+  DB._localDirty = false;
+  return DB.client.from('users').select('uid').eq('uid', uid).limit(1).then(function (res) {
+    var exists = res && res.data && res.data.length > 0;
+    if (exists && !dirty) {
+      delete row.cash_balance;
+      delete row.asset_balances;
+    }
+    return DB.client.from('users').upsert(row, { onConflict: 'uid' }).then(DB._ok, DB._ok);
+  }, function () {
+    // Server unreachable: never clobber a possibly-existing balance.
+    delete row.cash_balance;
+    delete row.asset_balances;
+    return DB.client.from('users').upsert(row, { onConflict: 'uid' }).then(DB._ok, DB._ok);
+  });
+};
+
+// Pull the users table into localStorage so admin sees every device's users.
+DB.pullUsers = function () {
+  if (!DB.ready) return Promise.resolve(null);
+  return DB.client.from('users').select('*').order('created_at', { ascending: true }).then(function (res) {
+    var rows = (res && res.data) ? res.data : [];
+    var list = [];
+    var adminList = [];
+    var deact = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var uid = String(r.uid);
+      list.push({ uid: uid, name: r.name || 'User', email: r.email || '', cashBalance: parseFloat(r.cash_balance) || 0, assetBalances: r.asset_balances || {}, kycStatus: r.kyc_status || 'none' });
+      if (r.is_admin && adminList.indexOf(uid) < 0) adminList.push(uid);
+      if (r.is_deactivated && deact.indexOf(uid) < 0) deact.push(uid);
+      localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
+    }
+    // Write server data directly — no local merge.
+    // The merge previously resurrected deleted users: device A deletes a user
+    // from Supabase, but localStorage still has them; next pull re-inserts
+    // them because they're "not in server yet". Server is the source of truth.
+    DB.set('bb_admin_users', list);
+    DB.set('bb_admin_access_list', adminList);
+    DB.set('bb_deactivated_accounts', deact);
+    return res;
+  }, function (e) {
+    console.warn('[DB] pullUsers failed', e);
+    // On failure, at least keep local users
+    return null;
+  });
+};
+
+// Cached copy of the users list (from the last successful pull).
+DB.cachedUsers = function () {
+  var list = [];
+  try { list = JSON.parse(localStorage.getItem('bb_admin_users') || '[]'); } catch (e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  return list;
+};
+
+// Live read of the central users table, sorted newest-first (created_at DESC)
+// so a brand-new registration appears at the TOP of the admin list instead of
+// hiding at the bottom. Falls back to the cached list when the server (or the
+// Supabase client) is unavailable so the UI never blanks out.
+DB.fetchUsersLive = function () {
+  if (!DB.ready || !DB.client || !DB.client.from) return Promise.resolve(DB.cachedUsers());
+  return DB.client.from('users').select('*').order('created_at', { ascending: false }).then(function (res) {
+    var rows = (res && res.data) ? res.data : [];
+    var list = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      list.push({
+        uid: String(r.uid),
+        name: r.name || 'User',
+        email: r.email || '',
+        cashBalance: parseFloat(r.cash_balance) || 0,
+        assetBalances: r.asset_balances || {},
+        kycStatus: r.kyc_status || 'none'
+      });
+    }
+    return list;
+  }, function (e) {
+    console.warn('[DB] fetchUsersLive failed', e);
+    return DB.cachedUsers();
+  });
+};
+
+// Returns the server row (or null) for an email. Used by register.html to
+// catch a duplicate email that localStorage alone cannot see — a fresh
+// device has an empty bb_admin_users cache, so a repeat registration would
+// otherwise sail through the local check and then be rejected by the server's
+// users_email_key constraint (PGRST23505), which the old code swallowed and
+// proceeded to the dashboard anyway, leaving the account missing from admin.
+DB.userByEmail = function (email) {
+  if (!DB.ready || !DB.client || !DB.client.from || !email) return Promise.resolve(null);
+  return DB.client.from('users').select('uid,name,email').eq('email', email).limit(1).then(function (res) {
+    return (res && res.data && res.data.length) ? res.data[0] : null;
+  }, function () {
+    // Server unreachable: assume not-taken; the insert will still be guarded
+    // by the onConflict/unique constraint on the server side.
+    return null;
+  });
+};
+
+DB.updateUser = function (uid, patch) {
+  if (!DB.ready) return Promise.resolve();
+  return DB.client.from('users').update(patch).eq('uid', Number(uid)).then(DB._ok, DB._ok);
+};
+
+DB.deleteUser = function (uid) {
+  if (!DB.ready) return Promise.resolve();
+  return DB.client.from('users').delete().eq('uid', Number(uid)).then(DB._ok, DB._ok);
+};
+
+// Pull the current device's own user row from Supabase into localStorage.
+// Returns true if anything changed (callers may reload/re-render).
+DB.pullLocalUser = function () {
+  if (!DB.ready) return Promise.resolve(false);
+  var uid = localStorage.getItem('bb_uid');
+  if (!uid) return Promise.resolve(false);
+  return DB.client.from('users').select('*').eq('uid', Number(uid)).limit(1).single().then(function (res) {
+    if (res && res.data) {
+      var r = res.data;
+      // Row confirmed to exist on the server — the signup push landed, so the
+      // create-if-missing fallback in syncLocalUser is no longer needed and a
+      // later admin delete must STAY deleted (an UPDATE on a missing row is a
+      // no-op). Clearing the flag here is what prevents resurrection.
+      localStorage.removeItem('bb_pending_signup');
+      var changed = false;
+      var oldCash = parseFloat(localStorage.getItem('bb_cash_balance')) || 0;
+      var newCash = parseFloat(r.cash_balance) || 0;
+      localStorage.setItem('bb_cash_balance', String(newCash));
+      if (Math.abs(oldCash - newCash) > 0.01) changed = true;
+      try {
+        var oldAb = localStorage.getItem('bb_asset_balances');
+        var newAb = JSON.stringify(r.asset_balances || {});
+        localStorage.setItem('bb_asset_balances', newAb);
+        if (oldAb !== newAb) changed = true;
+      } catch (e) {}
+      if (r.name && r.name !== localStorage.getItem('bb_name')) { localStorage.setItem('bb_name', r.name); changed = true; }
+      if (r.email && r.email !== localStorage.getItem('bb_email')) { localStorage.setItem('bb_email', r.email); changed = true; }
+      if (r.password) localStorage.setItem('bb_password', r.password);
+      if (r.kyc_status && r.kyc_status !== localStorage.getItem('bb_kyc_status')) { localStorage.setItem('bb_kyc_status', r.kyc_status); changed = true; }
+      if (r.is_admin != null) {
+        var aList = []; try { aList = JSON.parse(localStorage.getItem('bb_admin_access_list') || '[]'); } catch (e) { aList = []; }
+        var aIdx = aList.indexOf(String(uid));
+        if (r.is_admin && aIdx < 0) { aList.push(String(uid)); localStorage.setItem('bb_admin_access_list', JSON.stringify(aList)); changed = true; }
+        else if (!r.is_admin && aIdx >= 0) { aList.splice(aIdx, 1); localStorage.setItem('bb_admin_access_list', JSON.stringify(aList)); changed = true; }
+      }
+      if (r.profit_module != null) {
+        // Prefer the shared profit-modules map (fresh 5s sync); only fall
+        // back to the users-table column when no map entry exists yet.
+        var hasMap = false;
+        try { var pmMap = JSON.parse(localStorage.getItem('bb_profit_modules') || '{}'); hasMap = Object.prototype.hasOwnProperty.call(pmMap, String(uid)); } catch (e) {}
+        if (!hasMap) localStorage.setItem('bb_profit_module_' + uid, r.profit_module ? 'true' : 'false');
+      }
+      // Restore preferences, demo balance/positions if server has them
+      if (r.preferences && typeof r.preferences === 'object' && Object.keys(r.preferences).length > 0) {
+        var oldP = localStorage.getItem('bb_preferences');
+        var newP = JSON.stringify(r.preferences);
+        if (oldP !== newP) { localStorage.setItem('bb_preferences', newP); changed = true; }
+      }
+      if (r.demo_balance != null && typeof r.demo_balance === 'object') {
+        var oldDb = localStorage.getItem('bb_demo_trades_bal');
+        var newDb = JSON.stringify(r.demo_balance);
+        if (oldDb !== newDb) { localStorage.setItem('bb_demo_trades_bal', newDb); changed = true; }
+      }
+      if (r.demo_positions != null && Array.isArray(r.demo_positions)) {
+        var oldDp = localStorage.getItem('bb_demo_trades_pos');
+        var newDp = JSON.stringify(r.demo_positions);
+        if (oldDp !== newDp) { localStorage.setItem('bb_demo_trades_pos', newDp); changed = true; }
+      }
+      return changed;
+    }
+    return false;
+  }, function (e) { console.warn('[DB] pullLocalUser failed', e); return false; });
+};
+
+// Keep the current device's user row in sync from Supabase.
+// Polls pullLocalUser every intervalMs; reloads the page when the
+// server row differs from localStorage (admin adjustments, approvals).
+// Also starts a faster 5s poll for the shared profit-module flags so
+// admin toggles apply without waiting for the page reload.
+DB.startLocalPolling = function (intervalMs) {
+  intervalMs = intervalMs || 10000;
+  if (!DB._localPollTimer) {
+    // Two sources write cash_balance and must not fight:
+    //  * Real trades credit LOCALLY inside DB.settleRealTrades() before their
+    //    push is even queued, so local is the newer value and must be pushed
+    //    (pushed-tagged) before any pull reads the still-stale server row.
+    //  * AI Quants / admin credits land on the SERVER (settle_ai_quants RPC,
+    //    credit_user) while local is stale, so pulling first is mandatory or
+    //    the poll would push the stale absolute value over the fresh credit.
+    // Default: pull-then-push (protects server-authority credits on every page).
+    // When local was just dirtied locally (trade settled), push-then-pull so the
+    // real-trade credit survives. _skipSyncUntil suppresses a push during an
+    // active RPC+pull cycle (settleOrders) while still pulling on that tick.
+    var sync = function (force) {
+      if (DB._skipSyncUntil && Date.now() < DB._skipSyncUntil) return Promise.resolve();
+      return DB.syncLocalUser(force);
+    };
+    var pull = function () { return DB.pullLocalUser(); };
+    var poll = function () {
+      try { DB.settleRealTrades(); } catch (e) {}
+      var localDirty = !!DB._localDirty;
+      DB._localDirty = false;
+      // pullLocalUser→sync is the default (server balances are authoritative
+      // for admin/AI-quant credits). When this device just wrote a balance
+      // locally (trade settled, coin swapped) push it first with force=true so
+      // the local change survives, then pull. During an RPC+pull cycle
+      // (settleOrders) suppress the push on the first tick while still pulling.
+      if (DB._skipSyncUntil && Date.now() < DB._skipSyncUntil) { pull(); return; }
+      // changed must come from pullLocalUser (boolean: true only when the server
+      // row differs from localStorage). sync's return is the Supabase response
+      // object — always truthy — so chaining it makes the page reload on every
+      // tick. Discard the sync result and keep pull's boolean for the reload.
+      var afterSync = function (changed) { return sync(false).then(function () { return changed; }, function () { return changed; }); };
+      var run;
+      if (localDirty) {
+        run = sync(true).then(pull, pull);
+      } else {
+        run = pull().then(afterSync, afterSync);
+      }
+      run.then(function (changed) {
+        if (changed && window.location && window.location.reload) window.location.reload();
+        DB.pullProfitModules();
+      }, function () {
+        DB.pullProfitModules();
+      });
+    };
+    poll();
+    DB._localPollTimer = setInterval(poll, intervalMs);
+  }
+  if (!DB._profitPollTimer) {
+    DB.pullProfitModules();
+    DB._profitPollTimer = setInterval(DB.pullProfitModules, 5000);
+  }
+};
+
+// Settle expired REAL trades no matter which page is open. The trade page used
+// to be the only place that settled positions, so navigating to history or
+// another page while a trade was running left it stuck "Active" (= Pending in
+// history) and never credited the balance. Positions live in bb_trade_positions
+// (shared localStorage), so any page can settle them. Idempotent: a position
+// whose status != 'Active' is skipped, so it is safe to call repeatedly from
+// multiple pages/tabs. Returns array of settled ids (empty when nothing settled).
+DB.settleRealTrades = function () {
+  var settled = [];
+  try {
+    var positions = [];
+    try { positions = JSON.parse(localStorage.getItem('bb_trade_positions') || '[]') || []; } catch (e) { positions = []; }
+    if (!Array.isArray(positions)) positions = [];
+    var now = Date.now();
+    var myUid = localStorage.getItem('bb_uid') || '';
+    var balance = parseFloat(localStorage.getItem('bb_cash_balance')) || 0;
+    var pnl = parseFloat(localStorage.getItem('bb_trade_pnl') || '0');
+    var history = [];
+    try { history = JSON.parse(localStorage.getItem('bb_trades_history') || '[]') || []; } catch (e) { history = []; }
+    if (!Array.isArray(history)) history = [];
+    for (var i = 0; i < positions.length; i++) {
+      var p = positions[i];
+      if (!p || p.status !== 'Active') continue;
+      if (now < (p.startTime + p.dur * 1000)) continue;
+      var forceKey = 'bb_force_resolve_' + p.id;
+      var forced = localStorage.getItem(forceKey);
+      if (forced !== null) localStorage.removeItem(forceKey);
+      var pmOn = (localStorage.getItem('bb_profit_module_' + myUid) || localStorage.getItem('bb_profit_module')) === 'true';
+      var won = forced !== null ? forced === 'Won' : (pmOn ? true : Math.random() > 0.7);
+      p.status = won ? 'Won' : 'Lost';
+      p.exitPrice = (p.entryPrice || 0) * (1 + (Math.random() * 0.004 - 0.002));
+      balance += won ? (p.amt + p.profit) : (p.amt - p.profit);
+      pnl += won ? p.profit : -p.profit;
+      localStorage.setItem('bb_trade_pnl', pnl.toString());
+      var idx = -1;
+      for (var j = 0; j < history.length; j++) {
+        if (history[j] && history[j].id === p.id) { idx = j; break; }
+      }
+      var rec = {
+        id: p.id, pair: p.pair, side: p.dir === 'UP' ? 'Buy' : 'Sell',
+        amount: p.amt, price: p.entryPrice, exitPrice: p.exitPrice, fee: 0,
+        time: p.startTime, resolvedTime: now, status: won ? 'Won' : 'Lost',
+        profit: p.profit, source: 'real', uid: myUid
+      };
+      if (idx >= 0) { history[idx] = rec; } else { history.push(rec); }
+      settled.push(p.id);
+    }
+    if (settled.length) {
+      localStorage.setItem('bb_cash_balance', balance);
+      localStorage.setItem('bb_trade_positions', JSON.stringify(positions));
+      localStorage.setItem('bb_trades_history', JSON.stringify(history));
+      DB._localDirty = true;
+      DB.pushCollection('bb_trades_history');
+      DB.syncLocalUser();
+    }
+  } catch (e) { console.warn('[DB] settleRealTrades error', e); }
+  return settled;
+};
+
+// Run once on every page load so a trade that expired while the user was away
+// is settled immediately regardless of which page they open.
+try {
+  if (localStorage.getItem('bb_uid')) {
+    setTimeout(function () { DB.settleRealTrades(); }, 500);
+  }
+} catch (e) {}
+
+// Shared profit-module flags (uid -> bool). Stored in app_collections so
+// admin toggles reach every device without depending on the users table.
+DB.applyProfitModules = function (map) {
+  try {
+    if (!map || typeof map !== 'object') return;
+    for (var uid in map) {
+      if (Object.prototype.hasOwnProperty.call(map, uid)) {
+        localStorage.setItem('bb_profit_module_' + uid, map[uid] ? 'true' : 'false');
+      }
+    }
+  } catch (e) {}
+};
+DB.pullProfitModules = function () {
+  if (!DB.ready) return Promise.resolve();
+  return DB.client.from('app_collections').select('payload').eq('key', 'bb_profit_modules').single().then(function (res) {
+    if (res && res.data && res.data.payload) {
+      localStorage.setItem('bb_profit_modules', JSON.stringify(res.data.payload));
+      DB.applyProfitModules(res.data.payload);
+    }
+  }, function () { return null; });
+};
+
+// Try logging in against the central users table (used when the
+// device has no localStorage for this email yet).
+DB.loginUser = function (email, pass) {
+  if (!DB.ready || !email) return Promise.resolve(null);
+  return DB.client.from('users').select('*').eq('email', email).limit(1).single().then(function (res) {
+    if (res && res.data && res.data.password === pass) return res.data;
+    return null;
+  }, function () { return null; });
+};
+
+// ---------------- COLLECTIONS (trades, deposits, etc.) ----------------
+DB.COLLECTIONS = [
+  'bb_trades_history',
+  'bb_demo_trades_hist',
+  'bb_support_tickets',
+  'bb_deposit_requests',
+  'bb_deposit_addresses',
+  'bb_withdrawal_requests',
+  'bb_loans',
+  'bb_kyc_submissions',
+  'bb_earn_positions',
+  'bb_balance_history',
+  'bb_profit_modules',
+  'bb_ai_quants'
+];
+
+// Merge two ticket arrays by id, unioning messages (deduped) and
+// sorting by time. Server first, then local, so nothing is clobbered.
+DB._ticketMerge = function (local, server) {
+  var map = {};
+  var order = [];
+  function upsertTicket(t) {
+    if (!t || !t.id) return;
+    // Expired deletion tombstones no longer need to be propagated.
+    if (t.status === 'deleted' && t._deletedAt && (Date.now() - t._deletedAt) > DB.TICKET_TTL) return;
+    if (!map[t.id]) {
+      map[t.id] = { id: t.id, userId: t.userId, userName: t.userName, userEmail: t.userEmail, status: t.status || 'open', createdAt: t.createdAt || Date.now(), messages: [] };
+      order.push(t.id);
+    }
+    var cur = map[t.id];
+    // An admin deletion wins over every other status so it survives the
+    // union merge and propagates to every device (nothing resurrects it).
+    if (t.status === 'deleted' || cur.status === 'deleted') {
+      cur.status = 'deleted';
+      if (t._deletedAt) cur._deletedAt = t._deletedAt;
+    } else if (t.status === 'resolved') {
+      cur.status = 'resolved';
+    }
+    if (!cur.userName && t.userName) cur.userName = t.userName;
+    if (!cur.userEmail && t.userEmail) cur.userEmail = t.userEmail;
+    if (t.lastAdminReply) cur.lastAdminReply = t.lastAdminReply;
+    if (cur.status === 'deleted') {
+      // Tombstones carry no chat history (keeps the payload small).
+      cur.messages = [];
+      return;
+    }
+    var seen = {};
+    for (var i = 0; i < cur.messages.length; i++) {
+      var m = cur.messages[i];
+      seen[(m.from || '') + '|' + (m.time || 0) + '|' + (m.text || '')] = true;
+    }
+    var msgs = t.messages || [];
+    for (var j = 0; j < msgs.length; j++) {
+      var mm = msgs[j];
+      var key = (mm.from || '') + '|' + (mm.time || 0) + '|' + (mm.text || '');
+      if (!seen[key]) { cur.messages.push(mm); seen[key] = true; }
+    }
+    cur.messages.sort(function (a, b) { return (a.time || 0) - (b.time || 0); });
+  }
+  for (var a = 0; a < (server || []).length; a++) upsertTicket(server[a]);
+  for (var b = 0; b < (local || []).length; b++) upsertTicket(local[b]);
+  var result = [];
+  for (var c = 0; c < order.length; c++) result.push(map[order[c]]);
+  return result;
+};
+
+// Drop chat messages older than 2 days (keeps ticket shells).
+DB.TICKET_TTL = 2 * 24 * 60 * 60 * 1000;
+DB._cleanTickets = function (tickets) {
+  if (!Array.isArray(tickets)) return tickets;
+  var cutoff = Date.now() - DB.TICKET_TTL;
+  var out = [];
+  for (var i = 0; i < tickets.length; i++) {
+    var t = tickets[i];
+    if (!t) continue;
+    // Expire deletion tombstones so they don't accumulate forever.
+    if (t.status === 'deleted' && t._deletedAt && (Date.now() - t._deletedAt) > DB.TICKET_TTL) continue;
+    t.messages = (t.messages || []).filter(function (m) { return m.time && m.time >= cutoff; });
+    out.push(t);
+  }
+  return out;
+};
+
+// Merge two id-keyed arrays so neither side clobbers the other's
+// records. When the same id exists on both sides, the "resolved"
+// version wins (approved / rejected / paid / completed / resolved),
+// otherwise the one that changed most recently wins.
+DB._mergeById = function (local, server, idKey) {
+  idKey = idKey || 'id';
+  var map = {};
+  var order = [];
+  var RESOLVED = ['approved', 'active', 'rejected', 'paid', 'completed', 'resolved'];
+  function isResolved(v) { return RESOLVED.indexOf((v.status || '').toLowerCase()) >= 0; }
+  function newer(a, b) { return (a.resolvedAt || a.updatedAt || a.createdAt || 0) > (b.resolvedAt || b.updatedAt || b.createdAt || 0); }
+  function add(item) {
+    if (!item || item[idKey] == null) return;
+    var key = String(item[idKey]);
+    // Deletion tombstones win unconditionally.
+    if (item.status === 'deleted') { map[key] = item; if (order.indexOf(key) < 0) order.push(key); return; }
+    if (map[key] === undefined) {
+      map[key] = item;
+      order.push(key);
+      return;
+    }
+    var cur = map[key];
+    // An existing tombstone is never resurrected by a non-deleted item.
+    if (cur.status === 'deleted') { return; }
+    // A resolved status beats a pending one, regardless of side.
+    if (isResolved(item) && !isResolved(cur)) { map[key] = item; return; }
+    if (isResolved(cur) && !isResolved(item)) { return; }
+    // Same resolution level: keep the newer change.
+    if (newer(item, cur)) map[key] = item;
+  }
+  for (var i = 0; i < (server || []).length; i++) add(server[i]);
+  for (var j = 0; j < (local || []).length; j++) add(local[j]);
+  var out = [];
+  for (var k = 0; k < order.length; k++) out.push(map[order[k]]);
+  return out;
+};
+
+// Strip base64 proof images from resolved (non-pending, non-deleted) entries
+// before upserting to Supabase.  Without this, every user's proof accumulates
+// in the JSONB payload; the array eventually exceeds the REST body limit and
+// the upsert silently fails — deposits/loans never reach admin.
+// Pending entries keep their proofs so the admin can review them.
+DB._stripResolvedProofs = function (arr) {
+  if (!Array.isArray(arr)) return arr;
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var item = arr[i];
+    if (!item) { out.push(item); continue; }
+    var st = (item.status || '').toLowerCase();
+    if (st && st !== 'pending') {
+      var clone = null;
+      if (item.proof && item.proof.dataUrl) {
+        clone = clone || Object.assign({}, item);
+        clone.proof = { name: item.proof.name, type: item.proof.type, dataUrl: '' };
+      }
+      if (item.proofDataUrl) {
+        clone = clone || Object.assign({}, item);
+        clone.proofDataUrl = '';
+      }
+      if (item.frontDoc) {
+        clone = clone || Object.assign({}, item);
+        clone.frontDoc = '';
+      }
+      if (item.backDoc) {
+        clone = clone || Object.assign({}, item);
+        clone.backDoc = '';
+      }
+      out.push(clone || item);
+    } else {
+      out.push(item);
+    }
+  }
+  return out;
+};
+
+// Remove deleted tombstones older than 2 days from MERGE_COLLECTIONS arrays
+// so the payload doesn't grow unbounded with stale proofs.
+DB.COLLECTION_TTL = 2 * 24 * 60 * 60 * 1000;
+DB._purgeDeleted = function (arr) {
+  if (!Array.isArray(arr)) return arr;
+  var now = Date.now();
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var item = arr[i];
+    if (!item) continue;
+    if (item.status === 'deleted' && item._deletedAt && (now - item._deletedAt) > DB.COLLECTION_TTL) continue;
+    out.push(item);
+  }
+  return out;
+};
+
+// Clean merged arrays: purge old tombstones, strip proofs from non-pending.
+DB._cleanMergeArray = function (arr) {
+  if (!Array.isArray(arr)) return arr;
+  arr = DB._purgeDeleted(arr);
+  arr = DB._stripResolvedProofs(arr);
+  return arr;
+};
+
+// Collections that hold shared id-keyed request/position arrays where
+// one device's push must not wipe another device's admin resolutions.
+DB.MERGE_COLLECTIONS = [
+  'bb_deposit_requests',
+  'bb_withdrawal_requests',
+  'bb_loans',
+  'bb_kyc_submissions',
+  'bb_earn_positions',
+  'bb_ai_quants'
+];
+
+DB._pushChains = {};
+DB.pushCollection = function (key) {
+  if (!DB.ready) { console.warn('[DB] pushCollection(' + key + ') skipped — DB.ready=false'); return Promise.resolve(); }
+  var prev = DB._pushChains[key] || Promise.resolve();
+  var next = prev.then(function () { return DB._pushCollectionNow(key); }, function () { return DB._pushCollectionNow(key); });
+  DB._pushChains[key] = next;
+  return next;
+};
+DB._pushCollectionNow = function (key) {
+  var data = localStorage.getItem(key);
+  if (data === null || data === undefined) return Promise.resolve();
+  var payload = DB.safeParse(data);
+  if (key === 'bb_support_tickets') {
+    if (!Array.isArray(payload)) payload = [];
+    payload = DB._cleanTickets(payload);
+    // Read the current server payload, merge local into it, then upsert.
+    // Prevents one device's array from clobbering everyone else's chats.
+    return DB.client.from('app_collections').select('payload').eq('key', key).limit(1).single().then(function (res) {
+      var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
+      if (!Array.isArray(serverPayload)) serverPayload = [];
+      serverPayload = DB._cleanTickets(serverPayload);
+      // Re-read local fresh so a pull/write that landed while the server read
+      // was in flight is merged in, not reverted by a stale snapshot.
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      var merged = DB._ticketMerge(localNow, serverPayload);
+      localStorage.setItem(key, JSON.stringify(merged));
+      return DB.client.from('app_collections').upsert({ key: key, payload: merged }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, merged); return r; }, DB._ok);
+    }, function () {
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      localNow = DB._cleanTickets(localNow);
+      return DB.client.from('app_collections').upsert({ key: key, payload: localNow }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, localNow); return r; }, DB._ok);
+    });
+  }
+  if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
+    if (!Array.isArray(payload)) payload = [];
+    console.log('[DB] PUSH ' + key + ': local items=' + payload.length + ', trying server...');
+    return DB.client.from('app_collections').select('payload').eq('key', key).limit(1).single().then(function (res) {
+      var serverPayload = (res && res.data && res.data.payload) ? res.data.payload : [];
+      if (!Array.isArray(serverPayload)) serverPayload = [];
+      console.log('[DB] PUSH ' + key + ': server items=' + serverPayload.length);
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      var merged = DB._mergeById(localNow, serverPayload);
+      var cleaned = DB._cleanMergeArray(merged);
+      localStorage.setItem(key, JSON.stringify(cleaned));
+      var upsertData = cleaned;
+      var sizeKB = Math.round(JSON.stringify(upsertData).length / 1024);
+      console.log('[DB] PUSH ' + key + ': merged=' + merged.length + ', cleaned=' + cleaned.length + ', upsert payload=' + sizeKB + 'KB');
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) {
+        if (r && r.error) { console.warn('[DB] PUSH ' + key + ' UPSERT ERROR:', r.error.message || r.error); }
+        else { console.log('[DB] PUSH ' + key + ': upsert OK, items=' + cleaned.length); }
+        DB.broadcastUpdate(key, cleaned);
+        return r;
+      }, function (e) { console.warn('[DB] PUSH ' + key + ' NETWORK ERROR:', e && (e.message || e)); });
+    }, function (e) {
+      console.log('[DB] PUSH ' + key + ': no server row yet, upserting local directly');
+      var localNow = [];
+      try { localNow = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e2) { localNow = []; }
+      if (!Array.isArray(localNow)) localNow = [];
+      var upsertData = DB._cleanMergeArray(localNow);
+      return DB.client.from('app_collections').upsert({ key: key, payload: upsertData }, { onConflict: 'key' }).then(function (r) {
+        if (r && r.error) { console.warn('[DB] PUSH ' + key + ' UPSERT ERROR:', r.error.message || r.error); }
+        else { console.log('[DB] PUSH ' + key + ': upsert OK (new row), items=' + localNow.length); }
+        DB.broadcastUpdate(key, localNow);
+        return r;
+      }, function (err) { console.warn('[DB] PUSH ' + key + ' NETWORK ERROR:', err && (err.message || err)); });
+    });
+  }
+  return DB.client.from('app_collections').upsert({ key: key, payload: payload }, { onConflict: 'key' }).then(function (r) { DB._ok(r); DB.broadcastUpdate(key, payload); return r; }, function (e) { console.warn('[DB] upsert error (' + key + '):', e && (e.message || e)); });
+};
+
+DB._pullInFlight = {};
+DB._pullQueued = {};
+DB.pullCollection = function (key) {
+  if (!DB.ready) return Promise.resolve();
+  if (DB._pullInFlight[key]) {
+    // A pull for this key is already in flight. Never stack another
+    // full-payload download on top of it: the support payload can be
+    // hundreds of KB, so overlapping pulls saturate the connection
+    // pool and starve the push path (sends never reach the server).
+    // Note that a refresh is still wanted and re-run once the current
+    // pull settles, so the newest data is not lost.
+    DB._pullQueued[key] = true;
+    return DB._pullInFlight[key];
+  }
+  var p = DB.client.from('app_collections').select('payload').eq('key', key).single().then(function (res) {
+    DB._lastPullTime = Date.now();
+    DB._lastSyncError = '';
+    if (res && res.error) { console.warn('[DB] PULL ' + key + ': Supabase error:', res.error.message || res.error); }
+    if (res && res.data && res.data.payload !== null && res.data.payload !== undefined) {
+      var serverPayload = res.data.payload;
+      if (key === 'bb_support_tickets') {
+        if (!Array.isArray(serverPayload)) serverPayload = [];
+        serverPayload = DB._cleanTickets(serverPayload);
+        var localTickets = [];
+        try { localTickets = JSON.parse(localStorage.getItem('bb_support_tickets') || '[]'); } catch (e) { localTickets = []; }
+        if (!Array.isArray(localTickets)) localTickets = [];
+        localTickets = DB._cleanTickets(localTickets);
+        localStorage.setItem(key, JSON.stringify(DB._ticketMerge(localTickets, serverPayload)));
+      } else if (DB.MERGE_COLLECTIONS.indexOf(key) >= 0) {
+        // Merge with the local copy so locally-added records (e.g. a
+        // deposit the user just submitted) survive the pull.
+        if (!Array.isArray(serverPayload)) serverPayload = [];
+        var localArr = [];
+        try { localArr = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { localArr = []; }
+        if (!Array.isArray(localArr)) localArr = [];
+        var mergedPull = DB._mergeById(localArr, serverPayload);
+        var cleanedPull = DB._cleanMergeArray(mergedPull);
+        localStorage.setItem(key, JSON.stringify(cleanedPull));
+      } else {
+        localStorage.setItem(key, JSON.stringify(res.data.payload));
+      }
+    }
+  }, function (e) { DB._lastSyncError = (e && e.message) || 'pull failed'; return null; });
+  DB._pullInFlight[key] = p;
+  p.then(function () {
+    DB._pullInFlight[key] = null;
+    if (DB._pullQueued[key]) { DB._pullQueued[key] = false; DB.pullCollection(key); }
+  }, function () {
+    DB._pullInFlight[key] = null;
+    if (DB._pullQueued[key]) { DB._pullQueued[key] = false; DB.pullCollection(key); }
+  });
+  return p;
+};
+
+DB.pushAll = function () {
+  if (!DB.ready) return Promise.resolve();
+  var p = DB.pushUsers();
+  for (var i = 0; i < DB.COLLECTIONS.length; i++) p = p.then(DB.pushCollection.bind(null, DB.COLLECTIONS[i]));
+  return p;
+};
+
+// ---------------- REALTIME (WebSocket broadcast) ----------------
+// True live pub/sub via the Supabase Realtime service. Works without
+// any SQL/publication setup: when a device upserts a collection it
+// broadcasts on the shared 'bb-realtime' channel; every subscribed
+// device receives the signal in ~100ms and pulls the fresh payload.
+// Falls back silently to the caller's polling loop if unavailable.
+DB._broadcastChannel = null;
+DB._broadcastReady = false;
+DB._broadcastSubscribers = {};
+DB._pendingBroadcasts = [];
+DB._ensureBroadcast = function () {
+  if (!DB.ready) return;
+  if (DB._broadcastChannel) return;
+  try {
+    DB._broadcastChannel = DB.client.channel('bb-realtime', { config: { broadcast: { self: true } } });
+    DB._broadcastChannel
+      .on('broadcast', { event: 'update' }, function (data) {
+        // supabase-js delivers the full message:
+        //   { type:'broadcast', event:'update', payload:{ key, payload } }
+        // Older builds deliver just { key, payload }. Handle both.
+        var key = null, pld = null;
+        if (data) {
+          if (data.payload && typeof data.payload === 'object' && data.payload.key !== undefined) {
+            key = data.payload.key;
+            pld = (data.payload.payload !== undefined) ? data.payload.payload : null;
+          } else if (data.key !== undefined) {
+            key = data.key;
+            pld = (data.payload !== undefined) ? data.payload : null;
+          }
+        }
+        if (key && DB._broadcastSubscribers[key]) DB._broadcastSubscribers[key](key, pld);
+      })
+      .subscribe(function (status) {
+        DB._broadcastReady = (status === 'SUBSCRIBED');
+        if (DB._broadcastReady && DB._pendingBroadcasts.length) {
+          var pend = DB._pendingBroadcasts.splice(0);
+          for (var i = 0; i < pend.length; i++) DB._sendBroadcast(pend[i].key, pend[i].payload);
+        }
+      });
+  } catch (e) {
+    console.warn('[DB] realtime broadcast failed', e);
+  }
+};
+DB._sendBroadcast = function (key, payload) {
+  try {
+    var msg = { type: 'broadcast', event: 'update', payload: { key: key } };
+    // Include the data so receivers update instantly without a pull round-trip.
+    if (payload !== undefined && payload !== null) {
+      var s;
+      try { s = JSON.stringify(payload); } catch (e) { s = null; }
+      if (!s || s.length < 400000) msg.payload.payload = payload;
+    }
+    DB._broadcastChannel.send(msg);
+  } catch (e) {}
+};
+DB.broadcastUpdate = function (key, payload) {
+  if (!DB.ready) return;
+  DB._ensureBroadcast();
+  if (!DB._broadcastChannel) return;
+  if (!DB._broadcastReady) {
+    // Channel not connected yet: buffer so the update is not lost.
+    if (DB._pendingBroadcasts.indexOf(key) < 0) DB._pendingBroadcasts.push({ key: key, payload: payload });
+    return;
+  }
+  DB._sendBroadcast(key, payload);
+};
+DB.subscribe = function (key, callback) {
+  if (!DB.ready) return;
+  DB._ensureBroadcast();
+  DB._broadcastSubscribers[key] = callback;
+};
+DB.unsubscribe = function (key) {
+  delete DB._broadcastSubscribers[key];
+};
+
+DB.pullAll = function () {
+  if (!DB.ready) return Promise.resolve();
+  var SKIP_PULL = ['bb_deposit_addresses'];
+  var tasks = [DB.pullUsers()];
+  for (var i = 0; i < DB.COLLECTIONS.length; i++) {
+    if (SKIP_PULL.indexOf(DB.COLLECTIONS[i]) < 0) tasks.push(DB.pullCollection(DB.COLLECTIONS[i]));
+  }
+  return Promise.all(tasks);
+};
+
+// Map admin tab names to the collections they display.
+DB.TAB_MAP = {
+  deposits: ['bb_deposit_requests'],
+  withdrawals: ['bb_withdrawal_requests'],
+  loans: ['bb_loans'],
+  kyc: ['bb_kyc_submissions'],
+  trades: ['bb_trades_history'],
+  earn: ['bb_earn_positions'],
+  aiquants: ['bb_ai_quants'],
+  support: ['bb_support_tickets'],
+  users: [],
+  balances: [],
+  analytics: ['bb_trades_history','bb_earn_positions','bb_ai_quants'],
+  dashboard: ['bb_profit_modules']
+};
+
+// Pull only the collections needed for the given tab (fast).
+DB.pullTab = function (tab) {
+  if (!DB.ready) return Promise.resolve();
+  var keys = DB.TAB_MAP[tab] || [];
+  if (!keys.length) return Promise.resolve();
+  var tasks = [];
+  for (var i = 0; i < keys.length; i++) tasks.push(DB.pullCollection(keys[i]));
+  return Promise.all(tasks);
+};
+
+// Diagnostic helper: returns a snapshot of the sync layer state so the
+// admin page can show exactly what is (or is not) working.
+// ===== ADMIN PASSWORD (Supabase-backed) =====
+DB._remoteAdminPass = null;
+DB.getAdminPassword = function () {
+  if (!DB.ready) return Promise.resolve(null);
+  return DB.client.from('app_collections').select('payload').eq('key', 'bb_admin_config').limit(1).single().then(function (r) {
+    var pw = (r.data && r.data.payload && r.data.payload.adminPassword) || null;
+    DB._remoteAdminPass = pw;
+    return pw;
+  }).catch(function () { return null; });
+};
+DB.saveAdminPassword = function (pw) {
+  DB._remoteAdminPass = pw;
+  if (!DB.ready) return Promise.resolve();
+  return DB.client.from('app_collections').select('payload').eq('key', 'bb_admin_config').limit(1).single().then(function (r) {
+    var existing = (r.data && r.data.payload) || {};
+    existing.adminPassword = pw;
+    return DB.client.from('app_collections').upsert({ key: 'bb_admin_config', payload: existing }, { onConflict: 'key' });
+  }).catch(function () {
+    return DB.client.from('app_collections').upsert({ key: 'bb_admin_config', payload: { adminPassword: pw } }, { onConflict: 'key' });
+  });
+};
+
+DB.diagnose = function () {
+  var t = {};
+  try { t = JSON.parse(localStorage.getItem('bb_support_tickets') || '[]'); } catch (e) { t = []; }
+  var active = (t || []).filter(function (x) { return x && x.status !== 'deleted'; });
+  var myUid = localStorage.getItem('bb_uid') || '(none)';
+  var myTicket = null;
+  for (var i = 0; i < active.length; i++) {
+    if (String(active[i].userId) === String(myUid)) { myTicket = active[i]; break; }
+  }
+  return {
+    version: DB.VERSION,
+    ready: !!DB.ready,
+    realtime: !!DB._broadcastReady,
+    client: !!DB.client,
+    lastPullAgoSec: DB._lastPullTime ? Math.round((Date.now() - DB._lastPullTime) / 1000) : -1,
+    lastError: DB._lastSyncError || '',
+    serverTickets: active.length,
+    myTicket: myTicket ? { id: myTicket.id, msgs: (myTicket.messages || []).length } : null
+  };
+};
+
+DB.init();
+
+// On first load after login, pull all collections so a fresh device
+// gets the user's data (deposits, loans, trades, etc.) from Supabase.
+if (DB.ready && localStorage.getItem('bb_uid')) {
+  setTimeout(function () { DB.pullAll(); }, 2000);
+}
+
+// ========== USER STATUS WATCHER ==========
+// Polls Supabase every 10 s for the current user's is_deactivated / existence
+// and subscribes to Realtime for instant push when available.  Redirects to
+// login.html the moment an admin deactivates or deletes the account.
+DB._statusWatcherStarted = false;
+DB._startUserStatusWatcher = function () {
+  if (DB._statusWatcherStarted) return;
+  if (!DB.ready) return;
+  var uid = localStorage.getItem('bb_uid');
+  if (!uid) return;
+  var path = (location.pathname || '').toLowerCase();
+  if (path.indexOf('login') >= 0 || path.indexOf('register') >= 0 || path.indexOf('admin') >= 0) return;
+  DB._statusWatcherStarted = true;
+  function kick(reason) {
+    try {
+      localStorage.removeItem('bb_login_time');
+      localStorage.removeItem('bb_password');
+    } catch (e) {}
+    window.location.href = 'login.html';
+  }
+  // Drop the uid from the LOCAL deactivated list the moment the server says the
+  // account is active. The admin's browser knows it reactivated the user, but a
+  // logged-in user's own browser may have flagged itself during an earlier
+  // failed login — that stale flag otherwise bounces them straight back to the
+  // homepage forever (dashboard.html and every page block access on it).
+  function clearDeactivatedFlag(accUid) {
+    try {
+      var d = JSON.parse(localStorage.getItem('bb_deactivated_accounts') || '[]');
+      var idx = d.indexOf(accUid);
+      if (idx >= 0) { d.splice(idx, 1); localStorage.setItem('bb_deactivated_accounts', JSON.stringify(d)); }
+    } catch (e) {}
+  }
+  // A just-registered account may exist locally before the insert reaches the
+  // server, so deletion-enforcement waits out this grace window. The account
+  // timestamp / last login is used as the "born" reference; signed-in accounts
+  // that predate it must exist server-side or they were deleted.
+  function isNewborn() {
+    var born = 0;
+    try { born = parseInt(localStorage.getItem('bb_registered_at') || localStorage.getItem('bb_login_time') || '0', 10) || 0; } catch (e) {}
+    return born > 0 && (Date.now() - born) < 180000;
+  }
+  function checkStatus() {
+    if (!DB.ready || !DB.client) return;
+    var curUid = localStorage.getItem('bb_uid');
+    if (!curUid) return;
+    DB.client.from('users').select('is_deactivated').eq('uid', Number(curUid)).limit(1).single().then(function (res) {
+      if (!res || res.error || !res.data) {
+        // Distinguish "row confirmed absent" (PGRST116 / empty) from transient
+        // network / RLS errors. Only absence means the account was deleted.
+        var err = res && res.error;
+        var missing = !res || (!res.data && (!err || err.code === 'PGRST116' || err.code === '406'));
+        if (!missing) return;      // transient error — try again next poll
+        if (isNewborn()) return;   // brand-new registration still propagating
+        kick('deleted');
+        return;
+      }
+      if (res.data.is_deactivated) { kick('deactivated'); return; }
+      // Row exists and is active — e.g. the admin just reactivated this user.
+      // Heal any stale local flag so they can navigate the app again.
+      clearDeactivatedFlag(curUid);
+    }, function () {});
+  }
+  try {
+    DB.client.channel('user-status-watch').on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'users',
+      filter: 'uid=eq.' + uid
+    }, function (payload) {
+      var row = payload && payload.new;
+      if (!row) return;
+      if (row.is_deactivated) { kick('deactivated'); return; }
+      clearDeactivatedFlag(uid);
+    }).on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'users',
+      filter: 'uid=eq.' + uid
+    }, function () { kick('deleted'); }).subscribe();
+  } catch (e) {}
+  setInterval(checkStatus, 10000);
+};
+// Auto-start once DB is ready and a uid exists.
+setTimeout(function () { DB._startUserStatusWatcher(); }, 2000);

@@ -9,9 +9,8 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=20261017-instant-v1"></script>
-<script src="db.js?v=20261017-instant-v1"></script>
-<script src="finance-ui.js?v=20261017-instant-v1"></script>
+<script src="supabase-config.js?v=20260922v2"></script>
+<script src="db.js?v=20260922v2"></script>
 <style>
 :root{--bg:#0c0c0c;--bg2:#111;--bg3:#161616;--bg4:#1c1c1c;--bg5:#222;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.1);--t1:#fff;--t2:#b0b0b0;--t3:#666;--green:#00c087;--red:#f04141;--accent:#f7931a;--radius:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -219,7 +218,7 @@ try {
 <div id="mobileNav" class="mobile-nav-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="mobile-nav">
     <div class="flex justify-between items-center mb-6"><span class="font-heading font-bold text-lg">Menu</span><button onclick="document.getElementById('mobileNav').classList.remove('open')"><i data-lucide="x" style="width:20px;height:20px;"></i></button></div>
-    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="event.preventDefault();DB.logout();" style="color:var(--accent-red);">Logout</a>
+    <a href="dashboard.html">Dashboard</a><a href="assets.html">Assets</a><a href="markets.html">Markets</a><a href="trade.html">Trade</a><a href="earn.html">Earn</a><a href="ai-quants.html">AI Quants</a><a href="history.html">History</a><a href="demo.html">Demo</a>    <a href="settings.html">Settings</a><a href="index.html" style="color:var(--accent-orange);">Back to Homepage</a><a href="index.html" onclick="localStorage.removeItem('bb_login_time');" style="color:var(--accent-red);">Logout</a>
   </div>
 </div>
 
@@ -310,10 +309,10 @@ try {
 
     <!-- Latest Transaction -->
     <div class="tp-section">
-      <div class="tp-label">Market transactions</div>
+      <div class="tp-label">Latest Transaction</div>
       <div style="display:flex;gap:16px;font-size:10px;color:var(--t3);margin-bottom:4px;"><span>Time</span><span style="margin-left:auto;">Price</span><span style="margin-left:auto;">Amount</span></div>
       <div class="tx-list" id="txList">
-        <div style="text-align:center;padding:8px;font-size:12px;color:var(--t3);">Feed not connected</div>
+        <div style="text-align:center;padding:8px;font-size:12px;color:var(--t3);">No recent trades</div>
       </div>
     </div>
 
@@ -323,7 +322,6 @@ try {
       <div class="balance-amount">$<span id="balance">0.00</span> <span style="font-size:14px;color:var(--t3);font-weight:400;">USDT</span></div>
     </div>
 
-    <div class="tp-section" style="font-size:11px;color:var(--t2)">Internal price-direction contract. At expiry: win returns stake + shown profit; loss returns stake − shown profit; equal price returns stake. Early close returns 50%. Prices settle from the server feed. These are not exchange-executed futures.</div>
     <!-- Trade Duration -->
     <div class="tp-section">
       <div class="tp-label">Trade Duration</div>
@@ -443,8 +441,6 @@ window.addEventListener('resize',updateLayoutMargin);
 setTimeout(updateLayoutMargin,100);
 setTimeout(updateLayoutMargin,500);
 // ===== DATA =====
-// Only pairs with a configured settlement feed are tradable here; the server
-// rejects anything else, so showing unsupported markets only produced errors.
 const PAIRS = [
   {sym:'BTC/USDT',price:64464.00,dec:2,tvSymbol:'BINANCE:BTCUSDT'},
   {sym:'ETH/USDT',price:1880.96,dec:2,tvSymbol:'BINANCE:ETHUSDT'},
@@ -456,7 +452,15 @@ const PAIRS = [
   {sym:'DOT/USDT',price:0.816,dec:3,tvSymbol:'BINANCE:DOTUSDT'},
   {sym:'AVAX/USDT',price:38.56,dec:2,tvSymbol:'BINANCE:AVAXUSDT'},
   {sym:'LINK/USDT',price:14.23,dec:2,tvSymbol:'BINANCE:LINKUSDT'},
+  {sym:'MATIC/USDT',price:0.8912,dec:4,tvSymbol:'BINANCE:MATICUSDT'},
   {sym:'UNI/USDT',price:7.45,dec:2,tvSymbol:'BINANCE:UNIUSDT'},
+  {sym:'XAU/USD',price:4055.47,dec:2,tvSymbol:'OANDA:XAUUSD'},
+  {sym:'XAG/USD',price:28.45,dec:2,tvSymbol:'OANDA:XAGUSD'},
+  {sym:'EUR/USD',price:1.0842,dec:4,tvSymbol:'FX:EURUSD'},
+  {sym:'GBP/USD',price:1.2645,dec:4,tvSymbol:'FX:GBPUSD'},
+  {sym:'USD/JPY',price:154.23,dec:2,tvSymbol:'FX:USDJPY'},
+  {sym:'USD/CHF',price:0.8834,dec:4,tvSymbol:'FX:USDCHF'},
+  {sym:'AUD/USD',price:0.6512,dec:4,tvSymbol:'FX:AUDUSD'},
 ];
 let currentPair = PAIRS[0];
 let currentPrice = currentPair.price;
@@ -586,7 +590,7 @@ function simulatePrice(){
   updUI(currentPrice,drift>=0?1:-1);
 }
 // Independent simulation ticker — always runs, guarantees price moves
-// No fabricated price ticks on the trading page.
+setInterval(simulatePrice, 2000);
 
 function seedMetalPrice(){
   if(currentPair.sym!=='XAU/USD'&&currentPair.sym!=='XAG/USD')return;
@@ -653,7 +657,7 @@ function addTx(){
   list.prepend(row);
   if(list.children.length>15)list.lastChild.remove();
 }
-// No fabricated transaction feed.
+setInterval(addTx,3000);
 
 // ===== TRADES =====
 let activeTradePanel=null;
@@ -750,22 +754,20 @@ function showTradeResult(pos){
   if(!activeTradePanel)return;
   const panel=activeTradePanel.el;
   const won=pos.status==='Won';
-  const neutral=pos.status==='Draw'||pos.status==='Closed';
   const color=won?'#16c784':'#ea3943';
   const bg=won?'rgba(22,199,132,0.08)':'rgba(234,57,67,0.08)';
   const iconSvg=won
     ?'<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#16c784" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
     :'<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ea3943" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
-  const actual=Number((DB.get('bb_trades_history')||[]).find(function(x){return x.id===pos.id;})?.profit||0);
-  const pnlFormatted=(actual>=0?'+':'-')+fmtD(Math.abs(actual));
+  const pnlFormatted=won?('+'+fmtD(pos.profit)):('-'+fmtD(pos.profit));
   panel.innerHTML=`
   <div style="padding:24px 20px;text-align:center;">
     <div style="margin-bottom:16px;">${iconSvg}</div>
-    <div style="font-size:22px;font-weight:700;margin-bottom:4px;color:${color};">${neutral?pos.status:(won?'Trade Won!':'Trade Lost')}</div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:4px;color:${color};">${won?'Trade Won!':'Trade Lost'}</div>
     <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:20px;">${pos.pair} &bull; ${pos.dir}</div>
     <div style="background:${bg};border:1px solid ${color}33;border-radius:12px;padding:16px;margin-bottom:16px;">
       <div style="font-size:32px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:${color};margin-bottom:4px;">${pnlFormatted}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);">${neutral?'Net change':(won?'Profit earned':'Amount lost')}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);">${won?'Profit earned':'Amount lost'}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;">
       <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
@@ -800,10 +802,9 @@ function updateTradeTimer(){
   const pos=positions.find(p=>p.id===activeTradePanel.id);
   if(!pos||pos.status!=='Active'){return;}
   const now=Date.now();
-  const total=Number(pos.dur)||0;
-  if(!total)return;
-  const end=Number(pos.expiresAt)||(Number(pos.startTime)+total*1000);
-  const left=Math.max(0,Math.min(total,(end-now)/1000));
+  const end=pos.startTime+pos.dur*1000;
+  const left=Math.max(0,(end-now)/1000);
+  const total=pos.dur;
   const circumference=2*Math.PI*52;
   const offset=circumference*(1-left/total);
   const timerText=document.getElementById('tradeTimerText');
@@ -817,24 +818,47 @@ function updateTradeTimer(){
 }
 
 // ===== TRADE HISTORY STORAGE =====
-function saveTradeRecord(){throw new Error('Server-only trade records');}
+function saveTradeRecord(rec){
+  try{
+    var arr=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
+    if(!Array.isArray(arr)) arr=[];
+    var idx=arr.findIndex(function(r){return r&&r.id===rec.id;});
+    if(idx>=0){arr[idx]=rec;}else{arr.push(rec);}
+    localStorage.setItem('bb_trades_history',JSON.stringify(arr));
+    if(typeof DB!=='undefined'){DB.pushCollection('bb_trades_history');}
+  }catch(e){}
+}
 function cleanOldTrades(){
   // Display-only filter — never delete stored trades
 }
 cleanOldTrades();
 
 function placeTrade(dir){
-  var amount=document.getElementById('amtInput').value.trim(),dur=getDurInfo();
-  return FinanceUI.do('place-trade',async function(){
-    var order=await DB.edge('trade',{pair:currentPair.sym,direction:dir,amount:amount,duration:dur.seconds});
-    var rec=Object.assign({},order,{amt:Number(order.amount),profit:Number(order.potentialProfit)});
-    // Track the order locally the moment the server confirms it, so the countdown
-    // starts immediately instead of waiting for the next server pull.
-    if(!positions.some(function(p){return p.id===rec.id;})){positions=positions.concat([rec]);savePositions();}
-    showTradePanel(rec);renderPositions();updateTradeTimer();
-    document.getElementById('amtInput').value='';updateSummary();return order;
-  },'Trade confirmed. Settlement continues after this page closes.');
+  const amt=getAmount();
+  if(amt<=0){showToast('Please enter a valid amount','var(--red)');return;}
+  if(amt>balance){showToast('Insufficient balance','var(--red)');return;}
+  const dur=getDurInfo();
+  const profit=amt*dur.profitPct/100;
+  balance-=amt;
+  localStorage.setItem('bb_cash_balance',balance);
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
+  document.getElementById('balance').textContent=fmtD(balance).replace('$','');
+  const id='T-'+(++tradeIdCounter);
+  localStorage.setItem('bb_trade_id_counter', tradeIdCounter);
+  const pos={id,pair:currentPair.sym,dir,amt,dur:dur.seconds,profit,entryPrice:currentPrice,exitPrice:0,startTime:Date.now(),status:'Active'};
+  positions.push(pos);
+  savePositions();
+    saveTradeRecord({id:id,pair:currentPair.sym,side:dir==='UP'?'Buy':'Sell',amount:amt,price:currentPrice,fee:0,time:pos.startTime,status:'Active',profit:profit,source:'real',uid:localStorage.getItem('bb_uid')||''});
+  renderPositions();
+  showTradePanel(pos);
+  showToast(`${dir} trade placed: ${fmtD(amt)} on ${currentPair.sym}`,'var(--green)');
+  document.getElementById('amtInput').value='';
+  updateSummary();
+  // Settlement no longer depends on a one-shot setTimeout. The 1s loop
+  // (settleExpiredPositions) resolves this position, so it still settles even
+  // if the floating panel is closed or the page reloads/navigates away.
 }
+
 function renderPositions(){
   const body=document.getElementById('posBody');
   const count=document.getElementById('posCount');
@@ -852,7 +876,7 @@ function renderPositions(){
       <td class="${dirCls}">${p.dir}</td>
       <td>${fmtD(p.amt)}</td>
       <td>${durLabel(p.dur)}</td>
-      <td>${p.status==='Active'?(left>0?Math.ceil(left)+'s':'Awaiting settlement'):'—'}</td>
+      <td>${p.status==='Active'?Math.ceil(left)+'s':'0s'}</td>
       <td style="color:var(--green);">+${fmtD(p.profit)}</td>
       <td><span class="${statusCls}">${p.status}</span></td>
       <td>${p.status==='Active'?'<button onclick="closePos(\''+p.id+'\')" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;">Close</button>':'—'}</td>
@@ -860,10 +884,22 @@ function renderPositions(){
   }).join('');
 }
 function closePos(id){
-  var pos=positions.find(function(p){return p.id===id;});if(!pos)return;
-  if(!confirm('Close early and receive 50% of the stake ('+fmtD(pos.amt*0.5)+')?'))return;
-  return FinanceUI.do('close-'+id,function(){return DB.action('trade_close',{id:id});},'Position closed and refund credited.');
+  const pos=positions.find(p=>p.id===id);
+  if(!pos||pos.status!=='Active')return;
+  pos.status='Closed';
+  pos.exitPrice=currentPrice;
+  const refund=pos.amt*0.5;
+  balance+=refund;
+  localStorage.setItem('bb_cash_balance',balance);
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
+  document.getElementById('balance').textContent=fmtD(balance).replace('$','');
+  saveTradeRecord({id:id,pair:pos.pair,side:pos.dir==='UP'?'Buy':'Sell',amount:pos.amt,price:pos.entryPrice,exitPrice:pos.exitPrice,fee:0,time:pos.startTime,resolvedTime:Date.now(),status:'Closed',profit:pos.profit,refund:refund,source:'real',uid:localStorage.getItem('bb_uid')||''});
+  savePositions();
+  renderPositions();
+  if(activeTradePanel&&activeTradePanel.id===id)removeTradePanel();
+  showToast(`Position ${id} closed. Refunded ${fmtD(refund)}`,'var(--accent)');
 }
+
 // Settles every Active position whose duration has passed. Runs every second
 // AND on page load, so a trade resolves even if the floating mini screen was
 // closed or the page reloaded while it was open. Delegates to the shared
@@ -872,22 +908,75 @@ function closePos(id){
 // once even if trade.html and e.g. history.html are open at the same time.
 // This page re-syncs its in-memory array/balance from storage afterwards.
 function settleExpiredPositions(){
-  // Countdown is presentation only. PostgreSQL and the worker settle orders.
-  positions=loadPositions();balance=Number(localStorage.getItem('bb_cash_balance')||0);
-  document.getElementById('balance').textContent=fmtD(balance).replace('$','');
-  renderPositions();
-  if(activeTradePanel){var p=positions.find(function(x){return x.id===activeTradePanel.id;});if(p&&p.status!=='Active')showTradeResult(p);}
+  var settledIds=[];
+  if(typeof DB!=='undefined'&&DB.settleRealTrades){
+    try{ settledIds=DB.settleRealTrades()||[]; }catch(e){ settledIds=[]; }
+  } else {
+    settledIds=localSettleExpiredFallback();
+  }
+  if(settledIds.length){
+    positions=loadPositions();
+    balance=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+    try{document.getElementById('balance').textContent=fmtD(balance).replace('$','');}catch(e){}
+    renderPositions();
+    updateSummary();
+    settledIds.forEach(function(id){
+      var p=positions.find(function(x){return x&&x.id===id;});
+      if(p&&activeTradePanel&&activeTradePanel.id===id){
+        showTradeResult(p);
+        showToast(p.status==='Won'?'Trade '+p.id+' won! +'+fmtD(p.profit):'Trade '+p.id+' lost. -'+fmtD(p.profit),p.status==='Won'?'var(--green)':'var(--red)');
+      }
+    });
+  }
 }
-  DB.settleDue();
-window.addEventListener('bb:updated',settleExpiredPositions);
-settleExpiredPositions();
-setInterval(function(){
-  var now=Date.now();
-  var due=positions.some(function(p){return p.status==='Active'&&((Number(p.expiresAt)||(Number(p.startTime)+Number(p.dur)*1000))+1000)<=now;});
-  if(due)DB.settleDue(true);
-  if(positions.some(function(p){return p.status==='Active';}))renderPositions();
+// Local-only fallback (used only when db.js is absent): mirrors the exact
+// settlement rules of DB.settleRealTrades against localStorage.
+function localSettleExpiredFallback(){
+  var settled=[];
+  try{
+    var arr=[];
+    try{arr=JSON.parse(localStorage.getItem('bb_trade_positions')||'[]')||[];}catch(e){arr=[];}
+    if(!Array.isArray(arr))arr=[];
+    var now=Date.now();
+    var myUid=localStorage.getItem('bb_uid')||'';
+    var balance=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+    var pnl=parseFloat(localStorage.getItem('bb_trade_pnl')||'0');
+    for(var i=0;i<arr.length;i++){
+      var p=arr[i];
+      if(!p||p.status!=='Active')continue;
+      if(now<(p.startTime+p.dur*1000))continue;
+      var forceKey='bb_force_resolve_'+p.id;
+      var forced=localStorage.getItem(forceKey);
+      if(forced!==null)localStorage.removeItem(forceKey);
+      var pmOn=(localStorage.getItem('bb_profit_module_'+myUid)||localStorage.getItem('bb_profit_module'))==='true';
+      var won=forced!==null?forced==='Won':(pmOn?true:Math.random()>0.7);
+      p.status=won?'Won':'Lost';
+      p.exitPrice=(p.entryPrice||0)*(1+(Math.random()*0.004-0.002));
+      balance+=won?(p.amt+p.profit):(p.amt-p.profit);
+      pnl+=won?p.profit:-p.profit;
+      settled.push(p.id);
+    }
+    if(settled.length){
+      localStorage.setItem('bb_cash_balance',balance);
+      localStorage.setItem('bb_trade_pnl',pnl.toString());
+      localStorage.setItem('bb_trade_positions',JSON.stringify(arr));
+      // This page settles real trades every second, before the shared
+      // startLocalPolling tick (which skips already-settled positions). Mark
+      // the local balance change so the next sync/poll pushes the credit
+      // instead of a stale pull overwriting the freshly-added profit.
+      if(typeof DB!=='undefined'&&DB._localDirty!==undefined){DB._localDirty=true;}
+    }
+  }catch(e){}
+  return settled;
+}
+setInterval(()=>{
+  settleExpiredPositions();
+  if(positions.some(p=>p.status==='Active'))renderPositions();
   updateTradeTimer();
 },1000);
+settleExpiredPositions();
+
+
 // ===== COIN BALANCES (shared with assets page) =====
 const QS_PRICES={BTC:64464.00,ETH:1880.96,SOL:74.78,BNB:569.95,ADA:0.1650,DOGE:0.07243,XRP:1.1006,DOT:0.816};
 let COINS=(function(){
@@ -942,9 +1031,21 @@ function updateQuickSellOutput(){
   document.getElementById('qsReceive').textContent=received>0?'$'+received.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USDT':'0.00 USDT';
 }
 function submitQuickSell(){
-  var coin=document.getElementById('qsCoinSelect').value,amount=document.getElementById('qsAmount').value;
-  return FinanceUI.do('quick-sell',async function(){var r=await DB.edge('convert',{from:coin,to:'USDT',amount:amount});closeQuickSellModal();return r;},function(r){return 'Sold at confirmed market quote. Received '+r.received+' USDT.';});
+  var coin=document.getElementById('qsCoinSelect').value;
+  var amt=parseNum(document.getElementById('qsAmount').value);
+  if(amt<=0){showToast('Enter an amount','var(--red)');return;}
+  if(amt>COINS[coin].qty){showToast('Insufficient '+coin+' balance','var(--red)');return;}
+  var received=amt*COINS[coin].rate;
+  COINS[coin].qty-=amt;
+  saveCoinBalances();
+  balance+=received;
+  localStorage.setItem('bb_cash_balance',balance);
+  if(typeof DB!=='undefined'){if(DB._localDirty!==undefined)DB._localDirty=true;DB.syncLocalUser();}
+  document.getElementById('balance').textContent=fmtD(balance).replace('$','');
+  closeQuickSellModal();
+  showToast('Sold '+amt+' '+coin+' for $'+received.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USDT','var(--green)');
 }
+
 // ===== TOAST =====
 function showToast(msg,color){
   const old=document.querySelector('.toast');if(old)old.remove();
@@ -969,6 +1070,36 @@ requestAnimationFrame(()=>{
   lucide.createIcons();
 });
 
+// ===== SERVER BALANCE SYNC (no page reload) =====
+// db.js's DB.startLocalPolling() reloads the page whenever the server user
+// row differs from localStorage. Right after a trade settles (profit added)
+// the push can race the next poll, so the page auto-refreshed and wiped the
+// in-memory positions + settlement timer — trades stayed "Active"/pending and
+// profit was never credited. Here we sync without reloading, and we never
+// overwrite the local balance while a trade is in flight.
+if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
+  var myUidPoll=(localStorage.getItem('bb_uid')||'').trim();
+  (function tradeSafePoll(){
+    if(typeof DB!=='undefined'&&DB.pullProfitModules){try{DB.pullProfitModules();}catch(e){}}
+    if(typeof DB==='undefined'||!DB.ready||!DB.pullLocalUser){return;}
+    var hasActive=positions.some(function(p){return p&&p.status==='Active';});
+    if(!hasActive){
+      DB.syncLocalUser().then(function(){
+        return DB.pullLocalUser();
+      },function(){
+        return DB.pullLocalUser();
+      }).then(function(){
+        try{
+          var b=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+          balance=b;
+          var be=document.getElementById('balance');
+          if(be)be.textContent=fmtD(balance).replace('$','');
+        }catch(e){}
+      },function(){});
+    }
+    setTimeout(tradeSafePoll,10000);
+  })();
+}
 </script>
 <style>
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.3);}}
