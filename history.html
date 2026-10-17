@@ -9,9 +9,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v2"></script>
-  <script src="db.js?v=20261017-instant-v2"></script>
-<script src="finance-ui.js?v=20261017-instant-v2"></script>
+  <script src="supabase-config.js?v=20261017-instant-v4"></script>
+  <script src="db.js?v=20261017-instant-v4"></script>
+<script src="finance-ui.js?v=20261017-instant-v4"></script>
   <style>
     [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
     [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
@@ -243,19 +243,18 @@ function getTradeRecords(){
     var myUid=localStorage.getItem('bb_uid')||'';
     var trades=JSON.parse(localStorage.getItem('bb_trades_history')||'[]');
     if(!Array.isArray(trades)) return [];
-    var cutoff=Date.now()-7*24*60*60*1000;
-    var recent=trades.filter(function(r){
-      if(!r)return false;
-      if(r.time<cutoff)return false;
+    // DISPLAY-ONLY filter: show every one of this user's own trades. There is
+    // no age cutoff here — dropping anything older than a week is what made
+    // settled trades vanish from history. The server already returns only this
+    // user's rows; the uid check below is a second guard, and the filtered
+    // list is never written back to storage or pushed to Supabase.
+    var mine=trades.filter(function(r){
+      if(!r||!r.id)return false;
       if(r.uid && String(r.uid)!==String(myUid))return false;
       if(!r.uid && myUid)return false;
       return true;
     });
-    // DISPLAY-ONLY filter: each user sees their own trades from the last 7
-    // days. The old code WROTE this filtered subset back to localStorage and
-    // pushed it to Supabase — bb_trades_history is shared by all users, so it
-    // permanently deleted everyone else's history. Never write back here.
-    return recent.map(function(r){
+    return mine.map(function(r){
       return {type:'trade',asset:r.pair,side:r.side,amount:r.amount,price:r.price,fee:r.fee||0,time:new Date(r.time).toISOString(),status:['Won','Lost','Closed','Draw'].indexOf(r.status)>=0?'Completed':(r.status==='Review'?'Review':'Pending'),orderId:r.id,profit:r.profit,payout:r.payout,exitPrice:r.exitPrice,source:r.source||'real'};
     });
   }catch(e){return [];}

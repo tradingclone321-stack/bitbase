@@ -9,9 +9,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v3"></script>
-  <script src="db.js?v=20261017-instant-v3"></script>
-<script src="finance-ui.js?v=20261017-instant-v3"></script>
+  <script src="supabase-config.js?v=20261017-instant-v4"></script>
+  <script src="db.js?v=20261017-instant-v4"></script>
+<script src="finance-ui.js?v=20261017-instant-v4"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -159,7 +159,7 @@
       <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
     <button id="adminSignIn" onclick="adminLogin()">Sign In</button>
     <div id="adminLoginError" role="alert" style="display:none;margin-top:12px;padding:12px;background:#391c21;border:1px solid #a64855;border-radius:8px;font-size:12px;line-height:1.6;text-align:left;color:#ffd6dc;"></div>
-    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v3</span> · Sign in with your account email and password.</div>
+    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v4</span> · Sign in with your account email and password.</div>
   </div>
 </div>
 
@@ -368,8 +368,8 @@
       </div>
       <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
         <table class="data-table">
-          <thead><tr><th>ID</th><th>Pair</th><th>Side</th><th>Amount</th><th>Profit</th><th>Status</th><th>Source</th><th>Time</th><th>Actions</th></tr></thead>
-          <tbody id="tradesBody"><tr><td colspan="9" class="empty-state">No trades found</td></tr></tbody>
+          <thead><tr><th>ID</th><th>User</th><th>UID</th><th>Pair</th><th>Side</th><th>Amount</th><th>Profit</th><th>Status</th><th>Source</th><th>Time</th><th>Actions</th></tr></thead>
+          <tbody id="tradesBody"><tr><td colspan="11" class="empty-state">No trades found</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -695,7 +695,7 @@ var currentTradeFilter='all';
 var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
-var ADMIN_BUILD='2026-10-17-instant-v3';
+var ADMIN_BUILD='2026-10-17-instant-v4';
 
 function adminLoginError(message){var box=document.getElementById('adminLoginError');box.textContent=message||'';box.style.display=message?'block':'none';}
 // Only a script that genuinely failed to load can block the panel. A version
@@ -987,7 +987,7 @@ function renderUsers(users,live,errorMessage){
       '<td>'+pmToggle+'</td>'+
       '<td><span class="'+(u.kycStatus==='approved'?'badge-green':u.kycStatus==='rejected'?'badge-red':'badge-yellow')+'" style="font-size:10px;">'+(u.kycStatus==='approved'?'Verified':u.kycStatus==='rejected'?'Rejected':'None')+'</span></td>'+
       '<td>'+statusBadge+'</td>'+
-      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'<button class="btn-sm btn-danger" onclick="deleteUserAccount(\''+u.uid+'\')">Deactivate</button></div></td>'+
+      '<td><div style="display:flex;gap:4px;"><button class="btn-sm btn-primary" onclick="openUserEdit(\''+u.uid+'\')">Edit</button><button class="btn-sm" style="background:rgba(22,199,132,0.12);color:#16c784;" onclick="manualKYC(\''+u.uid+'\')">Verify</button>'+toggleBtn+'<button class="btn-sm btn-danger" onclick="deleteUserAccount(\''+u.uid+'\')">Delete</button></div></td>'+
     '</tr>';
   }
   body.innerHTML=html;
@@ -1006,7 +1006,9 @@ function refreshUsers(){
   if(dot)dot.style.background='#f59e0b';
   if(statusEl)statusEl.textContent='Loading live user list…';
   return DB.fetchUsersLive().then(function(users){
+    _userNameCache=null;
     renderUsers(users,true);
+    refreshTrades();
   },function(error){
     renderUsers(getAllUsers(),false,DB.describeUserError(error));
   });
@@ -1062,7 +1064,20 @@ function openUserEdit(uid){
 function closeUserEditModal(){document.getElementById('userEditModal').classList.remove('open');}
 function deactivateUser(uid){return FinanceUI.do('access-'+uid,function(){return DB.updateUser(uid,{is_deactivated:true});},'Account status saved.');}
 function reactivateUser(uid){return FinanceUI.do('access-'+uid,function(){return DB.updateUser(uid,{is_deactivated:false});},'Account status saved.');}
-function deleteUserAccount(uid){if(confirm('Deactivate this account and preserve its financial records?'))return deactivateUser(uid);}
+// Delete is separate from Deactivate: it signs the person out everywhere, erases
+// their credentials and personal details, and marks the account deleted. Trades,
+// balances and audit rows are kept so the financial record stays intact.
+function deleteUserAccount(uid){
+ var row=null;
+ try{row=getAllUsers().find(function(x){return String(x.uid)===String(uid);});}catch(e){}
+ var name=row&&row.name?row.name:('UID '+uid);
+ var msg='Delete '+name+'?\n\n'
+  +'This signs them out on every device and erases their password, email and personal details.\n'
+  +'Their trades, balances and audit history are kept for reconciliation.\n\n'
+  +'Use Deactivate instead if you only want to block sign-in temporarily.';
+ if(!confirm(msg))return Promise.resolve();
+ return FinanceUI.do('delete-user-'+uid,function(){return DB.deleteUser(uid);},'Account deleted.');
+}
 var adminAccessState=false;
 function getAdminAccessList(){
   try{return JSON.parse(localStorage.getItem('bb_admin_access_list')||'[]');}catch(e){return[];}
@@ -1384,10 +1399,23 @@ function deleteTicket(){
  return FinanceUI.do('support-delete-'+base.id+'-'+Date.now(),function(){return saveTicketRecord(function(src){return Object.assign({},src||base,{status:'deleted'});});},'Conversation status saved.');
 }
 // ===== TRADES =====
+// Orders carry the owner's uid; the name comes from the live user list so an
+// administrator can always tell whose trade they are looking at.
+var _userNameCache=null;
+function adminUserNameByUid(uid,knownName){
+ if(knownName)return knownName;
+ if(uid===null||uid===undefined||uid==='')return '—';
+ var key=String(uid);
+ if(_userNameCache===null){
+  _userNameCache={};
+  try{getAllUsers().forEach(function(x){if(x&&x.uid!==undefined)_userNameCache[String(x.uid)]=x.name||'';});}catch(e){}
+ }
+ return _userNameCache[key]||('UID '+key);
+}
 function refreshTrades(){
   var trades=getAllTrades();
   var body=document.getElementById('tradesBody');
-  if(trades.length===0){body.innerHTML='<tr><td colspan="9" class="empty-state">No trades found</td></tr>';return;}
+  if(trades.length===0){body.innerHTML='<tr><td colspan="11" class="empty-state">No trades found</td></tr>';return;}
   var filtered=trades;
   if(currentTradeFilter!=='all'){
     filtered=trades.filter(function(t){return t.status.toLowerCase()===currentTradeFilter;});
@@ -1396,15 +1424,18 @@ function refreshTrades(){
   var html='';
   for(var i=0;i<filtered.length;i++){
     var t=filtered[i];
+    var uid=(t.userId!==undefined&&t.userId!==null&&t.userId!=='')?t.userId:t.uid;
     var statusCls=t.status==='Won'||t.status==='Closed'?'badge-green':t.status==='Lost'?'badge-red':t.status==='Active'?'badge-yellow':'badge-blue';
     html+='<tr>'+
-      '<td style="font-family:monospace;">'+t.id+'</td>'+
-      '<td>'+t.pair+'</td>'+
-      '<td>'+(t.side||'—')+'</td>'+
+      '<td style="font-family:monospace;">'+escapeUserText(t.id)+'</td>'+
+      '<td>'+escapeUserText(adminUserNameByUid(uid,t.userName))+'</td>'+
+      '<td style="font-family:monospace;color:rgba(255,255,255,0.6);">'+(uid===undefined||uid===null||uid===''?'—':escapeUserText(String(uid)))+'</td>'+
+      '<td>'+escapeUserText(t.pair)+'</td>'+
+      '<td>'+escapeUserText(t.side||'—')+'</td>'+
       '<td style="font-family:monospace;">'+fmtUSD(t.amount||0)+'</td>'+
       '<td style="font-family:monospace;color:'+(t.profit>=0?'#16c784':'#ef4444')+';">'+(t.profit>=0?'+':'')+fmtUSD(t.profit||0)+'</td>'+
-      '<td><span class="'+statusCls+'">'+t.status+'</span></td>'+
-      '<td>'+(t.source||'real')+'</td>'+
+      '<td><span class="'+statusCls+'">'+escapeUserText(t.status)+'</span></td>'+
+      '<td>'+escapeUserText(t.source||'real')+'</td>'+
       '<td>'+fmtTime(t.time)+'</td>'+
       '<td>'+
         '<span>Server settlement</span>'+
