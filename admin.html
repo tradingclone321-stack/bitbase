@@ -9,9 +9,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v9"></script>
-  <script src="db.js?v=20261017-instant-v9"></script>
-<script src="finance-ui.js?v=20261017-instant-v9"></script>
+  <script src="supabase-config.js?v=20261017-instant-v10"></script>
+  <script src="db.js?v=20261017-instant-v10"></script>
+<script src="finance-ui.js?v=20261017-instant-v10"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -159,7 +159,7 @@
       <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
     <button id="adminSignIn" onclick="adminLogin()">Sign In</button>
     <div id="adminLoginError" role="alert" style="display:none;margin-top:12px;padding:12px;background:#391c21;border:1px solid #a64855;border-radius:8px;font-size:12px;line-height:1.6;text-align:left;color:#ffd6dc;"></div>
-    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v9</span> · Sign in with your account email and password.</div>
+    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v10</span> · Sign in with your account email and password.</div>
   </div>
 </div>
 
@@ -365,8 +365,8 @@
       </div>
       <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow-x:auto;">
         <table class="data-table">
-          <thead><tr><th>ID</th><th>User</th><th>UID</th><th>Pair</th><th>Side</th><th>Amount</th><th>Profit</th><th>Status</th><th>Source</th><th>Time</th><th>Actions</th></tr></thead>
-          <tbody id="tradesBody"><tr><td colspan="11" class="empty-state">No trades found</td></tr></tbody>
+          <thead><tr><th>ID</th><th>User</th><th>UID</th><th>Pair</th><th>Side</th><th>Amount</th><th>Profit</th><th>Status</th><th>Source</th><th>Placed</th><th>Duration</th><th>Actions</th></tr></thead>
+          <tbody id="tradesBody"><tr><td colspan="12" class="empty-state">No trades found</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -668,7 +668,7 @@ var currentTradeFilter='all';
 var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
-var ADMIN_BUILD='2026-10-17-instant-v9';
+var ADMIN_BUILD='2026-10-17-instant-v10';
 
 function adminLoginError(message){var box=document.getElementById('adminLoginError');box.textContent=message||'';box.style.display=message?'block':'none';}
 // Only a script that genuinely failed to load can block the panel. A version
@@ -1384,13 +1384,83 @@ function adminUserNameByUid(uid,knownName){
  }
  return _userNameCache[key]||('UID '+key);
 }
+// ---- Trade timing helpers -------------------------------------------------
+// A trade's payload holds the moment it was placed (`time`/`startTime`), how
+// long it runs (`dur`, in seconds) and when it expires (`expiresAt`). The
+// administrator should be able to see at a glance when an order opened, how
+// long it is meant to run, and — for orders still open — how much time is left,
+// so a stuck or unusually old trade is obvious without digging into the record.
+function tradeExpiry(t){
+  var e=Number(t.expiresAt);
+  if(Number.isFinite(e)&&e>0)return e;
+  var start=Number(t.startTime)||Number(t.time)||0;
+  return start+(Number(t.dur)||0)*1000;
+}
+function fmtDur(sec){
+  sec=Number(sec)||0;
+  if(sec<60)return sec+'s';
+  if(sec<3600)return Math.round(sec/60)+'m';
+  if(sec<86400){var h=Math.floor(sec/3600),m=Math.round((sec%3600)/60);return m?h+'h '+m+'m':h+'h';}
+  return Math.round(sec/86400)+'d';
+}
+function fmtLeft(end){
+  var s=Math.max(0,Math.floor((end-Date.now())/1000));
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  if(h>0)return h+'h '+m+'m';
+  if(m>0)return m+'m '+ss+'s';
+  return ss+'s';
+}
+function fmtElapsed(start){
+  var s=Math.max(0,Math.floor((Date.now()-(Number(start)||0))/1000));
+  var m=Math.floor(s/60),h=Math.floor(m/60);
+  if(h>0)return h+'h '+(m%60)+'m';
+  if(m>0)return m+'m '+(s%60)+'s';
+  return s+'s';
+}
+function fmtSpan(ms){
+  var s=Math.max(0,Math.round((Number(ms)||0)/1000));
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  if(h>0)return h+'h '+m+'m';
+  if(m>0)return m+'m '+ss+'s';
+  return ss+'s';
+}
+// One shared 1s clock updates every visible "time left" label in place, so the
+// countdown stays live without rebuilding the table (which would fight the
+// administrator's scrolling, hovering and clicks).
+function startTradeClock(){
+  if(window._tradeClock)return;
+  window._tradeClock=setInterval(function(){
+    if(document.hidden)return;
+    var left=document.querySelectorAll('[data-trade-left]');
+    for(var i=0;i<left.length;i++){
+      var end=Number(left[i].getAttribute('data-trade-left'))||0;
+      if(end-Date.now()<=0)left[i].textContent='due now';
+      else left[i].textContent=fmtLeft(end)+' left';
+    }
+    var ages=document.querySelectorAll('[data-trade-elapsed]');
+    for(var j=0;j<ages.length;j++)ages[j].textContent=fmtElapsed(ages[j].getAttribute('data-trade-elapsed'))+' ago';
+  },1000);
+}
+// Active orders can be forced to a result by an administrator; settled orders
+// only report how they resolved.
+function tradeActionCell(t){
+  if(String(t.status||'').toLowerCase()==='active'){
+    var id=String(t.id||'');
+    return '<button class="btn-sm" style="background:rgba(22,199,132,0.15);color:#16c784;" onclick="forceTradeResult(\'' + id + '\',\'won\')">Force Profit</button>'
+      + ' <button class="btn-sm" style="background:rgba(239,68,68,0.15);color:#ef4444;" onclick="forceTradeResult(\'' + id + '\',\'loss\')">Force Loss</button>';
+  }
+  if(t.adminForced)return '<span style="color:#f7931a;">Forced by admin</span>';
+  return '<span>Server settlement</span>';
+}
 function refreshTrades(){
+  startTradeClock();
   var trades=getAllTrades();
   var body=document.getElementById('tradesBody');
-  if(trades.length===0){body.innerHTML='<tr><td colspan="11" class="empty-state">No trades found</td></tr>';return;}
+  if(!body)return;
+  if(trades.length===0){body.innerHTML='<tr><td colspan="12" class="empty-state">No trades found</td></tr>';return;}
   var filtered=trades;
   if(currentTradeFilter!=='all'){
-    filtered=trades.filter(function(t){return t.status.toLowerCase()===currentTradeFilter;});
+    filtered=trades.filter(function(t){return String(t.status||'').toLowerCase()===currentTradeFilter;});
   }
   filtered.sort(function(a,b){return(b.time||0)-(a.time||0);});
   var html='';
@@ -1398,6 +1468,19 @@ function refreshTrades(){
     var t=filtered[i];
     var uid=(t.userId!==undefined&&t.userId!==null&&t.userId!=='')?t.userId:t.uid;
     var statusCls=t.status==='Won'||t.status==='Closed'?'badge-green':t.status==='Lost'?'badge-red':t.status==='Active'?'badge-yellow':'badge-blue';
+    var start=Number(t.startTime)||Number(t.time)||0;
+    var durCell=escapeUserText(fmtDur(t.dur));
+    if(String(t.status||'').toLowerCase()==='active'){
+      var end=tradeExpiry(t);
+      durCell+='<br><small style="color:#f7931a;" data-trade-left="'+end+'">'+(end-Date.now()<=0?'due now':fmtLeft(end)+' left')+'</small>';
+    }else if(start){
+      var resolved=Number(t.resolvedTime)||0;
+      if(resolved>start){
+        durCell+='<br><small style="color:rgba(255,255,255,0.45);">used '+fmtSpan(resolved-start)+'</small>';
+      }else{
+        durCell+='<br><small style="color:rgba(255,255,255,0.45);" data-trade-elapsed="'+start+'">'+fmtElapsed(start)+' ago</small>';
+      }
+    }
     html+='<tr>'+
       '<td style="font-family:monospace;">'+escapeUserText(t.id)+'</td>'+
       '<td>'+escapeUserText(adminUserNameByUid(uid,t.userName))+'</td>'+
@@ -1406,19 +1489,46 @@ function refreshTrades(){
       '<td>'+escapeUserText(t.side||'—')+'</td>'+
       '<td style="font-family:monospace;">'+fmtUSD(t.amount||0)+'</td>'+
       '<td style="font-family:monospace;color:'+(t.profit>=0?'#16c784':'#ef4444')+';">'+(t.profit>=0?'+':'')+fmtUSD(t.profit||0)+'</td>'+
-      '<td><span class="'+statusCls+'">'+escapeUserText(t.status)+'</span></td>'+
+      '<td><span class="'+statusCls+'">'+escapeUserText(t.status)+(t.adminForced?' · admin':'')+'</span></td>'+
       '<td>'+escapeUserText(t.source||'real')+'</td>'+
       '<td>'+fmtTime(t.time)+'</td>'+
-      '<td>'+
-        '<span>Server settlement</span>'+
-      '</td>'+
+      '<td>'+durCell+'</td>'+
+      '<td style="white-space:nowrap;">'+tradeActionCell(t)+'</td>'+
     '</tr>';
   }
   body.innerHTML=html;
 }
 function filterTrades(f){currentTradeFilter=f;refreshTrades();}
 function deleteTrade(){FinanceUI.message('Financial records are retained for reconciliation.',true);}
-function forceTradeResult(){FinanceUI.message('Trade results are settled from the market feed.',true);}
+// Force one active trade to close as a win or a loss. A fresh request ID is
+// generated per attempt so forcing trade A never blocks forcing trade B, and
+// the double-click guard is the per-trade busy key. The server refuses to touch
+// a trade that is already settled, so a retry can never settle it twice.
+function forceTradeResult(id,result){
+  var t=null;
+  try{t=getAllTrades().find(function(x){return String(x.id)===String(id);});}catch(e){}
+  if(!t)return Promise.resolve();
+  if(String(t.status||'').toLowerCase()!=='active'){FinanceUI.message('That trade is already settled.',true);return Promise.resolve();}
+  var won=result!=='loss';
+  var uid=(t.userId!==undefined&&t.userId!==null&&t.userId!=='')?t.userId:t.uid;
+  var profit=Number(t.potentialProfit||t.profit||0);
+  var msg=(won?'Force this trade to close as a PROFIT (win)?':'Force this trade to close as a LOSS?')+'\n\n'
+    +'Trade: '+id+'\n'
+    +'Trader: '+adminUserNameByUid(uid,t.userName)+'  (UID '+uid+')\n'
+    +'Stake: '+fmtUSD(t.amount||0)+'\n'
+    +(won?'Profit: +'+fmtUSD(profit):'Loss: -'+fmtUSD(profit))+'\n\n'
+    +'The balance is credited or written off now through the normal settlement ledger, '
+    +'overriding the market outcome. This cannot be undone.';
+  if(!confirm(msg))return Promise.resolve();
+  var rid=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('force-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+  var busyKey='force-'+id+'-'+(won?'won':'loss');
+  return FinanceUI.do(busyKey,function(){
+    return DB.rpc('bb_action',{p_token:DB.token(),p_action:'admin_settle_trade',p_id:rid,p_data:{id:id,result:won?'won':'lost'}});
+  },function(r){
+    var status=(r&&r.status)?r.status:(won?'Won':'Lost');
+    return 'Trade '+id+' settled as '+status+' (profit '+(won?'+':'-')+fmtUSD(profit)+').';
+  });
+}
 // ===== WITHDRAWALS =====
 function getAllWithdrawals(){
   try{
