@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+<script src="site-pause.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bitbase – AI Quants</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -9,9 +10,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v9"></script>
-  <script src="db.js?v=20261017-instant-v9"></script>
-<script src="finance-ui.js?v=20261017-instant-v9"></script>
+  <script src="supabase-config.js?v=20261017-instant-v10"></script>
+  <script src="db.js?v=20261017-instant-v10"></script>
+<script src="finance-ui.js?v=20261017-instant-v10"></script>
 </head>
 <body class="page-body">
 <script>
@@ -327,17 +328,56 @@ document.addEventListener('keydown',function(e){ if(e.key==='Escape') document.q
 
 // ===== ORDERS STORAGE =====
 function getOrders(){ try{ return JSON.parse(localStorage.getItem('bb_ai_quants'))||[]; }catch(e){return [];} }
+function numOr(v,d){ var n=Number(v); return (v!==null&&v!==undefined&&v!==''&&isFinite(n))?n:d; }
+// Older cached rows can predate server settlement and store rate/amount as
+// text or leave them out. A missing number used to make .toFixed() throw inside
+// renderOrders(), which blanked the whole list - including orders the server had
+// already completed. Every row is therefore normalised before it is rendered.
+function normalizeOrder(o){
+  o=o||{};
+  var plan=getPlan(o.plan)||null;
+  var started=numOr(o.started,0);
+  if(!started)started=Date.now();
+  var status=String(o.status||'').toLowerCase();
+  var owner=(o.uid!==null&&o.uid!==undefined)?String(o.uid):String(o.userId||'');
+  return Object.assign({},o,{
+    plan:o.plan||'',
+    planName:o.planName||(plan?plan.title:'AI Quant Plan'),
+    amount:numOr(o.amount,0),
+    rate:numOr(o.rate,plan?plan.rate:0),
+    days:Math.max(1,Math.round(numOr(o.days,plan?plan.days:1))),
+    started:started,
+    lastPayout:numOr(o.lastPayout,started),
+    settledDays:Math.max(0,Math.floor(numOr(o.settledDays,0))),
+    earned:numOr(o.earned,0),
+    payout:numOr(o.payout,0),
+    completedAt:numOr(o.completedAt,0),
+    updatedAt:numOr(o.updatedAt,0),
+    status:status,
+    uid:owner
+  });
+}
 function getMyOrders(){
-  var myUid=localStorage.getItem('bb_uid')||'';
+  var myUid=String(localStorage.getItem('bb_uid')||'');
   var all=getOrders();
   var mine=[];
   for(var i=0;i<all.length;i++){
-    if(String(all[i].uid)===String(myUid))mine.push(all[i]);
+    var o=all[i]||{};
+    var owner=(o.uid!==null&&o.uid!==undefined)?String(o.uid):String(o.userId||'');
+    if(owner!==myUid)continue;
+    if(String(o.status||'').toLowerCase()==='deleted')continue;
+    mine.push(normalizeOrder(o));
   }
   return mine;
 }
-function saveOrders(arr){ localStorage.setItem('bb_ai_quants',JSON.stringify(arr)); if(typeof DB!=='undefined')DB.pushCollection('bb_ai_quants'); }
 function getPlan(key){ for(var i=0;i<PLANS.length;i++) if(PLANS[i].key===key) return PLANS[i]; return null; }
+function orderPlanTitle(o){ var p=getPlan(o.plan); return (p&&p.title)||o.planName||'AI Quant Plan'; }
+function orderStatusText(o){
+  if(o.status==='active')return 'Active';
+  if(o.status==='completed')return 'Completed';
+  if(o.status==='review')return 'Under review';
+  return o.status?o.status.charAt(0).toUpperCase()+o.status.slice(1):'Completed';
+}
 
 // ===== BALANCE =====
 function getUsdtBalance(){return Number(localStorage.getItem('bb_cash_balance')||0);}
@@ -457,35 +497,40 @@ function fmtDur(ms){
 }
 
 // ===== ORDER DETAILS POPUP =====
-var currentOrderIndex=-1;
+var currentOrderIndex=-1,currentOrderId=null;
+function paintOrderStatus(o){
+  var sw=document.getElementById('odStatusWrap');
+  var st=document.getElementById('odStatus');
+  if(o.status==='active'){
+    sw.style.background='rgba(247,147,26,0.12)';
+    sw.style.color='var(--accent-orange)';
+  }else if(o.status==='completed'){
+    sw.style.background='rgba(22,199,132,0.12)';
+    sw.style.color='var(--accent-green)';
+  }else{
+    sw.style.background='rgba(253,176,34,0.12)';
+    sw.style.color='var(--accent-yellow)';
+  }
+  st.textContent=orderStatusText(o);
+}
 function showOrderDetails(idx){
   var orders=getMyOrders();
   var o=orders[idx];
   if(!o)return;
   currentOrderIndex=idx;
+  currentOrderId=o.id;
   var now=Date.now();
-  var p=getPlan(o.plan)||{title:o.planName};
   var elapsed=now-o.started;
-  var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
+  var progress=Math.min(100,Math.max(0,(elapsed/(o.days*DAY_MS))*100));
   var remaining=o.days*DAY_MS-elapsed;
   var nextPay=o.lastPayout+DAY_MS;
   var isActive=o.status==='active';
   var estProfit=o.amount*o.rate/100*o.days;
   var dailyProfit=o.amount*o.rate/100;
 
-  document.getElementById('odTitle').textContent=p.title;
+  document.getElementById('odTitle').textContent=orderPlanTitle(o);
   document.getElementById('odReturn').textContent=o.rate.toFixed(2)+'%';
-  var sw=document.getElementById('odStatusWrap');
-  var st=document.getElementById('odStatus');
-  if(isActive){
-    sw.style.background='rgba(247,147,26,0.12)';
-    sw.style.color='var(--accent-orange)';
-    st.textContent='Active';
-  }else{
-    sw.style.background='rgba(22,199,132,0.12)';
-    sw.style.color='var(--accent-green)';
-    st.textContent='Completed';
-  }
+  paintOrderStatus(o);
   document.getElementById('odInvested').textContent='$'+o.amount.toFixed(2);
   document.getElementById('odSettled').textContent='$'+(o.earned||0).toFixed(2)+' / $'+estProfit.toFixed(2);
   document.getElementById('odTerm').textContent=o.days+' days · ~$'+dailyProfit.toFixed(2)+'/day';
@@ -501,15 +546,22 @@ function showOrderDetails(idx){
 function refreshOpenOrderDetails(){
   if(currentOrderIndex<0)return;
   var orders=getMyOrders();
-  var o=orders[currentOrderIndex];
-  if(!o){closeModal('orderDetailsModal');return;}
+  var o=null;
+  if(currentOrderId!==null){
+    for(var i=0;i<orders.length;i++){
+      if(String(orders[i].id)===String(currentOrderId)){o=orders[i];break;}
+    }
+  }
+  if(!o)o=orders[currentOrderIndex];
+  if(!o){currentOrderIndex=-1;currentOrderId=null;closeModal('orderDetailsModal');return;}
   var now=Date.now();
   var elapsed=now-o.started;
-  var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
+  var progress=Math.min(100,Math.max(0,(elapsed/(o.days*DAY_MS))*100));
   var remaining=o.days*DAY_MS-elapsed;
   var nextPay=o.lastPayout+DAY_MS;
   var isActive=o.status==='active';
   var estProfit=o.amount*o.rate/100*o.days;
+  paintOrderStatus(o);
   document.getElementById('odSettled').textContent='$'+(o.earned||0).toFixed(2)+' / $'+estProfit.toFixed(2);
   document.getElementById('odRemaining').textContent=isActive?fmtDur(remaining):'—';
   document.getElementById('odNext').textContent=isActive?fmtDur(nextPay-now):'—';
@@ -517,13 +569,26 @@ function refreshOpenOrderDetails(){
   document.getElementById('odProgressBar').style.width=(isActive?progress:100)+'%';
 }
 
+var _ordersSignature='';
+function ordersSignature(orders){
+  var s='';
+  for(var i=0;i<orders.length;i++){
+    var o=orders[i];
+    s+=o.id+'|'+o.status+'|'+o.settledDays+'|'+o.earned+'|'+o.payout+'|'+o.completedAt+';';
+  }
+  return s;
+}
+function emptyOrdersHtml(){
+  return '<div id="emptyOrders" class="glass-card rounded-xl p-8 text-center"><div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><i data-lucide="bot" style="width:22px;height:22px;color:var(--text-tertiary);"></i></div><p class="text-sm text-secondary">No quant plans yet</p><p class="text-xs text-tertiary mt-1">Start investing with an AI strategy above</p></div>';
+}
 function renderOrders(){
   var orders=getMyOrders();
+  _ordersSignature=ordersSignature(orders);
   var now=Date.now();
   var invested=0,settled=0,active=0;
   for(var i=0;i<orders.length;i++){
     if(orders[i].status==='active'){invested+=orders[i].amount;active++;}
-    settled+=orders[i].earned||0;
+    settled+=orders[i].earned;
   }
   document.getElementById('sumInvested').textContent='$'+invested.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('sumSettled').textContent='$'+settled.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -531,54 +596,75 @@ function renderOrders(){
 
   var list=document.getElementById('orderList');
   if(!orders.length){
-    list.innerHTML='<div id="emptyOrders" class="glass-card rounded-xl p-8 text-center"><div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><i data-lucide="bot" style="width:22px;height:22px;color:var(--text-tertiary);"></i></div><p class="text-sm text-secondary">No quant plans yet</p><p class="text-xs text-tertiary mt-1">Start investing with an AI strategy above</p></div>';
+    list.innerHTML=emptyOrdersHtml();
     lucide.createIcons();
     return;
   }
   var html='';
   for(var i=orders.length-1;i>=0;i--){
     var o=orders[i];
-    var p=getPlan(o.plan)||{title:o.planName};
-    var elapsed=now-o.started;
-    var progress=Math.min(100,(elapsed/(o.days*DAY_MS))*100);
-    var remaining=o.days*DAY_MS-elapsed;
-    var nextPay=o.lastPayout+DAY_MS;
-    html+='<div class="glass-card rounded-xl p-6" style="cursor:pointer;transition:transform 0.2s,border-color 0.2s;" onclick="showOrderDetails('+i+')" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.borderColor=\'rgba(65,105,225,0.4)\';" onmouseout="this.style.transform=\'\';this.style.borderColor=\'\';">';
-    html+='<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">';
-    html+='<div class="flex items-center gap-3">';
-    html+='<div style="width:40px;height:40px;border-radius:10px;background:rgba(65,105,225,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="cpu" style="width:18px;height:18px;color:var(--accent-blue);"></i></div>';
-    html+='<div><div class="font-medium text-sm">'+p.title+'</div><div class="text-xs text-tertiary">'+o.days+'d term · '+o.rate.toFixed(2)+'% daily</div></div>';
-    html+='</div>';
-    html+='<div class="flex items-center gap-3">';
-    if(o.status==='active'){
-      html+='<span class="text-xs font-medium" style="color:var(--accent-orange);">'+fmtDur(remaining)+' left</span>';
-    }else{
-      html+='<span class="text-xs font-medium" style="color:var(--accent-green);">Completed</span>';
-    }
-    html+='<span class="text-xs font-medium flex items-center gap-1" style="color:var(--accent-blue);"><i data-lucide="chevron-right" style="width:14px;height:14px;"></i></span>';
-    html+='</div>';
-    html+='</div>';
+    try{
+      var elapsed=now-o.started;
+      var progress=Math.min(100,Math.max(0,(elapsed/(o.days*DAY_MS))*100));
+      var remaining=o.days*DAY_MS-elapsed;
+      var nextPay=o.lastPayout+DAY_MS;
+      var isActive=o.status==='active';
+      var isCompleted=o.status==='completed';
+      var estProfit=o.amount*o.rate/100*o.days;
+      var statusColor=isActive?'var(--accent-orange)':(isCompleted?'var(--accent-green)':'var(--accent-yellow)');
+      var paidOut=o.payout>0?o.payout:o.amount+o.earned;
+      html+='<div class="glass-card rounded-xl p-6" style="cursor:pointer;transition:transform 0.2s,border-color 0.2s;" onclick="showOrderDetails('+i+')" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.borderColor=\'rgba(65,105,225,0.4)\';" onmouseout="this.style.transform=\'\';this.style.borderColor=\'\';">';
+      html+='<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">';
+      html+='<div class="flex items-center gap-3">';
+      html+='<div style="width:40px;height:40px;border-radius:10px;background:rgba(65,105,225,0.1);display:flex;align-items:center;justify-content:center;"><i data-lucide="cpu" style="width:18px;height:18px;color:var(--accent-blue);"></i></div>';
+      html+='<div><div class="font-medium text-sm">'+orderPlanTitle(o)+'</div><div class="text-xs text-tertiary">'+o.days+'d term · '+o.rate.toFixed(2)+'% daily</div></div>';
+      html+='</div>';
+      html+='<div class="flex items-center gap-3">';
+      if(isActive){
+        html+='<span class="text-xs font-medium" style="color:var(--accent-orange);">'+fmtDur(remaining)+' left</span>';
+      }else{
+        html+='<span class="text-xs font-medium" style="color:'+statusColor+';">'+orderStatusText(o)+'</span>';
+      }
+      html+='<span class="text-xs font-medium flex items-center gap-1" style="color:var(--accent-blue);"><i data-lucide="chevron-right" style="width:14px;height:14px;"></i></span>';
+      html+='</div>';
+      html+='</div>';
 
-    html+='<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">';
-    html+='<div><div class="text-xs text-tertiary mb-1">Invested</div><div class="font-mono text-sm font-medium">$'+o.amount.toFixed(2)+'</div></div>';
-    html+='<div><div class="text-xs text-tertiary mb-1">Profit Settled</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">$'+(o.earned||0).toFixed(2)+'</div></div>';
-    html+='<div><div class="text-xs text-tertiary mb-1">Est. Term Profit</div><div class="font-mono text-sm font-medium">$'+(o.amount*o.rate/100*o.days).toFixed(2)+'</div></div>';
-    if(o.status==='active'){
-      html+='<div><div class="text-xs text-tertiary mb-1">Next Settlement</div><div class="font-mono text-sm font-medium">'+fmtDur(nextPay-now)+'</div></div>';
-    }else{
-      html+='<div><div class="text-xs text-tertiary mb-1">Status</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">Principal returned</div></div>';
-    }
-    html+='</div>';
+      html+='<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">';
+      html+='<div><div class="text-xs text-tertiary mb-1">Invested</div><div class="font-mono text-sm font-medium">$'+o.amount.toFixed(2)+'</div></div>';
+      html+='<div><div class="text-xs text-tertiary mb-1">Profit Settled</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">$'+o.earned.toFixed(2)+'</div></div>';
+      html+='<div><div class="text-xs text-tertiary mb-1">Est. Term Profit</div><div class="font-mono text-sm font-medium">$'+estProfit.toFixed(2)+'</div></div>';
+      if(isActive){
+        html+='<div><div class="text-xs text-tertiary mb-1">Next Settlement</div><div class="font-mono text-sm font-medium">'+fmtDur(nextPay-now)+'</div></div>';
+      }else if(isCompleted){
+        html+='<div><div class="text-xs text-tertiary mb-1">Paid Out</div><div class="font-mono text-sm font-medium" style="color:var(--accent-green);">$'+paidOut.toFixed(2)+'</div></div>';
+      }else{
+        html+='<div><div class="text-xs text-tertiary mb-1">Status</div><div class="font-mono text-sm font-medium" style="color:'+statusColor+';">'+orderStatusText(o)+'</div></div>';
+      }
+      html+='</div>';
 
-    if(o.status==='active'){
-      html+='<div class="flex items-center justify-between text-xs text-tertiary mb-2"><span>'+new Date(o.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span><span>Ends '+new Date(o.started+o.days*DAY_MS).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>';
-      html+='<div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;"><div style="width:'+progress.toFixed(1)+'%;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent-orange),var(--accent-yellow));"></div></div>';
-      html+='<div class="text-right text-xs text-tertiary mt-1">'+progress.toFixed(1)+'% of '+o.days+'d term</div>';
+      if(isActive){
+        html+='<div class="flex items-center justify-between text-xs text-tertiary mb-2"><span>'+new Date(o.started).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span><span>Ends '+new Date(o.started+o.days*DAY_MS).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>';
+        html+='<div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;"><div style="width:'+progress.toFixed(1)+'%;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent-orange),var(--accent-yellow));"></div></div>';
+        html+='<div class="text-right text-xs text-tertiary mt-1">'+progress.toFixed(1)+'% of '+o.days+'d term</div>';
+      }else if(o.completedAt){
+        html+='<div class="text-right text-xs text-tertiary mt-1">Settled '+new Date(o.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>';
+      }
+      if(o.status==='review'){
+        html+='<div class="text-xs mt-2" style="color:var(--accent-yellow);">This plan was recorded before server settlement and is being verified. Support will credit the correct balance.</div>';
+      }
+      html+='</div>';
+    }catch(e){
+      // One unreadable legacy row must never hide every other order.
+      try{console.warn('Skipped AI quant order',e);}catch(_e){}
     }
-    html+='</div>';
   }
+  if(!html)html=emptyOrdersHtml();
   list.innerHTML=html;
   lucide.createIcons();
+}
+function refreshOrdersIfChanged(){
+  var orders=getMyOrders();
+  if(ordersSignature(orders)!==_ordersSignature)renderOrders();
 }
 
 // ===== TOAST =====
@@ -595,13 +681,58 @@ function showToast(msg,type){
 // ===== INIT =====
 renderOrders();
 settleOrders();
-setInterval(function(){ settleOrders(); refreshOpenOrderDetails(); },1000);
+setInterval(function(){ settleOrders(); refreshOrdersIfChanged(); refreshOpenOrderDetails(); },1000);
+
+// ===== SERVER SETTLEMENT NUDGE =====
+// Accrual settlement belongs to PostgreSQL (bb_settle_accruals). If a cached
+// plan is already past a payout boundary, ask the server for a pass so the
+// completed order and its credit land here immediately instead of waiting for
+// a scheduler that may not be installed. The call is idempotent: the database
+// decides what is actually due and never pays the same day twice.
+var _quantTickAt=0,_quantTickBusy=false;
+function quantSettlementDue(){
+  var orders=getMyOrders(),now=Date.now();
+  for(var i=0;i<orders.length;i++){
+    var o=orders[i];
+    if(o.status!=='active')continue;
+    if(now>=o.started+o.days*DAY_MS)return true;
+    if(now>=o.lastPayout+DAY_MS)return true;
+  }
+  return false;
+}
+function settleQuantIfDue(){
+  if(_quantTickBusy||typeof DB==='undefined'||!DB.ready)return;
+  if(!localStorage.getItem('bb_session_token'))return;
+  if(Date.now()-_quantTickAt<60000)return;
+  if(!quantSettlementDue())return;
+  _quantTickAt=Date.now();
+  _quantTickBusy=true;
+  Promise.resolve().then(function(){return DB.rpc('bb_tick',{p_token:DB.token()});}).then(function(){
+    return Promise.all([DB.pullCollection('bb_ai_quants'),DB.pullLocalUser()]);
+  }).then(function(){
+    renderOrders();
+    refreshOpenOrderDetails();
+  }).catch(function(){}).then(function(){_quantTickBusy=false;});
+}
+function syncOrderView(){
+  refreshOrdersIfChanged();
+  refreshOpenOrderDetails();
+}
 
 // ===== SERVER SYNC =====
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
-  DB.pullLocalUser().then(function(){ renderOrders(); refreshOpenOrderDetails(); });
+  DB.pullLocalUser().then(syncOrderView,syncOrderView);
   DB.startLocalPolling(10000);
-  DB.pullCollection('bb_ai_quants').then(function(){ renderOrders(); });
+  DB.pullCollection('bb_ai_quants').then(syncOrderView,syncOrderView);
+  if(DB.subscribe)DB.subscribe('bb_ai_quants',function(){syncOrderView();});
+  settleQuantIfDue();
+  setInterval(settleQuantIfDue,30000);
+  // A tab that was in the background misses visibility polls on some browsers.
+  window.addEventListener('focus',function(){
+    if(typeof DB==='undefined'||!DB.ready||!localStorage.getItem('bb_session_token'))return;
+    DB.pullCollection('bb_ai_quants').then(syncOrderView,syncOrderView);
+    DB.pullLocalUser().catch(function(){});
+  });
 }
 </script>
 <div class="mobile-bottom-bar">
@@ -612,6 +743,6 @@ if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
   <a href="markets.html"><i data-lucide="bar-chart-3"></i>Markets</a>
 </div>
 <script>lucide.createIcons();</script>
-<script>window.addEventListener('bb:updated',function(){renderOrders();refreshOpenOrderDetails();});</script>
+<script>window.addEventListener('bb:updated',function(){syncOrderView();});</script>
 </body>
 </html>

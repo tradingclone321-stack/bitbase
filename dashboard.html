@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+<script src="site-pause.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bitbase – Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -9,9 +10,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v9"></script>
-  <script src="db.js?v=20261017-instant-v9"></script>
-<script src="finance-ui.js?v=20261017-instant-v9"></script>
+  <script src="supabase-config.js?v=20261017-instant-v10"></script>
+  <script src="db.js?v=20261017-instant-v10"></script>
+<script src="finance-ui.js?v=20261017-instant-v10"></script>
   <style>
     [data-theme="light"] { --bg-primary: #f5f5f5; --bg-secondary: #ffffff; --bg-tertiary: #e8e8e8; --bg-glass: rgba(255,255,255,0.92); --text-primary: #1a1a1a; --text-secondary: #555555; --text-tertiary: #999999; --border-subtle: rgba(0,0,0,0.06); --border-medium: rgba(0,0,0,0.1); --border-glow: rgba(247,147,26,0.4); }
     [data-theme="light"] body, [data-theme="light"] .page-body { background: #f5f5f5; color: #1a1a1a; }
@@ -539,6 +540,23 @@ function renderRecentActivity(){
     }
   }catch(e){}
 
+  // AI Quant completions (server settled)
+  try{
+    var quants=JSON.parse(localStorage.getItem('bb_ai_quants')||'[]');
+    for(var i=0;i<quants.length;i++){
+      var q=quants[i];
+      if(!q||String(q.uid||'')!==String(myUid))continue;
+      if(String(q.status||'').toLowerCase()!=='completed')continue;
+      var qTime=Number(q.completedAt||q.updatedAt||0);
+      if(!qTime||qTime<cutoff)continue;
+      var qPaid=Number(q.payout||0);
+      var qGain=Number(q.earned||0);
+      if(!(qPaid>0))qPaid=Number(q.amount||0)+qGain;
+      if(!qGain&&qPaid>0)qGain=Math.max(0,qPaid-Number(q.amount||0));
+      items.push({time:qTime,label:'AI Quant completed · '+formatUSD(qPaid)+' paid out',icon:'cpu',color:'var(--accent-green)',bg:'rgba(22,199,132,0.1)',amount:'+'+formatUSD(qGain)});
+    }
+  }catch(e){}
+
   // Deposits
   try{
     var deposits=JSON.parse(localStorage.getItem('bb_deposit_requests')||'[]');
@@ -601,20 +619,26 @@ function renderRecentActivity(){
 
 function fmtAmt(n){return n>=100?n.toLocaleString('en-US'):n;}
 
-// ===== LIVE BALANCE SYNC =====
+// ===== LIVE ACCOUNT SYNC =====
+// Every authoritative refresh repaints the cards, because an AI Quant or Earn
+// order can finish without the cash total changing by a different amount than
+// "locked". Re-rendering only when the balance moved left completed plans (and
+// their released principal) invisible until the page was reloaded.
+function syncLiveAccount(forceChart){
+  var newBal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
+  var changed=newBal!==CASH_BALANCE;
+  CASH_BALANCE=newBal;
+  for(var i=0;i<holdings.length;i++){
+    if(holdings[i].symbol==='USDT'){holdings[i].qty=CASH_BALANCE;break;}
+  }
+  renderHoldings();
+  renderStats('1M');
+  if(changed||forceChart)renderChart('1M');
+  renderRecentActivity();
+}
 window.addEventListener('bb:updated',function(){
   if(document.hidden)return;
-  var newBal=parseFloat(localStorage.getItem('bb_cash_balance'))||0;
-  if(newBal!==CASH_BALANCE){
-    CASH_BALANCE=newBal;
-    for(var i=0;i<holdings.length;i++){
-      if(holdings[i].symbol==='USDT'){holdings[i].qty=CASH_BALANCE;break;}
-    }
-    renderHoldings();
-    renderStats('1M');
-    renderChart('1M');
-    renderRecentActivity();
-  }
+  syncLiveAccount();
 });
 
 // ===== INIT =====
@@ -625,7 +649,7 @@ renderStats('1M');
 
 // ===== SERVER BALANCE SYNC =====
 if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
-  DB.pullAll();
+  DB.pullAll().then(function(){syncLiveAccount(true);},function(){});
   var origPoll=DB.pullLocalUser;
   DB.pullLocalUser=function(){
     return origPoll().then(function(changed){
@@ -634,6 +658,10 @@ if(typeof DB!=='undefined' && DB.ready && localStorage.getItem('bb_uid')){
     });
   };
   DB.startLocalPolling(10000);
+  window.addEventListener('focus',function(){
+    if(typeof DB==='undefined'||!DB.ready||!localStorage.getItem('bb_session_token'))return;
+    DB.pullAll().then(function(){syncLiveAccount(true);},function(){});
+  });
 }
 </script>
 <div class="mobile-bottom-bar">
