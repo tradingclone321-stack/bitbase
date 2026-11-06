@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Site not available</title>
+<style>
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:#000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    box-sizing:border-box;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .notice{
+    width:350px;
+    max-width:100%;
+    box-sizing:border-box;
+    background:#fff;
+    border-radius:6px;
+    padding:20px 14px 22px;
+    box-shadow:0 1px 2px rgba(0,0,0,.28),0 8px 24px rgba(0,0,0,.32);
+  }
+  .notice h1{
+    margin:0 0 12px;
+    font-size:19px;
+    line-height:1.3;
+    font-weight:700;
+    letter-spacing:-.1px;
+    color:#1a1a1a;
+  }
+  .notice p{
+    margin:0;
+    font-size:14px;
+    line-height:1.5;
+    color:#4a4a4a;
+  }
+  .notice hr{
+    border:0;
+    border-top:1px solid #e5e5e5;
+    margin:16px 0 12px;
+  }
+  .notice .fine{
+    font-size:11.5px;
+    line-height:1.45;
+    color:#5f6368;
+  }
+  .notice .fine a{
+    color:#0f9d8f;
+    text-decoration:none;
+  }
+  .notice .fine a:hover{text-decoration:underline}
+  @media (max-width:420px){
+    .notice{padding:18px 18px 20px;border-radius:5px}
+    .notice h1{font-size:18px}
+  }
+</style>
+</head>
+<body>
+  <main class="notice" role="main" aria-labelledby="noticeTitle">
+    <h1 id="noticeTitle">Site not available</h1>
+    <p>This site was paused as it reached its usage limits.<br>Please contact the site owner for more information.</p>
+    <hr>
+    <p class="fine">If this is your site, please visit Netlify's <a href="https://docs.netlify.com/manage/accounts-and-billing/billing/" target="_blank" rel="noopener">Billing docs page</a> or<br><a href="https://app.netlify.com/" target="_blank" rel="noopener">log into your Netlify account</a> to upgrade your plan.</p>
+  </main>
+</body>
+</html>
