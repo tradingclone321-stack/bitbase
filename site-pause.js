@@ -16,7 +16,7 @@
      <script src="site-pause.js"></script> line from the page <head>s.
    ========================================================================== */
 (function () {
-  var SITE_PAUSED = true;
+  var SITE_PAUSED = false;
   if (!SITE_PAUSED) return;
 
   var page = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
