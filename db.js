@@ -1,6 +1,6 @@
 /* BitBase v2: server owns balances, orders, permissions, and durable records.
  * Browser storage is a replaceable cache. No cached balance is ever uploaded. */
-var DB = {VERSION:'2026-10-17-instant-v9',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
+var DB = {VERSION:'2026-10-17-instant-v11',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
 DB.get=function(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
 DB.set=function(k,v){localStorage.setItem(k,JSON.stringify(v));};
 DB.safeParse=function(s){try{return JSON.parse(s);}catch(e){return s;}};
@@ -110,8 +110,16 @@ DB.syncLocalUser=function(){return DB.pullLocalUser();}; // deliberately pull-on
 DB.pushUsers=function(){return Promise.reject(new Error('Bulk browser balance uploads are disabled.'));};
 DB.upsertUser=function(u){return DB.action('profile',{name:u.name,email:u.email}).then(DB.pullLocalUser);};
 DB.updateUser=function(uid,patch){return DB.action('admin_user',Object.assign({},patch,{uid:Number(uid)})).then(function(){return DB.pullUsers();});};
-DB.deleteUser=function(uid){return DB.action('admin_delete_user',{uid:Number(uid)}).then(function(){return DB.pullUsers();});}; // anonymises the account and wipes credentials; financial history is retained
+DB.deleteUser=function(uid){
+ var data={uid:Number(uid)};
+ return DB.operation('delete-user-'+uid,data,function(id){
+  return DB.rpc('bb_action',{p_token:DB.token(),p_action:'admin_delete_user',p_id:id,p_data:data});
+ }).then(function(){return DB.pullUsers();}); // anonymises the account and wipes credentials; financial history is retained
+};
 DB.COLLECTIONS=['bb_trades_history','bb_demo_trades_hist','bb_support_tickets','bb_deposit_requests','bb_deposit_addresses','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_earn_positions','bb_balance_history','bb_ai_quants'];
+// A rejected pull must never stop the other collections (or the page's
+// "bb:updated" render) from completing. Every caller gets a settled list.
+DB.safePull=function(fn){try{return Promise.resolve(fn());}catch(e){return Promise.reject(e);}};
 DB.pullCollection=function(key){
  if(DB._pulls[key])return DB._pulls[key];
  var token=DB.token(),uid=localStorage.getItem('bb_uid');
@@ -122,7 +130,7 @@ DB.pullCollection=function(key){
    DB.set('bb_trade_positions',payload.filter(function(p){return String(p.uid)===uid;}).map(function(p){return Object.assign({},p,{amt:Number(p.amount||p.amt),profit:Number(p.potentialProfit||Math.abs(p.profit)||0)});}));
    localStorage.setItem('bb_trade_pnl',String(payload.filter(function(p){return String(p.uid)===uid;}).reduce(function(sum,p){return sum+Number(p.profit||0);},0)));
   }
-  if(DB._subscribers[key])DB._subscribers[key](key,payload);
+  if(DB._subscribers[key]){try{DB._subscribers[key](key,payload);}catch(e){}};
   return payload;
  }).finally(function(){DB._pulls[key]=null;});return DB._pulls[key];
 };
@@ -139,7 +147,19 @@ DB.pushCollection=function(key){
 // Returns the saved record without waiting for the collection re-read; the
 // caller renders from `result` and the next refresh brings the cache level.
 DB.saveRecord=async function(key,item){var result=await DB.rpc('bb_save_record',{p_token:DB.token(),p_collection:key,p_record:item});DB.pullCollection(key).catch(function(e){DB._lastSyncError='Saved; refresh pending. '+DB.describeUserError(e);});return result;};
-DB.pullAll=function(){var tasks=[DB.pullLocalUser()];if(DB.me&&DB.me.is_admin)tasks.push(DB.fetchUsersLive());DB.COLLECTIONS.forEach(function(k){tasks.push(DB.pullCollection(k));});return Promise.all(tasks);};
+DB.pullAll=function(){
+ // Settle each task so one slow or failing collection cannot hide a completed
+ // order or a credited balance that already arrived. Only a total outage is
+ // surfaced as an error (partial refreshes still update the page).
+ var tasks=[DB.safePull(function(){return DB.pullLocalUser();})];
+ if(DB.me&&DB.me.is_admin)tasks.push(DB.safePull(function(){return DB.fetchUsersLive();}));
+ DB.COLLECTIONS.forEach(function(k){tasks.push(DB.safePull(function(){return DB.pullCollection(k);}));});
+ return Promise.allSettled(tasks).then(function(results){
+  var failed=results.filter(function(r){return r.status==='rejected';});
+  if(failed.length&&failed.length===results.length)throw failed[0].reason;
+  return results;
+ });
+};
 DB.TAB_MAP={deposits:['bb_deposit_requests','bb_deposit_addresses'],withdrawals:['bb_withdrawal_requests'],loans:['bb_loans'],kyc:['bb_kyc_submissions'],trades:['bb_trades_history'],earn:['bb_earn_positions'],aiquants:['bb_ai_quants'],support:['bb_support_tickets'],balances:['bb_balance_history'],analytics:['bb_trades_history','bb_earn_positions','bb_ai_quants'],dashboard:['bb_trades_history']};
 DB.pullTab=function(tab){return Promise.all((DB.TAB_MAP[tab]||[]).map(DB.pullCollection));};
 DB.settleRealTrades=function(){return [];}; // pricing/settlement belongs to the scheduler
@@ -170,12 +190,31 @@ DB.hasDueTrade=function(){
 };
 DB.startLocalPolling=function(interval){
  if(DB._pollTimer)return;
- async function poll(){if(document.hidden||!localStorage.getItem('bb_session_token')||DB._polling)return;DB._polling=true;try{
-  // When a cached order is already past its expiry, settle first and wait for
-  // it, so the balance pulled right after reflects the credited result in the
-  // same pass instead of one poll later.
-  if(DB.hasDueTrade()){await DB.settleDue(true);}else{DB.settleDue();}
-  await DB.pullLocalUser();await Promise.all(DB.COLLECTIONS.map(DB.pullCollection));window.dispatchEvent(new CustomEvent('bb:updated'));}catch(e){DB._lastSyncError=DB.describeUserError(e);window.dispatchEvent(new CustomEvent('bb:sync-error',{detail:DB._lastSyncError}));}finally{DB._polling=false;}}
+ async function poll(){
+  if(document.hidden||!localStorage.getItem('bb_session_token')||DB._polling)return;
+  DB._polling=true;
+  var total=0,failed=0;
+  try{
+   // When a cached order is already past its expiry, settle first and wait for
+   // it, so the balance pulled right after reflects the credited result in the
+   // same pass instead of one poll later.
+   try{if(DB.hasDueTrade()){await DB.settleDue(true);}else{DB.settleDue().catch(function(){});}}catch(e){}
+   total++;try{await DB.pullLocalUser();}catch(e){failed++;DB._lastSyncError=DB.describeUserError(e);}
+   var results=await Promise.allSettled(DB.COLLECTIONS.map(function(k){
+    return DB.safePull(function(){return DB.pullCollection(k);});
+   }));
+   total+=results.length;
+   for(var i=0;i<results.length;i++){
+    if(results[i].status==='rejected'){failed++;DB._lastSyncError=DB.describeUserError(results[i].reason);}
+   }
+   // Render from whatever did arrive, even when another collection failed.
+   window.dispatchEvent(new CustomEvent('bb:updated'));
+   if(failed&&failed===total)window.dispatchEvent(new CustomEvent('bb:sync-error',{detail:DB._lastSyncError||'Connection unavailable. Cached data is shown.'}));
+  }catch(e){
+   DB._lastSyncError=DB.describeUserError(e);
+   window.dispatchEvent(new CustomEvent('bb:sync-error',{detail:DB._lastSyncError}));
+  }finally{DB._polling=false;}
+ }
  DB._pollTimer=setInterval(poll,interval||5000);poll();window.addEventListener('online',poll);document.addEventListener('visibilitychange',poll);
 };
 DB.diagnose=function(){return{version:DB.VERSION,ready:DB.ready,lastError:DB._lastSyncError,lastPullAgoSec:DB._lastPullTime?Math.round((Date.now()-DB._lastPullTime)/1000):-1,realtime:false,serverTickets:(DB.get('bb_support_tickets')||[]).length};};
