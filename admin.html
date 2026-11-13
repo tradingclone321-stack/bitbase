@@ -10,9 +10,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=20261017-instant-v11"></script>
-  <script src="db.js?v=20261017-instant-v11"></script>
-<script src="finance-ui.js?v=20261017-instant-v11"></script>
+  <script src="supabase-config.js?v=20261017-instant-v12"></script>
+  <script src="db.js?v=20261017-instant-v12"></script>
+<script src="finance-ui.js?v=20261017-instant-v12"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#0f0f0f;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
@@ -160,7 +160,7 @@
       <input type="password" id="adminPassword" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()">
     <button id="adminSignIn" onclick="adminLogin()">Sign In</button>
     <div id="adminLoginError" role="alert" style="display:none;margin-top:12px;padding:12px;background:#391c21;border:1px solid #a64855;border-radius:8px;font-size:12px;line-height:1.6;text-align:left;color:#ffd6dc;"></div>
-    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v11</span> · Sign in with your account email and password.</div>
+    <div style="margin-top:14px;color:#888;font-size:11px;">Admin update <span id="adminReleaseLabel">2026-10-17-instant-v12</span> · Sign in with your account email and password.</div>
   </div>
 </div>
 
@@ -669,7 +669,8 @@ var currentTradeFilter='all';
 var currentWithdrawalFilter='all';
 var adminSupportPollTimer=null;
 var adminLastMsgCount=0;
-var ADMIN_BUILD='2026-10-17-instant-v11';
+var GUEST_TICKET_COLLECTION='bb_guest_support';
+var ADMIN_BUILD='2026-10-17-instant-v12';
 
 function adminLoginError(message){var box=document.getElementById('adminLoginError');box.textContent=message||'';box.style.display=message?'block':'none';}
 // Only a script that genuinely failed to load can block the panel. A version
@@ -771,21 +772,30 @@ function getAllTrades(){
     return JSON.parse(raw);
   }catch(e){return[];}
 }
-function getAllTickets(){
+function getAccountTicketsRaw(){
   try{
     var raw=localStorage.getItem('bb_support_tickets');
     if(!raw)return[];
     var arr=JSON.parse(raw);
-    // Hide deletion tombstones from every consumer (list, open, stats).
-    return arr.filter(function(t){return t && t.status!=='deleted';});
+    return Array.isArray(arr)?arr:[];
   }catch(e){return[];}
 }
-function getAllTicketsRaw(){
+function getGuestTicketsRaw(){
   try{
-    var raw=localStorage.getItem('bb_support_tickets');
+    var raw=localStorage.getItem(GUEST_TICKET_COLLECTION);
     if(!raw)return[];
-    return JSON.parse(raw);
+    var arr=JSON.parse(raw);
+    return Array.isArray(arr)?arr:[];
   }catch(e){return[];}
+}
+// Guest conversations live in their own server collection so they never appear
+// in a signed-in member's own support chat. The administrator's Support tab
+// shows both lists, newest activity first.
+function getAllTickets(){
+  return getAccountTicketsRaw().concat(getGuestTicketsRaw()).filter(function(t){return t && t.status!=='deleted';});
+}
+function getAllTicketsRaw(){
+  return getAccountTicketsRaw().concat(getGuestTicketsRaw());
 }
 function saveTickets(tickets){
   if(!Array.isArray(tickets))tickets=[];
@@ -1128,8 +1138,9 @@ function refreshTickets(){
   for(var i=0;i<filtered.length;i++){
     var t=filtered[i];
     var statusDot=t.status==='open'?'background:#f7931a;':'background:#16c784;';
-    var lastMsg=t.messages&&t.messages.length?t.messages[t.messages.length-1].text:'No messages';
+    var lastMsg=t.messages&&t.messages.length?String(t.messages[t.messages.length-1].text||'No messages'):'No messages';
     if(lastMsg.length>60)lastMsg=lastMsg.substring(0,60)+'...';
+    lastMsg=escapeUserText(lastMsg);
     var activeClass=t.id===currentTicketId?'active':'';
     // Unseen user messages -> bold row + orange count badge.
     var unseen=countUserMsgs(t)-getTicketSeenCount(t.id);
@@ -1137,10 +1148,11 @@ function refreshTickets(){
     var rowStyle=unseen>0?'background:rgba(247,147,26,0.09);border-left:3px solid #f7931a;':'';
     var nameStyle=unseen>0?'font-weight:800;color:#fff;':'';
     var badge=unseen>0?'<span style="background:#f7931a;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;margin-left:6px;">'+unseen+'</span>':'';
+    var guestBadge=t.guest?'<span style="background:rgba(65,105,225,0.18);color:#8aa4ff;border-radius:6px;padding:1px 6px;font-size:9px;font-weight:800;margin-left:6px;letter-spacing:0.03em;">GUEST</span>':'';
     var prevStyle=unseen>0?'font-weight:700;color:rgba(255,255,255,0.9);':'';
     html+='<div class="ticket-item '+activeClass+'" style="'+rowStyle+'" onclick="openTicket(\''+t.id+'\')">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
-        '<span class="name" style="'+nameStyle+'">'+escapeUserText(t.userName)+' ('+t.userId+')</span>'+badge+
+        '<span class="name" style="'+nameStyle+'">'+escapeUserText(t.userName||(t.guest?'Guest':'User'))+' ('+escapeUserText(t.userId||'guest')+')'+guestBadge+badge+'</span>'+
         '<span class="time">'+fmtTime(t.createdAt)+'</span>'+
       '</div>'+
       '<div style="display:flex;align-items:center;gap:6px;">'+
@@ -1168,7 +1180,7 @@ function openTicket(id){
   document.getElementById('chatEmpty').style.display='none';
   document.getElementById('chatActive').style.display='flex';
   document.getElementById('chatUserName').textContent=ticket.userName+' ('+ticket.userId+')';
-  document.getElementById('chatUserEmail').textContent=ticket.userEmail+' • '+fmtTime(ticket.createdAt);
+  document.getElementById('chatUserEmail').textContent=(ticket.userEmail||'No email')+(ticket.subject?' • '+ticket.subject:'')+' • '+fmtTime(ticket.createdAt);
   var statusBadge=ticket.status==='open'?'<span class="badge-yellow">Open</span>':'<span class="badge-green">Resolved</span>';
   document.getElementById('chatStatus').innerHTML=statusBadge;
   renderChatMessages(ticket);
@@ -1209,10 +1221,13 @@ function startAdminSupportPoll(){
   if(adminSupportPollTimer)clearInterval(adminSupportPollTimer);
   function checkNew(){
     if(!currentTicketId){stopAdminSupportPoll();return;}
-    var pullPromise=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
+    var pullPromise=(typeof DB!=='undefined'&&DB.ready)?Promise.all([
+      DB.pullCollection('bb_support_tickets').catch(function(){}),
+      DB.pullCollection(GUEST_TICKET_COLLECTION).catch(function(){})
+    ]):Promise.resolve();
     pullPromise.then(function(){
       try{
-        var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+        var tickets=getAllTicketsRaw();
         for(var i=0;i<tickets.length;i++){
           if(tickets[i].id===currentTicketId){
             var msgs=tickets[i].messages||[];
@@ -1239,12 +1254,15 @@ function stopAdminSupportPoll(){
 function forceSync(role){
   var st=document.getElementById(role==='admin'?'syncStatus':'supportSyncStatus');
   if(st)st.innerHTML='<span style="color:#f7931a;">●</span> syncing...';
-  var doPull=(typeof DB!=='undefined'&&DB.ready)?DB.pullCollection('bb_support_tickets'):Promise.resolve();
+  var doPull=(typeof DB!=='undefined'&&DB.ready)?Promise.all([
+    DB.pullCollection('bb_support_tickets').catch(function(){}),
+    DB.pullCollection(GUEST_TICKET_COLLECTION).catch(function(){})
+  ]):Promise.resolve();
   doPull.then(function(){
     try{
       refreshTickets();
       if(role==='admin'&&currentTicketId){
-        var tickets=JSON.parse(localStorage.getItem('bb_support_tickets')||'[]');
+        var tickets=getAllTicketsRaw();
         for(var i=0;i<tickets.length;i++){
           if(tickets[i].id===currentTicketId){renderChatMessages(tickets[i]);adminLastMsgCount=(tickets[i].messages||[]).length;break;}
         }
@@ -1270,10 +1288,13 @@ function refreshSupportLive(key, payload){
       if(!Array.isArray(local))local=[];
       localStorage.setItem('bb_support_tickets', JSON.stringify(DB._ticketMerge(local, payload)));
     }catch(e){}
-    renderSupportLive();
+    DB.pullCollection(GUEST_TICKET_COLLECTION).catch(function(){}).then(renderSupportLive);
     return;
   }
-  DB.pullCollection('bb_support_tickets').then(function(){renderSupportLive();},function(){});
+  Promise.all([
+    DB.pullCollection('bb_support_tickets').catch(function(){}),
+    DB.pullCollection(GUEST_TICKET_COLLECTION).catch(function(){})
+  ]).then(renderSupportLive);
 }
 function renderSupportLive(){
   try{
@@ -1371,13 +1392,29 @@ function openAttModal(idx){
   document.body.appendChild(overlay);
 }
 // Ticket writes are queued and each one starts from the newest server copy, so
-// two quick replies can never overwrite each other.
+// two quick replies can never overwrite each other. Guest conversations use
+// their own collection but the same administrator controls.
 var _ticketSaveChain=Promise.resolve();
-function saveTicketRecord(build){
+function ticketCollection(t){return t&&t.guest?GUEST_TICKET_COLLECTION:'bb_support_tickets';}
+function saveTicketRecord(build,collection){
+ collection=collection||'bb_support_tickets';
  _ticketSaveChain=_ticketSaveChain.catch(function(){}).then(function(){
-  var latest=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});
+  var source=collection===GUEST_TICKET_COLLECTION?getGuestTicketsRaw():getAccountTicketsRaw();
+  var latest=source.find(function(t){return t.id===currentTicketId;});
   var record=build(latest);
-  return DB.saveRecord('bb_support_tickets',record).then(function(saved){
+  return DB.saveRecord(collection,record).then(function(saved){
+   // Keep the local collection current immediately. DB.saveRecord refreshes
+   // the cache in the background, and two quick replies must not build the
+   // second one from a version that is already stale on the server.
+   try{
+    var list=collection===GUEST_TICKET_COLLECTION?getGuestTicketsRaw():getAccountTicketsRaw();
+    var replaced=false;
+    for(var i=0;i<list.length;i++){
+     if(list[i]&&list[i].id===saved.id){list[i]=saved;replaced=true;break;}
+    }
+    if(!replaced)list.push(saved);
+    localStorage.setItem(collection,JSON.stringify(list));
+   }catch(e){}
    if(currentTicketId===record.id)renderChatMessages(saved);
    return saved;
   });
@@ -1391,15 +1428,17 @@ function replyToTicket(){
  var withMessage=function(src){var s=src||base;return Object.assign({},s,{lastAdminReply:message.time,messages:(s.messages||[]).concat([message])});};
  // Draw the reply on the same click, then let the queued write confirm it.
  input.value='';renderChatMessages(withMessage(base));
- return FinanceUI.do('support-reply-'+message.id,function(){return saveTicketRecord(withMessage);},'Reply sent.');
+ return FinanceUI.do('support-reply-'+message.id,function(){return saveTicketRecord(withMessage,ticketCollection(base));},'Reply sent.');
 }
 function resolveTicket(){
  var base=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!base)return;
- return FinanceUI.do('support-resolve-'+base.id+'-'+Date.now(),function(){return saveTicketRecord(function(src){return Object.assign({},src||base,{status:'resolved'});});},'Conversation status saved.');
+ var collection=ticketCollection(base);
+ return FinanceUI.do('support-resolve-'+base.id+'-'+Date.now(),function(){return saveTicketRecord(function(src){return Object.assign({},src||base,{status:'resolved'});},collection);},'Conversation status saved.');
 }
 function deleteTicket(){
  var base=getAllTicketsRaw().find(function(t){return t.id===currentTicketId;});if(!base)return;
- return FinanceUI.do('support-delete-'+base.id+'-'+Date.now(),function(){return saveTicketRecord(function(src){return Object.assign({},src||base,{status:'deleted'});});},'Conversation status saved.');
+ var collection=ticketCollection(base);
+ return FinanceUI.do('support-delete-'+base.id+'-'+Date.now(),function(){return saveTicketRecord(function(src){return Object.assign({},src||base,{status:'deleted'});},collection);},'Conversation status saved.');
 }
 // ===== TRADES =====
 // Orders carry the owner's uid; the name comes from the live user list so an

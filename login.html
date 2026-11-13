@@ -10,9 +10,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-config.js?v=20261017-instant-v10"></script>
-    <script src="db.js?v=20261017-instant-v10"></script>
-<script src="finance-ui.js?v=20261017-instant-v10"></script>
+    <script src="supabase-config.js?v=20261017-instant-v12"></script>
+    <script src="db.js?v=20261017-instant-v12"></script>
+<script src="finance-ui.js?v=20261017-instant-v12"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -95,6 +95,104 @@
             height: 16px;
             accent-color: #f7931a;
         }
+        /* Guest customer service */
+        #guestSupportFab {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1100;
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(135deg, #f7931a, #e88417);
+            box-shadow: 0 6px 24px rgba(247,147,26,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            transition: transform 0.15s;
+        }
+        #guestSupportFab:hover { transform: scale(1.06); }
+        #guestSupportBadge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 19px;
+            height: 19px;
+            padding: 0 5px;
+            border-radius: 10px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 800;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #0f0f0f;
+        }
+        .gs-input {
+            width: 100%;
+            padding: 12px 14px;
+            background-color: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .gs-input:focus { border-color: #f7931a; }
+        .gs-input::placeholder { color: #666; }
+        textarea.gs-input { resize: vertical; min-height: 96px; line-height: 1.5; }
+        .gs-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #d1d5db;
+            margin-bottom: 6px;
+        }
+        #guestSupportMessages {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 180px;
+            max-height: 42vh;
+            padding: 4px 2px 10px;
+        }
+        .gs-msg {
+            max-width: 86%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .gs-msg.user {
+            align-self: flex-end;
+            background: rgba(247,147,26,0.14);
+            border: 1px solid rgba(247,147,26,0.28);
+            border-bottom-right-radius: 4px;
+        }
+        .gs-msg.admin {
+            align-self: flex-start;
+            background: rgba(65,105,225,0.14);
+            border: 1px solid rgba(65,105,225,0.28);
+            border-bottom-left-radius: 4px;
+        }
+        .gs-msg-time {
+            font-size: 10px;
+            color: rgba(255,255,255,0.35);
+            margin-top: 5px;
+        }
+        @media (max-width: 480px) {
+            #guestSupportFab { right: 14px; bottom: 14px; width: 48px; height: 48px; }
+            .gs-msg { max-width: 90%; font-size: 12px; padding: 8px 12px; }
+        }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -150,6 +248,95 @@
         <p class="text-center mt-8 text-gray-400 text-sm">
             Don't have an account? <a href="register.html" class="text-accent font-medium hover:underline">Sign up</a>
         </p>
+        <p class="text-center mt-3">
+            <button type="button" onclick="openGuestSupport()" style="background:none;border:none;color:#f7931a;font-size:14px;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">Contact customer service</button>
+        </p>
+    </div>
+
+    <!-- Guest customer service: available before signing in -->
+    <button id="guestSupportFab" type="button" onclick="toggleGuestSupport()" aria-label="Contact customer service" title="Contact customer service" aria-expanded="false">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        <span id="guestSupportBadge" aria-hidden="true">0</span>
+    </button>
+
+    <div id="guestSupportPanel" role="dialog" aria-modal="false" aria-labelledby="guestSupportTitle" style="display:none;position:fixed;right:20px;bottom:20px;z-index:1200;width:min(400px,calc(100vw - 32px));height:min(640px,calc(100vh - 40px));background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.55);overflow:hidden;flex-direction:column;">
+        <div style="background:linear-gradient(135deg,#f7931a,#e88417);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+                </div>
+                <div style="min-width:0;">
+                    <div id="guestSupportTitle" style="font-size:15px;font-weight:700;color:#fff;">Customer Service</div>
+                    <div id="guestSupportSubtitle" style="font-size:11px;color:rgba(255,255,255,0.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">We usually reply within a few hours</div>
+                </div>
+            </div>
+            <button type="button" onclick="closeGuestSupport()" aria-label="Close customer service" style="background:rgba(255,255,255,0.18);border:none;color:#fff;width:30px;height:30px;border-radius:8px;font-size:20px;line-height:1;cursor:pointer;flex-shrink:0;">&times;</button>
+        </div>
+        <div id="guestSupportBody" style="flex:1;min-height:0;overflow-y:auto;padding:16px 18px 18px;display:flex;flex-direction:column;">
+            <div id="guestSupportStartView">
+                <p style="font-size:12px;line-height:1.5;color:rgba(255,255,255,0.55);margin:0 0 14px;">Send a message to our team. No account is needed, and replies appear right here.</p>
+                <form id="guestSupportStartForm" onsubmit="guestSupportStart(event)" novalidate>
+                    <div style="margin-bottom:10px;">
+                        <label class="gs-label" for="gsName">Your name</label>
+                        <input id="gsName" class="gs-input" type="text" maxlength="80" autocomplete="name" placeholder="Enter your name">
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <label class="gs-label" for="gsEmail">Email <span style="font-weight:400;color:rgba(255,255,255,0.35);">(optional)</span></label>
+                        <input id="gsEmail" class="gs-input" type="email" maxlength="180" autocomplete="email" placeholder="Where we can reach you">
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <label class="gs-label" for="gsSubject">Subject</label>
+                        <input id="gsSubject" class="gs-input" type="text" maxlength="140" placeholder="How can we help?">
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <label class="gs-label" for="gsMessage">Message</label>
+                        <textarea id="gsMessage" class="gs-input" maxlength="4000" rows="4" placeholder="Describe your question or issue"></textarea>
+                    </div>
+                    <div style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;" aria-hidden="true">
+                        <label for="gsCompany">Company</label>
+                        <input id="gsCompany" type="text" tabindex="-1" autocomplete="off">
+                    </div>
+                    <div id="guestSupportStartError" style="display:none;margin:0 0 10px;padding:9px 12px;border-radius:8px;background:rgba(234,57,67,0.1);border:1px solid rgba(234,57,67,0.25);color:#ff6b74;font-size:12px;line-height:1.4;"></div>
+                    <button id="guestSupportStartBtn" type="submit" class="btn-primary" style="height:44px;font-size:14px;">Start conversation</button>
+                </form>
+                <div style="text-align:center;margin-top:12px;">
+                    <button type="button" onclick="guestSupportShowResume()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:11px;cursor:pointer;text-decoration:underline;">I already have a resume code</button>
+                </div>
+            </div>
+            <div id="guestSupportResumeView" style="display:none;">
+                <button type="button" onclick="guestSupportBackToStart()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:12px;cursor:pointer;padding:0;margin-bottom:14px;">&larr; Back</button>
+                <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 6px;">Resume a conversation</h3>
+                <p style="font-size:12px;line-height:1.5;color:rgba(255,255,255,0.55);margin:0 0 14px;">Paste the resume code you copied earlier. It looks like <span style="font-family:'IBM Plex Mono',monospace;color:rgba(255,255,255,0.75);">GST-... . ...</span></p>
+                <form id="guestSupportResumeForm" onsubmit="guestSupportResume(event)" novalidate>
+                    <input id="guestSupportResumeInput" class="gs-input" type="text" maxlength="300" autocomplete="off" spellcheck="false" placeholder="Paste your resume code" style="font-family:'IBM Plex Mono',monospace;font-size:12px;">
+                    <div id="guestSupportResumeError" style="display:none;margin:8px 0 0;padding:9px 12px;border-radius:8px;background:rgba(234,57,67,0.1);border:1px solid rgba(234,57,67,0.25);color:#ff6b74;font-size:12px;line-height:1.4;"></div>
+                    <button id="guestSupportResumeBtn" type="submit" class="btn-primary" style="height:44px;font-size:14px;margin-top:12px;">Resume conversation</button>
+                </form>
+            </div>
+            <div id="guestSupportChatView" style="display:none;flex:1;min-height:0;flex-direction:column;">
+                <div id="guestSupportNotice" style="display:none;flex-shrink:0;margin-bottom:10px;padding:9px 12px;border-radius:8px;background:rgba(247,147,26,0.1);border:1px solid rgba(247,147,26,0.25);color:#f7b45c;font-size:12px;line-height:1.4;"></div>
+                <div id="guestSupportMessages"></div>
+                <div id="guestSupportResumeBox" style="flex-shrink:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:9px 11px;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
+                        <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.45);">Resume code</span>
+                        <button type="button" onclick="guestSupportCopyResume(this)" style="background:rgba(247,147,26,0.12);border:1px solid rgba(247,147,26,0.3);color:#f7931a;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">Copy</button>
+                    </div>
+                    <div id="guestSupportResumeCode" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(255,255,255,0.72);word-break:break-all;"></div>
+                    <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;">Keep this private. It reopens this chat in another browser.</div>
+                </div>
+                <form id="guestSupportSendForm" onsubmit="guestSupportSend(event)" novalidate style="flex-shrink:0;">
+                    <div style="display:flex;gap:8px;align-items:flex-end;">
+                        <textarea id="guestSupportInput" class="gs-input" rows="2" maxlength="4000" placeholder="Type your message..." style="min-height:44px;max-height:110px;resize:none;line-height:1.4;"></textarea>
+                        <button id="guestSupportSendBtn" type="submit" style="height:44px;padding:0 16px;border:none;border-radius:10px;background:linear-gradient(135deg,#f7931a,#e88417);color:#fff;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">Send</button>
+                    </div>
+                    <div id="guestSupportSendError" style="display:none;margin:8px 0 0;padding:9px 12px;border-radius:8px;background:rgba(234,57,67,0.1);border:1px solid rgba(234,57,67,0.25);color:#ff6b74;font-size:12px;line-height:1.4;"></div>
+                </form>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;flex-shrink:0;">
+                    <button type="button" onclick="guestSupportNew()" style="background:none;border:none;color:rgba(255,255,255,0.45);font-size:11px;cursor:pointer;padding:0;text-decoration:underline;">Start new conversation</button>
+                    <span id="guestSupportThreadLabel" style="font-size:10px;color:rgba(255,255,255,0.25);font-family:'IBM Plex Mono',monospace;"></span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Forgot Password Modal -->
@@ -261,6 +448,507 @@
             document.body.appendChild(t);
             setTimeout(function(){ t.remove(); }, 3000);
         }
+    </script>
+
+    <script>
+    // ===== Guest customer service (login page) =====
+    // The browser keeps a random conversation key. Only a SHA-256 hash of that
+    // key is stored on the server, so a stolen database dump cannot read a
+    // guest conversation. The resume code is simply the thread ID plus the key.
+    (function(){
+        'use strict';
+        var ID_KEY='bb_guest_support_identity';
+        var PROFILE_KEY='bb_guest_support_profile';
+        var SEEN_KEY='bb_guest_support_seen';
+        var PENDING_KEY='bb_guest_support_pending';
+        var CACHE_PREFIX='bb_guest_support_cache:';
+        var POLL_MS=6000;
+        var refreshPromise=null;
+        var pollTimer=null;
+        var busyStart=false,busySend=false,busyResume=false;
+
+        function $(id){return document.getElementById(id);}
+        function getJSON(key,fallback){
+            try{var v=JSON.parse(localStorage.getItem(key));return v==null?fallback:v;}catch(e){return fallback;}
+        }
+        function setJSON(key,v){try{localStorage.setItem(key,JSON.stringify(v));}catch(e){}}
+        function remove(key){try{localStorage.removeItem(key);}catch(e){}}
+
+        function identity(){
+            var v=getJSON(ID_KEY,null);
+            if(!v||typeof v.id!=='string'||typeof v.key!=='string')return null;
+            if(!/^GST-[A-Za-z0-9]{8,60}$/.test(v.id)||v.key.length<32||v.key.length>120)return null;
+            return {id:v.id,key:v.key,savedAt:v.savedAt||0,pending:!!v.pending,pendingStart:v.pendingStart||null};
+        }
+        function saveIdentity(v){setJSON(ID_KEY,v);}
+        function clearIdentity(){
+            var v=identity();
+            if(v)remove(CACHE_PREFIX+v.id);
+            remove(ID_KEY);
+        }
+        function randomHex(bytes){
+            var a=new Uint8Array(bytes);
+            if(window.crypto&&typeof window.crypto.getRandomValues==='function')window.crypto.getRandomValues(a);
+            else for(var i=0;i<a.length;i++)a[i]=Math.floor(Math.random()*256);
+            var out='';
+            for(var j=0;j<a.length;j++)out+=('0'+a[j].toString(16)).slice(-2);
+            return out;
+        }
+        function newIdentity(){return {id:'GST-'+randomHex(12),key:randomHex(24),savedAt:Date.now()};}
+        function resumeCode(v){return v.id+'.'+v.key;}
+        function parseCode(raw){
+            var s=String(raw||'').replace(/\s+/g,'');
+            var m=s.match(/^(GST-[A-Za-z0-9]{8,60})[.:|]([A-Za-z0-9_-]{32,120})$/);
+            return m?{id:m[1],key:m[2],savedAt:Date.now()}:null;
+        }
+        function profile(){
+            var p=getJSON(PROFILE_KEY,{});
+            return p&&typeof p==='object'?p:{};
+        }
+        function saveProfile(name,email){setJSON(PROFILE_KEY,{name:name||'',email:email||''});}
+
+        function seenMap(){
+            var m=getJSON(SEEN_KEY,{});
+            return m&&typeof m==='object'?m:{};
+        }
+        function seenCount(id){return Number(seenMap()[id])||0;}
+        function markSeen(id,count){
+            var m=seenMap();m[id]=count;setJSON(SEEN_KEY,m);
+        }
+        function adminCount(thread){
+            var msgs=thread&&Array.isArray(thread.messages)?thread.messages:[];
+            var n=0;
+            for(var i=0;i<msgs.length;i++){if(msgs[i]&&msgs[i].from==='admin')n++;}
+            return n;
+        }
+        function cacheThread(thread){
+            if(!thread||!thread.id)return;
+            try{localStorage.setItem(CACHE_PREFIX+thread.id,JSON.stringify(thread));}catch(e){}
+        }
+        function cachedThread(v){var t=getJSON(CACHE_PREFIX+v.id,null);return t&&t.id===v.id?t:null;}
+
+        function updateBadge(thread){
+            var badge=$('guestSupportBadge');
+            if(!badge)return;
+            var unseen=Math.max(0,adminCount(thread)-seenCount(thread.id));
+            if(unseen>0){badge.textContent=String(unseen);badge.style.display='flex';}
+            else{badge.style.display='none';}
+        }
+        function showView(name){
+            var start=$('guestSupportStartView'),resume=$('guestSupportResumeView'),chat=$('guestSupportChatView');
+            if(!start||!resume||!chat)return;
+            start.style.display=name==='start'?'block':'none';
+            resume.style.display=name==='resume'?'block':'none';
+            chat.style.display=name==='chat'?'flex':'none';
+            if(name==='chat')chat.style.flexDirection='column';
+        }
+        function showErrorBox(id,msg){
+            var el=$(id);
+            if(!el)return;
+            el.textContent=msg||'';
+            el.style.display=msg?'block':'none';
+        }
+        function errorText(err){
+            var m=err&&err.message?String(err.message):'Connection unavailable. Try again.';
+            if(/failed to fetch|networkerror|network error|load failed|timed out|DB_TIMEOUT/i.test(m))return 'Connection problem. Check your internet and try again.';
+            try{if(typeof DB!=='undefined'&&DB.describeUserError)return DB.describeUserError(err);}catch(e){}
+            return m;
+        }
+        function setBusy(btn,busy,label){
+            if(!btn)return;
+            if(busy){
+                if(!btn.dataset.gsLabel)btn.dataset.gsLabel=btn.textContent;
+                btn.textContent=label||'Please wait...';
+                btn.disabled=true;
+                btn.style.opacity='0.7';
+            }else{
+                btn.textContent=btn.dataset.gsLabel||btn.textContent;
+                btn.disabled=false;
+                btn.style.opacity='';
+            }
+        }
+        function fmtTime(ts){
+            var n=Number(ts);
+            if(!n)return '';
+            try{return new Date(n).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
+            catch(e){return '';}
+        }
+
+        function renderLoading(){
+            var box=$('guestSupportMessages');
+            if(!box)return;
+            box.innerHTML='';
+            var el=document.createElement('div');
+            el.style.cssText='font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:18px 0;';
+            el.textContent='Loading conversation...';
+            box.appendChild(el);
+        }
+        function renderThread(thread){
+            if(!thread||!thread.id)return;
+            var current=identity();
+            if(!current||current.id!==thread.id)return;
+            cacheThread(thread);
+            var msgs=Array.isArray(thread.messages)?thread.messages:[];
+            var box=$('guestSupportMessages');
+            if(!box)return;
+            box.innerHTML='';
+            if(!msgs.length){
+                var empty=document.createElement('div');
+                empty.style.cssText='font-size:12px;color:rgba(255,255,255,0.35);text-align:center;padding:18px 0;';
+                empty.textContent='No messages yet.';
+                box.appendChild(empty);
+            }else{
+                for(var i=0;i<msgs.length;i++){
+                    var m=msgs[i]||{};
+                    var row=document.createElement('div');
+                    row.className='gs-msg '+(m.from==='admin'?'admin':'user');
+                    var txt=document.createElement('div');
+                    txt.textContent=String(m.text||'');
+                    row.appendChild(txt);
+                    var time=document.createElement('div');
+                    time.className='gs-msg-time';
+                    time.textContent=fmtTime(m.time);
+                    row.appendChild(time);
+                    box.appendChild(row);
+                }
+            }
+            var status=String(thread.status||'open').toLowerCase();
+            var notice=$('guestSupportNotice');
+            var form=$('guestSupportSendForm');
+            var resumeBox=$('guestSupportResumeBox');
+            if(status==='deleted'){
+                notice.textContent='This conversation was closed by customer service. Start a new conversation if you need more help.';
+                notice.style.display='block';
+                if(form)form.style.display='none';
+                if(resumeBox)resumeBox.style.display='none';
+            }else if(status==='resolved'){
+                notice.textContent='Customer service marked this conversation resolved. If you still need help, send another message and it will reopen.';
+                notice.style.display='block';
+                if(form)form.style.display='block';
+                if(resumeBox)resumeBox.style.display='block';
+            }else{
+                notice.style.display='none';
+                if(form)form.style.display='block';
+                if(resumeBox)resumeBox.style.display='block';
+            }
+            var code=$('guestSupportResumeCode');
+            if(code)code.textContent=resumeCode(current);
+            var sendInput=$('guestSupportInput');
+            if(status!=='deleted'&&sendInput&&!sendInput.value){
+                var pendingForThread=pendingMap()[thread.id];
+                if(pendingForThread&&pendingForThread.body){
+                    sendInput.value=pendingForThread.body;
+                    showErrorBox('guestSupportSendError','Your last message was not confirmed. Send it again — the server will not post it twice.');
+                }
+            }
+            var label=$('guestSupportThreadLabel');
+            if(label)label.textContent='#'+current.id.slice(-6).toUpperCase();
+            var subtitle=$('guestSupportSubtitle');
+            if(subtitle)subtitle.textContent=status==='deleted'?'Conversation closed':status==='resolved'?'Resolved — reply to reopen':'We usually reply within a few hours';
+            var panel=$('guestSupportPanel');
+            if(panel&&panel.style.display!=='none'){
+                markSeen(thread.id,adminCount(thread));
+                var badge=$('guestSupportBadge');
+                if(badge)badge.style.display='none';
+            }else{
+                updateBadge(thread);
+            }
+            setTimeout(function(){box.scrollTop=box.scrollHeight;},0);
+        }
+        function refreshThread(silent){
+            var id=identity();
+            if(!id||id.pending)return Promise.resolve(null);
+            if(refreshPromise)return refreshPromise;
+            refreshPromise=DB.rpc('bb_guest_support_read',{p_thread:id.id,p_key:id.key}).then(function(thread){
+                var current=identity();
+                if(!current||current.id!==id.id||current.pending)return null;
+                if(!thread||!thread.id)throw new Error('Conversation not found');
+                cacheThread(thread);
+                updateBadge(thread);
+                var panel=$('guestSupportPanel');
+                if(panel&&panel.style.display!=='none')renderThread(thread);
+                return thread;
+            }).catch(function(err){
+                var current=identity();
+                if(!current||current.id!==id.id||current.pending)return null;
+                var msg=errorText(err);
+                if(/Conversation not found/i.test(msg)){
+                    clearIdentity();
+                    var panel=$('guestSupportPanel');
+                    if(panel&&panel.style.display!=='none'){
+                        showView('start');
+                        showErrorBox('guestSupportStartError','That conversation is no longer available. Start a new one below.');
+                    }
+                }else if(!silent){
+                    showErrorBox('guestSupportSendError',msg);
+                }
+                return null;
+            }).then(function(result){refreshPromise=null;return result;});
+            return refreshPromise;
+        }
+
+        function openGuestSupport(){
+            var panel=$('guestSupportPanel'),fab=$('guestSupportFab');
+            if(!panel)return;
+            panel.style.display='flex';
+            if(fab){fab.style.display='none';fab.setAttribute('aria-expanded','true');}
+            var id=identity();
+            if(!id||id.pending){
+                showView('start');
+                var p=profile(),ps=id&&id.pendingStart?id.pendingStart:null;
+                var name=$('gsName'),email=$('gsEmail'),subject=$('gsSubject'),body=$('gsMessage');
+                if(name&&!name.value)name.value=(ps&&ps.name)||p.name||'';
+                if(email&&!email.value)email.value=(ps&&ps.email)||p.email||'';
+                if(subject&&!subject.value&&ps&&ps.subject)subject.value=ps.subject;
+                if(body&&!body.value&&ps&&ps.body)body.value=ps.body;
+                if(ps)showErrorBox('guestSupportStartError','Your last attempt may already have reached us. Press Start conversation again to retry safely — it will not post twice.');
+                setTimeout(function(){if(name&&!name.value)name.focus();},50);
+            }else{
+                showView('chat');
+                if(fab)fab.style.display='none';
+                var cached=cachedThread(id);
+                if(cached)renderThread(cached);else renderLoading();
+                refreshThread(false);
+            }
+        }
+        function closeGuestSupport(){
+            var panel=$('guestSupportPanel'),fab=$('guestSupportFab');
+            if(panel)panel.style.display='none';
+            if(fab){fab.style.display='flex';fab.setAttribute('aria-expanded','false');}
+            var id=identity();
+            if(id){
+                var t=cachedThread(id);
+                if(t){markSeen(id.id,adminCount(t));updateBadge(t);}
+            }
+        }
+        function toggleGuestSupport(){
+            var panel=$('guestSupportPanel');
+            if(panel&&panel.style.display!=='none')closeGuestSupport();
+            else openGuestSupport();
+        }
+        function guestSupportShowResume(){
+            showView('resume');
+            showErrorBox('guestSupportResumeError','');
+            var input=$('guestSupportResumeInput');
+            if(input)setTimeout(function(){input.focus();},50);
+        }
+        function guestSupportBackToStart(){
+            showView('start');
+            showErrorBox('guestSupportResumeError','');
+        }
+
+        function guestSupportStart(e){
+            e.preventDefault();
+            if(busyStart)return;
+            var nameEl=$('gsName'),emailEl=$('gsEmail'),subjectEl=$('gsSubject'),bodyEl=$('gsMessage'),honeyEl=$('gsCompany');
+            var name=nameEl?nameEl.value.trim():'',email=emailEl?emailEl.value.trim():'';
+            var subject=subjectEl?subjectEl.value.trim():'',body=bodyEl?bodyEl.value.trim():'';
+            var honey=honeyEl?honeyEl.value:'';
+            if(!name){showErrorBox('guestSupportStartError','Enter your name.');if(nameEl)nameEl.focus();return;}
+            if(name.length>80){showErrorBox('guestSupportStartError','Your name is too long.');return;}
+            if(email&&(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||email.length>180)){showErrorBox('guestSupportStartError','Enter a valid email address or leave it blank.');if(emailEl)emailEl.focus();return;}
+            if(!subject){showErrorBox('guestSupportStartError','Enter a subject.');if(subjectEl)subjectEl.focus();return;}
+            if(subject.length>140){showErrorBox('guestSupportStartError','Keep the subject under 140 characters.');return;}
+            if(!body){showErrorBox('guestSupportStartError','Enter a message.');if(bodyEl)bodyEl.focus();return;}
+            if(body.length>4000){showErrorBox('guestSupportStartError','Keep the message under 4,000 characters.');return;}
+            var id=identity()||newIdentity();
+            id.pending=true;
+            id.pendingStart={name:name,email:email,subject:subject,body:body};
+            saveIdentity(id);
+            busyStart=true;
+            setBusy($('guestSupportStartBtn'),true,'Starting...');
+            showErrorBox('guestSupportStartError','');
+            DB.rpc('bb_guest_support_start',{
+                p_thread:id.id,p_key:id.key,p_name:name,p_email:email,
+                p_subject:subject,p_body:body,p_honey:honey
+            }).then(function(){
+                id.pending=false;
+                delete id.pendingStart;
+                saveIdentity(id);
+                saveProfile(name,email);
+                if(subjectEl)subjectEl.value='';
+                if(bodyEl)bodyEl.value='';
+                var now=Date.now();
+                var optimistic={
+                    id:id.id,status:'open',guest:true,guestName:name,guestEmail:email,
+                    subject:subject,userName:'Guest: '+name,userEmail:email,userId:'guest',
+                    createdAt:now,updatedAt:now,
+                    messages:[{id:'local-start',from:'user',text:body,time:now}]
+                };
+                cacheThread(optimistic);
+                showView('chat');
+                renderThread(optimistic);
+                refreshThread(true);
+            }).catch(function(err){
+                var msg=errorText(err);
+                if(/Conversation not found|Conversation closed|Invalid conversation (ID|key)/i.test(msg))clearIdentity();
+                showErrorBox('guestSupportStartError',msg);
+            }).then(function(){
+                busyStart=false;
+                setBusy($('guestSupportStartBtn'),false);
+            });
+        }
+
+        function guestSupportResume(e){
+            e.preventDefault();
+            if(busyResume)return;
+            var parsed=parseCode($('guestSupportResumeInput')?$('guestSupportResumeInput').value:'');
+            if(!parsed){
+                showErrorBox('guestSupportResumeError','Enter a valid resume code. It looks like GST-... . ...');
+                return;
+            }
+            parsed.pending=false;
+            busyResume=true;
+            setBusy($('guestSupportResumeBtn'),true,'Checking...');
+            showErrorBox('guestSupportResumeError','');
+            DB.rpc('bb_guest_support_read',{p_thread:parsed.id,p_key:parsed.key}).then(function(thread){
+                saveIdentity(parsed);
+                cacheThread(thread);
+                showView('chat');
+                renderThread(thread);
+                var input=$('guestSupportResumeInput');
+                if(input)input.value='';
+                refreshThread(true);
+            }).catch(function(err){
+                var msg=errorText(err);
+                if(/Conversation not found/i.test(msg))msg='That resume code did not match a conversation. Check the code and try again.';
+                showErrorBox('guestSupportResumeError',msg);
+            }).then(function(){
+                busyResume=false;
+                setBusy($('guestSupportResumeBtn'),false);
+            });
+        }
+
+        function guestSupportSend(e){
+            e.preventDefault();
+            if(busySend)return;
+            var id=identity();
+            if(!id)return;
+            var input=$('guestSupportInput');
+            var text=input?input.value.trim():'';
+            if(!text){showErrorBox('guestSupportSendError','Type a message first.');if(input)input.focus();return;}
+            if(text.length>4000){showErrorBox('guestSupportSendError','Keep the message under 4,000 characters.');return;}
+            var pending=pendingMap();
+            var existing=pending[id.id];
+            if(existing&&existing.body!==text){
+                showErrorBox('guestSupportSendError','Your previous message is still unconfirmed. Send the same text again first.');
+                return;
+            }
+            var requestId=existing&&existing.id?existing.id:DB.newId();
+            pending[id.id]={id:requestId,body:text,time:Date.now()};
+            setJSON(PENDING_KEY,pending);
+            busySend=true;
+            setBusy($('guestSupportSendBtn'),true,'Sending...');
+            showErrorBox('guestSupportSendError','');
+            DB.rpc('bb_guest_support_post',{p_thread:id.id,p_key:id.key,p_body:text,p_request_id:requestId}).then(function(thread){
+                var current=identity();
+                var p2=pendingMap();
+                delete p2[id.id];
+                setJSON(PENDING_KEY,p2);
+                if(!current||current.id!==id.id)return;
+                if(input)input.value='';
+                if(thread&&thread.id){cacheThread(thread);renderThread(thread);}
+                else refreshThread(false);
+            }).catch(function(err){
+                var msg=errorText(err);
+                if(err&&err.code&&/^(22|23|28|42|P0001|40001)/.test(String(err.code))){var p3=pendingMap();delete p3[id.id];setJSON(PENDING_KEY,p3);}
+                showErrorBox('guestSupportSendError',msg);
+                if(/Conversation not found|Conversation closed/i.test(msg))refreshThread(true);
+            }).then(function(){
+                busySend=false;
+                setBusy($('guestSupportSendBtn'),false);
+            });
+        }
+        function pendingMap(){
+            var m=getJSON(PENDING_KEY,{});
+            return m&&typeof m==='object'?m:{};
+        }
+
+        function guestSupportNew(){
+            var id=identity();
+            var cached=id?cachedThread(id):null;
+            var wasDeleted=!!(cached&&String(cached.status).toLowerCase()==='deleted');
+            if(!wasDeleted&&!window.confirm('Start a new conversation? Copy your resume code first if you may need this chat again.'))return;
+            clearIdentity();
+            var p=profile();
+            var name=$('gsName'),email=$('gsEmail'),subject=$('gsSubject'),body=$('gsMessage');
+            if(name&&!name.value)name.value=p.name||'';
+            if(email&&!email.value)email.value=p.email||'';
+            if(subject)subject.value='';
+            if(body)body.value='';
+            showView('start');
+            showErrorBox('guestSupportStartError','');
+            showErrorBox('guestSupportSendError','');
+            var badge=$('guestSupportBadge');
+            if(badge)badge.style.display='none';
+            if(name)setTimeout(function(){name.focus();},20);
+        }
+        function guestSupportCopyResume(btn){
+            var id=identity();
+            if(!id)return;
+            var code=resumeCode(id);
+            function done(ok){
+                if(!btn)return;
+                var old=btn.dataset.gsCopyLabel||btn.textContent;
+                btn.dataset.gsCopyLabel=old;
+                btn.textContent=ok?'Copied':'Press Ctrl+C';
+                setTimeout(function(){btn.textContent=old;},1600);
+            }
+            if(navigator.clipboard&&typeof navigator.clipboard.writeText==='function'){
+                navigator.clipboard.writeText(code).then(function(){done(true);},function(){done(fallbackCopy(code));});
+            }else{
+                done(fallbackCopy(code));
+            }
+        }
+        function fallbackCopy(text){
+            var ta=document.createElement('textarea');
+            ta.value=text;
+            ta.setAttribute('readonly','');
+            ta.style.cssText='position:fixed;left:-9999px;top:0;';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok=false;
+            try{ok=document.execCommand('copy');}catch(e){ok=false;}
+            document.body.removeChild(ta);
+            return ok;
+        }
+
+        function startPolling(){
+            if(pollTimer)return;
+            pollTimer=setInterval(function(){
+                if(document.hidden)return;
+                var id=identity();
+                if(!id||id.pending)return;
+                refreshThread(true);
+            },POLL_MS);
+            document.addEventListener('visibilitychange',function(){
+                var id=identity();
+                if(!document.hidden&&id&&!id.pending)refreshThread(true);
+            });
+        }
+        function initGuestSupport(){
+            var id=identity();
+            if(id){
+                var cached=cachedThread(id);
+                if(cached)updateBadge(cached);
+            }
+            startPolling();
+        }
+
+        window.openGuestSupport=openGuestSupport;
+        window.closeGuestSupport=closeGuestSupport;
+        window.toggleGuestSupport=toggleGuestSupport;
+        window.guestSupportStart=guestSupportStart;
+        window.guestSupportSend=guestSupportSend;
+        window.guestSupportResume=guestSupportResume;
+        window.guestSupportShowResume=guestSupportShowResume;
+        window.guestSupportBackToStart=guestSupportBackToStart;
+        window.guestSupportNew=guestSupportNew;
+        window.guestSupportCopyResume=guestSupportCopyResume;
+
+        if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initGuestSupport);
+        else initGuestSupport();
+    })();
     </script>
 </body>
 </html>

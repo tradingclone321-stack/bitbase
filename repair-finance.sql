@@ -220,6 +220,12 @@ begin
  end if;
  if p_resource='bb_profit_modules' then return '{}'::jsonb; end if;
  if p_resource='bb_deposit_addresses' then return coalesce((select payload||jsonb_build_object('_version',version) from public.bb_records where collection=p_resource and id='config'),'{}'); end if;
+ if p_resource='bb_guest_support' then
+  -- Guest conversations are visible only to administrators. The stored key
+  -- hash is never sent to any client; guest access uses its own key check.
+  if not u.is_admin then raise exception 'Administrator access required' using errcode='42501'; end if;
+  select coalesce(jsonb_agg((payload-'guestTokenHash')||jsonb_build_object('_version',version,'guest',true) order by updated_at desc,id),'[]') into result from public.bb_records where collection=p_resource; return result;
+ end if;
  if p_resource not in ('bb_deposit_requests','bb_withdrawal_requests','bb_loans','bb_kyc_submissions','bb_support_tickets','bb_demo_trades_hist') then raise exception 'Unknown collection'; end if;
  select coalesce(jsonb_agg(payload||jsonb_build_object('_version',version) order by updated_at,id),'[]') into result from public.bb_records where collection=p_resource and (u.is_admin or uid=u.uid); return result;
 end $$;
@@ -231,15 +237,58 @@ declare u public.users; r public.bb_records; rid text; n jsonb; v bigint; ms big
 begin
  u:=bb_private.actor(p_token); rid:=p_record->>'id';
  if p_collection='bb_deposit_addresses' then rid:='config'; if not u.is_admin then raise exception 'Administrator access required'; end if; end if;
- if p_collection not in ('bb_support_tickets','bb_kyc_submissions','bb_deposit_addresses') or rid is null or rid !~ '^[A-Za-z0-9_-]{1,180}$' then raise exception 'Use the financial transaction API for this record'; end if;
+ if p_collection not in ('bb_support_tickets','bb_kyc_submissions','bb_deposit_addresses','bb_guest_support') or rid is null or rid !~ '^[A-Za-z0-9_-]{1,180}$' then raise exception 'Use the financial transaction API for this record'; end if;
  perform pg_advisory_xact_lock(hashtext(p_collection||':'||rid));
  select * into r from public.bb_records where collection=p_collection and id=rid for update;
  if r.id is not null and not u.is_admin and r.uid<>u.uid then raise exception 'Record belongs to another account'; end if;
  n:=p_record-'_version';
  if r.id is not null and n=r.payload then return r.payload||jsonb_build_object('_version',r.version); end if;
  if r.id is not null and coalesce((p_record->>'_version')::bigint,0)<>r.version then raise exception 'Record changed on another device. Refresh and retry.' using errcode='40001'; end if;
- if p_collection<>'bb_deposit_addresses' then
+ if p_collection='bb_guest_support' then
+  -- Only the Support tab may write a guest conversation. The key hash is
+  -- copied from the stored row, so the administrator never receives it and
+  -- cannot accidentally erase the guest's only way back into the thread.
+  if not u.is_admin then raise exception 'Administrator access required' using errcode='42501'; end if;
+  if r.id is null then raise exception 'Start the conversation from the login page'; end if;
+  if coalesce(n->>'status','open') not in ('open','resolved','deleted') then raise exception 'Invalid conversation status'; end if;
+  if n->>'status'='deleted' then
+   -- Delete clears the conversation content but leaves a closed tombstone so
+   -- the guest is told the thread was closed instead of silently reconnecting.
+   n:=jsonb_build_object('id',rid,'status','deleted','guest',true,'guestTokenHash',r.payload->>'guestTokenHash','deletedAt',ms,'updatedAt',ms,'userId','guest');
+  else
+   n:=n||jsonb_build_object('id',rid,'guest',true,'userId','guest',
+    'guestTokenHash',r.payload->>'guestTokenHash',
+    'guestName',coalesce(n->>'guestName',r.payload->>'guestName'),
+    'guestEmail',coalesce(n->>'guestEmail',r.payload->>'guestEmail'),
+    'subject',coalesce(n->>'subject',r.payload->>'subject'),
+    'userName',coalesce(n->>'userName',r.payload->>'userName'),
+    'userEmail',coalesce(n->>'userEmail',r.payload->>'userEmail'),
+    'createdAt',coalesce(n->'createdAt',r.payload->'createdAt'),
+    'updatedAt',ms);
+  end if;
+ end if;
+ if p_collection not in ('bb_deposit_addresses','bb_guest_support') then
   n:=n||jsonb_build_object('userId',coalesce(r.uid,u.uid)::text,'uid',coalesce(r.uid,u.uid)::text,'id',rid);
+ end if;
+ -- Support threads are append-only. Merge by message ID instead of replacing
+ -- the array, so a reply built from a slightly stale cache can never drop a
+ -- message that another person just sent. Stored messages win on duplicate
+ -- IDs, which also blocks editing an existing message in place.
+ if p_collection in ('bb_support_tickets','bb_guest_support') and coalesce(n->>'status','')<>'deleted' then
+  select coalesce(jsonb_agg(m order by
+    case when coalesce(m->>'time','') ~ '^[0-9]+$' then (m->>'time')::numeric else null end nulls last,
+    src,ord),'[]'::jsonb)
+  into other
+  from (
+   select distinct on (coalesce(m->>'id','null:'||src||':'||ord)) m,src,ord
+   from (
+    select value as m,1 as src,ord from jsonb_array_elements(coalesce(r.payload->'messages','[]'::jsonb)) with ordinality as s(value,ord)
+    union all
+    select value as m,2 as src,ord from jsonb_array_elements(coalesce(n->'messages','[]'::jsonb)) with ordinality as t(value,ord)
+   ) allm
+   order by coalesce(m->>'id','null:'||src||':'||ord),src,ord
+  ) dedup;
+  n:=n||jsonb_build_object('messages',other);
  end if;
  if p_collection='bb_kyc_submissions' then
   if r.id is not null and not u.is_admin then raise exception 'Submit a new KYC request'; end if;
@@ -254,10 +303,111 @@ begin
    if other->>'from' in ('admin','support') and not coalesce(r.payload->'messages','[]') @> jsonb_build_array(other) then raise exception 'Cannot impersonate support'; end if;
   end loop;
  end if;
- insert into public.bb_records(collection,id,uid,payload) values(p_collection,rid,case when p_collection='bb_deposit_addresses' then null else coalesce(r.uid,u.uid) end,n)
+ insert into public.bb_records(collection,id,uid,payload) values(p_collection,rid,case when p_collection in ('bb_deposit_addresses','bb_guest_support') then null else coalesce(r.uid,u.uid) end,n)
  on conflict(collection,id) do update set payload=excluded.payload,version=bb_records.version+1,updated_at=now() returning version into v;
  perform bb_private.audit(u.uid,coalesce(r.uid,u.uid),'record.save',p_collection,rid,jsonb_build_object('version',v,'status',n->>'status'));
+ if p_collection='bb_guest_support' then return (n-'guestTokenHash')||jsonb_build_object('_version',v); end if;
  return n||jsonb_build_object('_version',v);
+end $$;
+
+-- ===== Guest customer service (login page) ================================
+-- An unregistered visitor opens a conversation with a random key held only in
+-- their browser. The database stores a SHA-256 hash of that key, never the key
+-- itself, and only returns the thread to a caller that presents the match. The
+-- administrator sees the same conversation in the Support tab. Keeping it in a
+-- separate collection means it never appears in a signed-in member's inbox.
+create or replace function public.bb_guest_support_start(
+ p_thread text,p_key text,p_name text,p_email text,p_subject text,p_body text,p_honey text default ''
+) returns jsonb
+language plpgsql security definer set search_path=pg_catalog,public,extensions as $$
+declare
+ ms bigint:=(extract(epoch from now())*1000)::bigint;
+ n jsonb; rid text; nm text; em text; subj text; msg text;
+begin
+ if coalesce(p_honey,'')<>'' then raise exception 'Message could not be sent'; end if;
+ rid:=trim(coalesce(p_thread,''));
+ if rid !~ '^GST-[A-Za-z0-9]{8,60}$' then raise exception 'Invalid conversation ID'; end if;
+ if length(coalesce(p_key,'')) not between 32 and 120 then raise exception 'Invalid conversation key'; end if;
+ nm:=trim(coalesce(p_name,''));
+ if char_length(nm) not between 1 and 80 then raise exception 'Enter your name'; end if;
+ em:=trim(coalesce(p_email,''));
+ if char_length(em)>180 then raise exception 'Email address is too long'; end if;
+ if em<>'' and em !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then raise exception 'Enter a valid email address or leave it blank'; end if;
+ subj:=trim(coalesce(p_subject,''));
+ if char_length(subj) not between 1 and 140 then raise exception 'Enter a subject'; end if;
+ msg:=trim(coalesce(p_body,''));
+ if char_length(msg) not between 1 and 4000 then raise exception 'Enter a message'; end if;
+ perform pg_advisory_xact_lock(hashtext('guest-support:'||rid));
+ select payload into n from public.bb_records where collection='bb_guest_support' and id=rid for update;
+ if n is not null then
+  -- A retry after a lost response must reuse the same thread, not create two.
+  if n->>'guestTokenHash' is distinct from encode(digest(p_key,'sha256'),'hex') then raise exception 'Conversation not found'; end if;
+  if lower(coalesce(n->>'status',''))='deleted' then raise exception 'Conversation closed'; end if;
+  return jsonb_build_object('ok',true,'id',rid,'status',lower(coalesce(n->>'status','open')),'createdAt',n->'createdAt');
+ end if;
+ insert into public.bb_records(collection,id,uid,payload) values(
+  'bb_guest_support',rid,null,
+  jsonb_build_object(
+   'id',rid,'status','open','guest',true,
+   'guestName',nm,'guestEmail',em,'guestTokenHash',encode(digest(p_key,'sha256'),'hex'),
+   'subject',subj,'userName','Guest: '||nm,'userEmail',em,'userId','guest',
+   'createdAt',ms,'updatedAt',ms,
+   'messages',jsonb_build_array(jsonb_build_object(
+    'id','GM-'||substr(encode(digest('start:'||rid||':'||p_key,'sha256'),'hex'),1,20),
+    'from','user','text',msg,'time',ms))
+  )
+ );
+ perform bb_private.audit(null,null,'guest_support.start','bb_guest_support',rid,jsonb_build_object('subject',subj));
+ return jsonb_build_object('ok',true,'id',rid,'status','open','createdAt',ms);
+end $$;
+
+create or replace function public.bb_guest_support_read(p_thread text,p_key text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog,public,extensions as $$
+declare n jsonb; rid text;
+begin
+ rid:=trim(coalesce(p_thread,''));
+ if rid !~ '^GST-[A-Za-z0-9]{8,60}$' or length(coalesce(p_key,'')) not between 32 and 120 then raise exception 'Conversation not found'; end if;
+ select payload into n from public.bb_records where collection='bb_guest_support' and id=rid;
+ if n is null or n->>'guestTokenHash' is distinct from encode(digest(p_key,'sha256'),'hex') then raise exception 'Conversation not found'; end if;
+ if lower(coalesce(n->>'status',''))='deleted' then
+  return jsonb_build_object('ok',true,'id',rid,'status','deleted','messages','[]'::jsonb);
+ end if;
+ return (n-'guestTokenHash')||jsonb_build_object('ok',true);
+end $$;
+
+create or replace function public.bb_guest_support_post(p_thread text,p_key text,p_body text,p_request_id text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog,public,extensions as $$
+declare
+ n jsonb; rid text; msg text; ms bigint:=(extract(epoch from now())*1000)::bigint;
+ mid text; recent integer; total integer;
+begin
+ rid:=trim(coalesce(p_thread,''));
+ if rid !~ '^GST-[A-Za-z0-9]{8,60}$' or length(coalesce(p_key,'')) not between 32 and 120 then raise exception 'Conversation not found'; end if;
+ if coalesce(p_request_id,'') !~ '^[A-Za-z0-9_-]{12,180}$' then raise exception 'A unique request ID is required'; end if;
+ msg:=trim(coalesce(p_body,''));
+ if char_length(msg) not between 1 and 4000 then raise exception 'Enter a message'; end if;
+ perform pg_advisory_xact_lock(hashtext('guest-support:'||rid));
+ select payload into n from public.bb_records where collection='bb_guest_support' and id=rid for update;
+ if n is null or n->>'guestTokenHash' is distinct from encode(digest(p_key,'sha256'),'hex') then raise exception 'Conversation not found'; end if;
+ if lower(coalesce(n->>'status',''))='deleted' then raise exception 'Conversation closed'; end if;
+ -- The message ID is derived from the request ID, so a retry after a dropped
+ -- response returns the same thread instead of posting the text twice.
+ mid:='GM-'||substr(encode(digest('post:'||p_request_id,'sha256'),'hex'),1,20);
+ if exists(select 1 from jsonb_array_elements(coalesce(n->'messages','[]'::jsonb)) m where m->>'id'=mid) then
+  return (n-'guestTokenHash')||jsonb_build_object('ok',true);
+ end if;
+ select count(*) into recent from jsonb_array_elements(coalesce(n->'messages','[]'::jsonb)) m
+  where m->>'from'<>'admin' and coalesce((m->>'time')::numeric,0)>ms-60000;
+ if recent>=8 then raise exception 'Too many messages. Please wait a minute before sending again.'; end if;
+ total:=jsonb_array_length(coalesce(n->'messages','[]'::jsonb));
+ if total>=200 then raise exception 'This conversation is full. Please start a new conversation.'; end if;
+ n:=n||jsonb_build_object(
+  'status','open','updatedAt',ms,
+  'messages',coalesce(n->'messages','[]'::jsonb)||jsonb_build_array(jsonb_build_object('id',mid,'from','user','text',msg,'time',ms))
+ );
+ update public.bb_records set payload=n,version=version+1,updated_at=now() where collection='bb_guest_support' and id=rid;
+ perform bb_private.audit(null,null,'guest_support.message','bb_guest_support',rid,jsonb_build_object('length',char_length(msg)));
+ return (n-'guestTokenHash')||jsonb_build_object('ok',true);
 end $$;
 
 -- One transaction for user/admin actions. Caller supplies a stable request ID.
@@ -265,8 +415,8 @@ create or replace function public.bb_action(p_token text,p_action text,p_id text
 language plpgsql security definer set search_path=pg_catalog,public,extensions as $$
 #variable_conflict use_variable
 declare u public.users; target public.users; prev bb_private.requests; rec public.bb_records; ord public.bb_orders;
- n jsonb; res jsonb; cid text; rid text; coin text; wallet text; amt numeric; delta numeric; bal numeric; fee numeric;
- ms bigint:=(extract(epoch from now())*1000)::bigint; rate numeric; days integer; min_amt numeric; ky text; action_status text; updated public.users;
+ n jsonb; res jsonb; cid text; rid text; coin text; wallet text; amt numeric; delta numeric; bal numeric; fee numeric; gain numeric; payout numeric;
+ ms bigint:=(extract(epoch from now())*1000)::bigint; rate numeric; days integer; due integer; done integer; profit numeric; earned numeric; min_amt numeric; ky text; action_status text; updated public.users;
 begin
  u:=bb_private.actor(p_token);
  if coalesce(p_id,'') !~ '^[A-Za-z0-9_-]{12,180}$' then raise exception 'A unique request ID is required'; end if;
@@ -337,6 +487,110 @@ begin
    update public.users set name=coalesce(p_data->>'name',name),email=coalesce(lower(trim(p_data->>'email')),email),is_admin=coalesce((p_data->>'is_admin')::boolean,is_admin),is_deactivated=coalesce((p_data->>'is_deactivated')::boolean,is_deactivated),kyc_status=coalesce(p_data->>'kyc_status',kyc_status),updated_at=now() where uid=target.uid returning * into updated;
    if updated.is_deactivated then delete from bb_private.sessions where uid=target.uid; end if;
    res:=bb_private.public_user(updated);
+  end if;
+ elsif p_action='admin_settle_trade' then
+  -- Administrator override: close one active trade as a win or a loss without
+  -- waiting for the market feed. The money moves through the same ledger path
+  -- as a normal settlement, and the payload records that a person forced it so
+  -- the forced result is never mistaken for a market outcome. Forcing a loss
+  -- wins over the account's profit module, because the administrator asked for it.
+  if not u.is_admin then raise exception 'Administrator access required' using errcode='42501'; end if;
+  rid:=coalesce(p_data->>'id','');
+  action_status:=lower(coalesce(p_data->>'result',''));
+  if action_status not in ('won','lost') then raise exception 'Choose a win or a loss for this trade'; end if;
+  select * into ord from public.bb_orders where id=rid;
+  if ord.id is null or ord.kind<>'trade' then raise exception 'Trade not found'; end if;
+  select * into target from public.users where uid=ord.uid for update;
+  if target.uid is null then raise exception 'Missing trade owner'; end if;
+  select * into ord from public.bb_orders where id=rid for update;
+  n:=ord.payload;
+  if lower(n->>'status')<>'active' then raise exception 'Only active trades can be forced; this one is already settled'; end if;
+  amt:=(n->>'amount')::numeric;
+  if amt is null or amt<0 then raise exception 'Invalid trade stake'; end if;
+  gain:=case when action_status='won' then coalesce((n->>'potentialProfit')::numeric,0) else -coalesce((n->>'potentialProfit')::numeric,0) end;
+  payout:=round(amt+gain,8);
+  if payout<0 then payout:=0; gain:=-amt; end if;
+  perform bb_private.move(ord.uid,'USDT',payout,'trade-admin:'||rid,'trade_'||action_status,u.uid);
+  n:=n||jsonb_build_object('status',case when action_status='won' then 'Won' else 'Lost' end,
+   'exitPrice',coalesce((n->>'entryPrice')::numeric,(n->>'price')::numeric,0),'exitQuoteAt',ms,
+   'profit',gain,'payout',payout,'resolvedTime',ms,'adminForced',true,'forcedBy',u.uid,'forcedResult',action_status);
+  update public.bb_orders set payload=n,version=version+1,updated_at=now() where id=rid;
+  perform bb_private.audit(u.uid,ord.uid,'trade.admin_settle','orders',rid,jsonb_build_object('result',action_status,'profit',gain,'payout',payout));
+  res:=n;
+ elsif p_action='admin_delete_record' then
+  -- Administrator delete for one record. The row, any money it is holding, and
+  -- the audit entry are settled in this one transaction. Quant plans are orders,
+  -- not bb_records rows, so they are handled separately.
+  if not u.is_admin then raise exception 'Administrator access required' using errcode='42501'; end if;
+  cid:=coalesce(p_data->>'collection','');
+  rid:=coalesce(p_data->>'id','');
+  if cid not in ('bb_loans','bb_deposit_requests','bb_withdrawal_requests','bb_kyc_submissions','bb_ai_quants') then raise exception 'Invalid record collection'; end if;
+  if length(rid) not between 1 and 180 then raise exception 'Record ID required'; end if;
+  -- Match bb_save_record's advisory key so a simultaneous KYC/support save
+  -- cannot deadlock against this delete (both then lock user, then record).
+  perform pg_advisory_xact_lock(hashtext(cid||':'||rid));
+  if cid='bb_ai_quants' then
+   select * into ord from public.bb_orders where id=rid and kind='quant';
+   if ord.id is null then raise exception 'Plan not found'; end if;
+   select * into target from public.users where uid=ord.uid for update;
+   select * into ord from public.bb_orders where id=rid for update;
+   if ord.id is null then raise exception 'Plan not found'; end if;
+   n:=ord.payload;
+   amt:=coalesce((n->>'amount')::numeric,0);
+   profit:=0;
+   if lower(coalesce(n->>'status',''))='active' then
+    -- Pay any days that are already due, then return the principal. Deletion
+    -- must not silently keep earnings the plan has already accrued.
+    days:=coalesce((n->>'days')::integer,0);
+    done:=coalesce((n->>'settledDays')::integer,0);
+    due:=least(days,greatest(0,floor((ms-(n->>'started')::bigint)::numeric/86400000)::integer));
+    if due>done then
+     earned:=round(amt*(n->>'rate')::numeric/100*due,8);
+     profit:=earned-coalesce((n->>'earned')::numeric,0);
+     if profit>0 then
+      perform bb_private.move(ord.uid,'USDT',profit,'quant-delete-earn:'||rid||':'||due,'quant_deleted_earnings',u.uid);
+     else
+      profit:=0;
+     end if;
+    end if;
+    -- Daily earnings already paid are deliberately not clawed back.
+    if amt>0 then
+     perform bb_private.move(ord.uid,'USDT',amt,'quant-delete:'||rid,'quant_deleted_refund',u.uid);
+    end if;
+   end if;
+   delete from public.bb_orders where id=rid;
+   perform bb_private.audit(u.uid,ord.uid,'order.admin_delete','orders',rid,
+    jsonb_build_object('kind','quant','status',n->>'status','principal',amt,
+     'earningsPaid',profit,
+     'refunded',case when lower(coalesce(n->>'status',''))='active' then amt else 0 end));
+   res:=jsonb_build_object('ok',true,'collection',cid,'id',rid,
+    'earningsPaid',profit,
+    'refunded',case when lower(coalesce(n->>'status',''))='active' then amt else 0 end);
+  else
+   select * into rec from public.bb_records where collection=cid and id=rid;
+   if rec.id is null then raise exception 'Record not found'; end if;
+   if rec.uid is null then raise exception 'Missing record owner'; end if;
+   select * into target from public.users where uid=rec.uid for update;
+   select * into rec from public.bb_records where collection=cid and id=rid for update;
+   if rec.id is null then raise exception 'Record not found'; end if;
+   n:=rec.payload;
+   if cid='bb_withdrawal_requests' and lower(coalesce(n->>'status',''))='pending' and coalesce((n->>'reserved')::boolean,false) then
+    -- A pending withdrawal already debited amount+fee; deleting it must refund them.
+    coin:=coalesce(n->>'coin','USDT');
+    amt:=coalesce((n->>'amount')::numeric,0);
+    fee:=coalesce((n->>'fee')::numeric,0);
+    if amt<=0 then raise exception 'Stored withdrawal amount is invalid'; end if;
+    if fee<0 then fee:=0; end if;
+    perform bb_private.move(rec.uid,coin,amt+fee,'withdraw-delete:'||rid,'withdraw_deleted',u.uid);
+   end if;
+   if cid='bb_kyc_submissions' then
+    update public.users set kyc_status='none'
+     where uid=rec.uid and not exists(select 1 from public.bb_records where collection='bb_kyc_submissions' and uid=rec.uid and id<>rid);
+   end if;
+   delete from public.bb_records where collection=cid and id=rid;
+   perform bb_private.audit(u.uid,rec.uid,'record.admin_delete',cid,rid,
+    jsonb_build_object('status',n->>'status','amount',coalesce(n->>'amount',n->>'borrowAmt')));
+   res:=jsonb_build_object('ok',true,'collection',cid,'id',rid);
   end if;
  elsif p_action='transfer' then
   select * into target from public.users where users.uid=u.uid for update;
@@ -543,6 +797,7 @@ begin
   -- Consistent order prevents deadlocks with starts, closes, and admin actions.
   select * into u from public.users where uid=snapshot.uid for update;
   select * into o from public.bb_orders where id=snapshot.id for update;
+  if o.id is null then continue; end if; -- deleted by an administrator after the snapshot
   n:=o.payload;if n->>'status'<>'active' then continue; end if;
   if o.kind='quant' then
    days:=(n->>'days')::integer; done:=coalesce((n->>'settledDays')::integer,0);
@@ -662,7 +917,7 @@ begin
   execute format('revoke all on function %s from public,anon,authenticated',r.signature);
  end loop;
 end $permissions$;
-grant execute on function public.bb_register(text,text,text),public.bb_login(text,text),public.bb_read(text,text),public.bb_save_record(text,text,jsonb),public.bb_action(text,text,text,jsonb),public.bb_tick(text),public.bb_demo(text,text,text,jsonb) to anon,authenticated;
+grant execute on function public.bb_register(text,text,text),public.bb_login(text,text),public.bb_read(text,text),public.bb_save_record(text,text,jsonb),public.bb_action(text,text,text,jsonb),public.bb_tick(text),public.bb_demo(text,text,text,jsonb),public.bb_guest_support_start(text,text,text,text,text,text,text),public.bb_guest_support_read(text,text),public.bb_guest_support_post(text,text,text,text) to anon,authenticated;
 grant execute on function public.bb_place_trade(text,text,text,text,numeric,integer,numeric,bigint),public.bb_due_trades(),public.bb_settle_trade(text,numeric,bigint),public.bb_convert(text,text,text,text,numeric,numeric,bigint),public.bb_settle_accruals(),public.bb_engine_status(text,integer),public.bb_settle_demo() to service_role;
 -- Do not leave the old schedule running against the archived JSON collections.
 do $old_cron$

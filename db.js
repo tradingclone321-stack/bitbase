@@ -1,6 +1,6 @@
 /* BitBase v2: server owns balances, orders, permissions, and durable records.
  * Browser storage is a replaceable cache. No cached balance is ever uploaded. */
-var DB = {VERSION:'2026-10-17-instant-v11',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
+var DB = {VERSION:'2026-10-17-instant-v12',ready:false,client:null,_lastSyncError:'',_lastUsersError:'',_lastPullTime:0,_localDirty:false,_pulls:{},_pushChains:{},_subscribers:{},_snapshot:{}};
 DB.get=function(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
 DB.set=function(k,v){localStorage.setItem(k,JSON.stringify(v));};
 DB.safeParse=function(s){try{return JSON.parse(s);}catch(e){return s;}};
@@ -152,7 +152,7 @@ DB.pullAll=function(){
  // order or a credited balance that already arrived. Only a total outage is
  // surfaced as an error (partial refreshes still update the page).
  var tasks=[DB.safePull(function(){return DB.pullLocalUser();})];
- if(DB.me&&DB.me.is_admin)tasks.push(DB.safePull(function(){return DB.fetchUsersLive();}));
+ if(DB.me&&DB.me.is_admin){tasks.push(DB.safePull(function(){return DB.fetchUsersLive();}));tasks.push(DB.safePull(function(){return DB.pullCollection('bb_guest_support');}));}
  DB.COLLECTIONS.forEach(function(k){tasks.push(DB.safePull(function(){return DB.pullCollection(k);}));});
  return Promise.allSettled(tasks).then(function(results){
   var failed=results.filter(function(r){return r.status==='rejected';});
